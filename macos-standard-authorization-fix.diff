@@ -1,0 +1,85 @@
+diff --git a/include/sys/macos/MacOS.h b/include/sys/macos/MacOS.h
+index ef322b67..d3a2dc91 100644
+--- a/include/sys/macos/MacOS.h
++++ b/include/sys/macos/MacOS.h
+@@ -2,4 +2,5 @@
+ 
+ #include <QString>
+ 
+-int Mac_Run_Command(QString command);
+\ No newline at end of file
++int Mac_Set_Core_Permissions(const QString &path);
++bool Mac_Core_Path_Supports_Setuid(const QString &path);
+diff --git a/src/sys/macos/MacOS.cpp b/src/sys/macos/MacOS.cpp
+index 87bea476..c978c577 100644
+--- a/src/sys/macos/MacOS.cpp
++++ b/src/sys/macos/MacOS.cpp
+@@ -1,9 +1,26 @@
+ #include <QFile>
+-#include <QFileInfo>
++#include <QProcess>
++#include <QProcessEnvironment>
+ #include <QString>
+-#include <include/global/Utils.hpp>
++#include <sys/mount.h>
+ 
+-int Mac_Run_Command(QString command) {
+-    auto cmd = QString("osascript -e 'tell application \"Terminal\" to activate' -e 'tell application \"Terminal\" to do script \"%1\"' with administrator privileges").arg(command);
+-    return system(cmd.toStdString().c_str());
++bool Mac_Core_Path_Supports_Setuid(const QString &path) {
++    struct statfs filesystem {};
++    const auto nativePath = QFile::encodeName(path);
++    return statfs(nativePath.constData(), &filesystem) == 0
++        && !(filesystem.f_flags & (MNT_NOSUID | MNT_IGNORE_OWNERSHIP));
++}
++
++int Mac_Set_Core_Permissions(const QString &path) {
++    QProcess process;
++    auto environment = QProcessEnvironment::systemEnvironment();
++    environment.insert("THRONE_CORE_PATH", path);
++    process.setProcessEnvironment(environment);
++    process.start("/usr/bin/osascript", {
++        "-e",
++        "set corePath to system attribute \"THRONE_CORE_PATH\"\n"
++        "do shell script (\"/usr/sbin/chown root:wheel \" & quoted form of corePath & \" && /bin/chmod u+s \" & quoted form of corePath) with administrator privileges"
++    });
++    if (!process.waitForFinished(-1)) return -1;
++    return process.exitCode();
+ }
+diff --git a/src/ui/mainwindow.cpp b/src/ui/mainwindow.cpp
+index 49f2318e..e3a92d49 100644
+--- a/src/ui/mainwindow.cpp
++++ b/src/ui/mainwindow.cpp
+@@ -1758,21 +1758,26 @@ bool MainWindow::get_elevated_permissions(int reason) {
+ #endif
+ 
+ #ifdef Q_OS_MACOS
+-    if (Configs::isSetuidSet(Configs::FindCoreRealPath().toStdString()))
++    const auto corePath = Configs::FindCoreRealPath();
++    if (Configs::isSetuidSet(corePath.toStdString()))
+     {
+         StopVPNProcess();
+         return true;
+     }
++    if (!Mac_Core_Path_Supports_Setuid(corePath)) {
++        MessageBoxWarning(tr("Tun mode unavailable"),
++                          tr("Throne is running from a volume that does not support root permissions. Move Throne.app to /Applications, reopen it, and enable Tun mode again."));
++        return false;
++    }
+     auto n = QMessageBox::warning(GetMessageBoxParent(), software_name, tr("Please give the core root privileges"), QMessageBox::Yes | QMessageBox::No);
+     if (n == QMessageBox::Yes)
+     {
+-        auto Command = QString("sudo chown root:wheel '%1' && sudo chmod u+s '%1'").arg(Configs::FindCoreRealPath());
+-        auto ret = Mac_Run_Command(Command);
++        auto ret = Mac_Set_Core_Permissions(corePath);
+         if (ret == 0) {
+-            MessageBoxInfo(tr("Requesting permission"), tr("Please Enter your password in the opened terminal, then try again"));
+-            return false;
++            StopVPNProcess();
++            return true;
+         } else {
+-            MW_show_log(QString("Failed to run %1 with %2").arg(Command).arg(ret));
++            MW_show_log(QString("Failed to set core permissions for %1 with %2").arg(corePath).arg(ret));
+             return false;
+         }
+     }

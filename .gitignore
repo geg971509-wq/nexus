@@ -1,0 +1,11 @@
+.DS_Store
+.cache/
+.omc/
+.claude/
+**/target/
+app/node_modules/
+app/src-tauri/target/
+*.log
+build/
+bin/
+*.app

@@ -1,0 +1,71 @@
+name: Pull request checks
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-26
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "26.0"
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v5.5.0
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: |
+            core/server/go.sum
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: "31.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: jurplel/install-qt-action@v4.3.0
+        with:
+          version: "6.12.0-beta2"
+          cache: true
+      - name: Check shell syntax
+        run: |
+          bash -n build.sh script/bootstrap_macos.sh script/build_qt_static_macos.sh script/update_core_forks.sh script/fetch_build_warp_client.sh
+          ./build.sh --help
+      - name: Generate Go RPC bindings
+        working-directory: core/server/gen
+        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+          protoc -I . --go_out=. --go-grpc_out=. libcore.proto
+          if [ -d gen ]; then
+            mv gen/*.go .
+            rmdir gen
+          fi
+          test -f libcore.pb.go
+          test -f libcore_grpc.pb.go
+      - name: Test core
+        working-directory: core/server
+        run: go test -race -shuffle=on -count=1 ./...
+      - name: Verify pinned route list
+        run: |
+          echo "375bc29d405e937e0024c652667acf8e2ed2000540990d5c4b884f41e774d706  include/global/srslist.h" | shasum -a 256 -c -
+      - name: Configure private checks
+        run: cmake -S . -B build -DBUILD_TESTING=ON -DWARP_CLIENT_ENABLE=OFF -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)" -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0
+      - name: Build application and checks
+        run: cmake --build build --parallel
+      - name: Run checks
+        run: ctest --test-dir build --output-on-failure
+
+  windows-go:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-go@v5.5.0
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: core/server/go.sum
+      - name: Run Windows unit tests
+        working-directory: core/server
+        run: go test -race -shuffle=on -count=1 ./internal/boxdns/winipcfg

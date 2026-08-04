@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /core/server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: github.com/sagernet/sing-box
+      - dependency-name: github.com/sagernet/sing-tun
+      - dependency-name: github.com/sagernet/wireguard-go
+      - dependency-name: github.com/xtls/xray-core
+    groups:
+      core-go-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns:
+          - "*"
