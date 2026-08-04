@@ -1,0 +1,20 @@
+[[permission]]
+identifier = "allow-nexus-commands"
+description = "Allow Nexus app IPC commands (Phase B–E)"
+commands.allow = [
+  "app_identity",
+  "core_start",
+  "core_query_state",
+  "core_check_config",
+  "core_stop",
+  "store_snapshot",
+  "generate_preview",
+  "set_system_proxy_cmd",
+  "set_system_dns_cmd",
+  "set_tun_cmd",
+  "connect_selected",
+  "warp_status",
+  "warp_set",
+  "warp_set_mode",
+  "warp_open"
+]

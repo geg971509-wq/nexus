@@ -9,3 +9,6 @@ app/src-tauri/target/
 build/
 bin/
 *.app
+
+# staged Tauri externalBin (built by build.sh)
+app/src-tauri/binaries/

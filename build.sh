@@ -1,266 +1,206 @@
 #!/usr/bin/env bash
+# Nexus macOS app build — Go NexusCore + Tauri 2 shell
 set -euo pipefail
 
-ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_TYPE="${BUILD_TYPE:-Release}"
-QT_VERSION="${QT_VERSION:-6.12.0-beta2}"
-PROTOC_GEN_GO_VERSION="${PROTOC_GEN_GO_VERSION:-v1.36.11}"
-PROTOC_GEN_GO_GRPC_VERSION="${PROTOC_GEN_GO_GRPC_VERSION:-1.6.2}"
-DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
-ARCH="$(uname -m)"
-QT_BUILD_DIR="$ROOT_DIR/qt6/build"
-QT_CORE_ARCHIVE="$QT_BUILD_DIR/lib/QtCore.framework/Versions/A/QtCore"
-CLANG_FORMAT_PATH=""
-SDKROOT=""
-SDK_VERSION=""
-UPDATE=false
-BUILD=true
-BOOTSTRAP=false
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$ROOT/app"
+TAURI_DIR="$APP_DIR/src-tauri"
+CORE_SRC="$ROOT/core/server"
+BIN_DIR="$ROOT/bin"
+CORE_OUT="$BIN_DIR/NexusCore"
+# Tauri externalBin: binaries/<name>-<target-triple>
+BINARIES_DIR="$TAURI_DIR/binaries"
 
-export GOPATH="${GOPATH:-$HOME/go}"
-export PATH="$GOPATH/bin:$PATH"
+export PATH="${HOME}/.cargo/bin:${PATH}"
+export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-always}"
 
-color_output() { printf '\033[%sm%s\033[0m\n' "$2" "$1"; }
-log_success() { color_output "[SUCCESS] $1" "32"; }
-log_error() { color_output "[ERROR] $1" "31"; }
-log_warn() { color_output "[WARNING] $1" "33"; }
-log_info() { color_output "[INFO] $1" "36"; }
-cmd_exists() { command -v "$1" >/dev/null 2>&1; }
+SKIP_CORE=false
+SKIP_NPM=false
+DEBUG=false
+OPEN_AFTER=false
 
 usage() {
-    cat <<'EOF'
-Usage: ./build.sh [--update] [--update-only] [--bootstrap]
+  cat <<'EOF'
+Usage: ./build.sh [options]
 
-  --update       Update pinned core forks, then build
-  --update-only  Update pinned core forks without building
-  --bootstrap    Prepare the macOS build environment before building
-  --help         Show this help
+  Build Nexus.app (macOS): NexusCore (Go) + Tauri shell.
+
+  --debug       cargo/tauri debug profile (default: release)
+  --skip-core   reuse existing bin/NexusCore
+  --skip-npm    skip npm install if node_modules present (still runs if missing)
+  --open        open the built .app when done
+  -h, --help    this help
+
+Env:
+  NEXUS_CORE_BIN   override core path at runtime (absolute file only)
+  MACOSX_DEPLOYMENT_TARGET  default 11.0
 EOF
 }
 
-require_command() {
-    if ! cmd_exists "$1"; then
-        log_error "Missing required command: $1 (run ./build.sh --bootstrap)"
-        exit 1
-    fi
+log()  { printf '\033[36m[INFO]\033[0m %s\n' "$*"; }
+ok()   { printf '\033[32m[OK]\033[0m %s\n' "$*"; }
+err()  { printf '\033[31m[ERR]\033[0m %s\n' "$*" >&2; }
+die()  { err "$*"; exit 1; }
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || die "missing command: $1"
 }
 
-resolve_openssl() {
-    if [[ -n "${OPENSSL_ROOT_DIR:-}" && -d "$OPENSSL_ROOT_DIR" ]]; then
-        return
-    fi
-    if cmd_exists brew && brew list openssl@3 >/dev/null 2>&1; then
-        OPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
-        export OPENSSL_ROOT_DIR
-        return
-    fi
-    log_error "OpenSSL 3 was not found (run ./build.sh --bootstrap)"
-    exit 1
+target_triple() {
+  local arch os
+  arch="$(uname -m)"
+  case "$arch" in
+    arm64|aarch64) arch="aarch64" ;;
+    x86_64) arch="x86_64" ;;
+    *) die "unsupported arch: $arch" ;;
+  esac
+  os="$(uname -s)"
+  case "$os" in
+    Darwin) echo "${arch}-apple-darwin" ;;
+    *) die "this build.sh is macOS-only (got $os)" ;;
+  esac
 }
 
-preflight() {
-    local command_name version
-    for command_name in cmake ninja go protoc protoc-gen-go protoc-gen-go-grpc clang-format xcrun codesign dsymutil strip; do
-        require_command "$command_name"
-    done
-    if ! xcode-select -p >/dev/null 2>&1; then
-        log_error "Xcode Command Line Tools are not configured"
-        exit 1
-    fi
-
-    version="$(protoc-gen-go --version)"
-    case "$version" in
-        *"$PROTOC_GEN_GO_VERSION") ;;
-        *) log_error "Expected protoc-gen-go $PROTOC_GEN_GO_VERSION, got: $version"; exit 1 ;;
-    esac
-    version="$(protoc-gen-go-grpc --version)"
-    case "$version" in
-        *"$PROTOC_GEN_GO_GRPC_VERSION") ;;
-        *) log_error "Expected protoc-gen-go-grpc $PROTOC_GEN_GO_GRPC_VERSION, got: $version"; exit 1 ;;
-    esac
-
-    if [[ ! -f "$QT_CORE_ARCHIVE" ]]; then
-        log_error "Static Qt is missing at $QT_BUILD_DIR (run ./build.sh --bootstrap)"
-        exit 1
-    fi
-    if [[ ! -x "$QT_BUILD_DIR/bin/macdeployqt" ]]; then
-        log_error "macdeployqt is missing at $QT_BUILD_DIR/bin/macdeployqt"
-        exit 1
-    fi
-
-    SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
-    SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
-    case "$SDK_VERSION" in
-        26.*) ;;
-        *) log_error "macOS 26 SDK required, found $SDK_VERSION"; exit 1 ;;
-    esac
-    export SDKROOT MACOSX_DEPLOYMENT_TARGET="$DEPLOYMENT_TARGET"
-    CLANG_FORMAT_PATH="$(command -v clang-format)"
-    resolve_openssl
-
-    local expected_qt_stamp qt_source_commit qt_tag_commit
-    qt_source_commit="$(git -C "$ROOT_DIR/qt6" rev-parse HEAD)"
-    qt_tag_commit="$(git -C "$ROOT_DIR/qt6" rev-parse "v$QT_VERSION^{commit}")"
-    if [[ "$qt_source_commit" != "$qt_tag_commit" ]]; then
-        log_error "Qt source is not at v$QT_VERSION (run ./build.sh --bootstrap)"
-        exit 1
-    fi
-    expected_qt_stamp="$(printf 'qt=%s\ncommit=%s\nsdk=%s\ntarget=%s\narch=%s' "$QT_VERSION" "$qt_source_commit" "$SDK_VERSION" "$DEPLOYMENT_TARGET" "$ARCH")"
-    if [[ ! -f "$QT_BUILD_DIR/.throne-static-qt-stamp" ]] ||
-        [[ "$(<"$QT_BUILD_DIR/.throne-static-qt-stamp")" != "$expected_qt_stamp" ]]; then
-        log_error "Static Qt cache is not built for macOS $DEPLOYMENT_TARGET (run ./build.sh --bootstrap)"
-        exit 1
-    fi
-}
-
-build_core() {
-    local server_dir="$ROOT_DIR/core/server"
-    local gen_dir="$server_dir/gen"
-    local build_tags version_singbox ldflags
-
-    export CGO_ENABLED=1
-    export CC="$(xcrun --sdk macosx --find clang)"
-    export CGO_CFLAGS="${CGO_CFLAGS:+$CGO_CFLAGS }-isysroot $SDKROOT -mmacosx-version-min=$DEPLOYMENT_TARGET"
-    export CGO_LDFLAGS="${CGO_LDFLAGS:+$CGO_LDFLAGS }-isysroot $SDKROOT -mmacosx-version-min=$DEPLOYMENT_TARGET"
-
-    rm -f "$gen_dir"/*.pb.go "$gen_dir"/*_grpc.pb.go "$gen_dir"/*.pb.protorpc.go
-    rm -rf "$gen_dir/gen"
-    (
-        cd "$gen_dir"
-        protoc -I . \
-            --plugin=protoc-gen-go="$GOPATH/bin/protoc-gen-go" \
-            --plugin=protoc-gen-go-grpc="$GOPATH/bin/protoc-gen-go-grpc" \
-            --go_out=. --go-grpc_out=. libcore.proto
-    )
-    if [[ -d "$gen_dir/gen" ]]; then
-        mv "$gen_dir/gen"/*.go "$gen_dir/"
-        rmdir "$gen_dir/gen"
-    fi
-    if [[ ! -f "$gen_dir/libcore.pb.go" || ! -f "$gen_dir/libcore_grpc.pb.go" ]]; then
-        log_error "Protocol Buffer generation did not produce both Go outputs"
-        exit 1
-    fi
-
-    version_singbox="$(cd "$server_dir" && go list -m -f '{{.Version}}' github.com/sagernet/sing-box)"
-    build_tags="with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,badlinkname,tfogo_checklinkname0"
-    ldflags="-w -s -X 'github.com/sagernet/sing-box/constant.Version=$version_singbox' -X 'internal/godebug.defaultGODEBUG=multipathtcp=0' -checklinkname=0"
-    (cd "$server_dir" && go build -v -trimpath -ldflags "$ldflags" -tags "$build_tags" -o ThroneCore .)
-    log_success "ThroneCore built"
-}
-
-configure_project() {
-    local build_dir="$ROOT_DIR/build"
-    local qt_cmake_dir="$QT_BUILD_DIR/lib/cmake"
-    local cmake_args=(
-        -G Ninja
-        -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
-        -DBUILD_TESTING=OFF
-        -DNKR_PACKAGE_MACOS=ON
-        -DCMAKE_PREFIX_PATH="$qt_cmake_dir"
-        -DCMAKE_OSX_ARCHITECTURES="$ARCH"
-        -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT_DIR"
-        -DCLANG_FORMAT:FILEPATH="$CLANG_FORMAT_PATH"
-        -DCMAKE_OSX_SYSROOT="$SDKROOT"
-        -DCMAKE_OSX_DEPLOYMENT_TARGET="$DEPLOYMENT_TARGET"
-        -DWARP_CLIENT_ENABLE=ON
-    )
-
-    if [[ -f "$build_dir/CMakeCache.txt" ]] && ! grep -Fq "$ROOT_DIR" "$build_dir/CMakeCache.txt"; then
-        log_warn "Removing a CMake cache created for another source directory"
-        rm -rf "$build_dir"
-    fi
-    cmake -S "$ROOT_DIR" -B "$build_dir" "${cmake_args[@]}"
-}
-
-build_project() {
-    cmake --build "$ROOT_DIR/build" --config "$BUILD_TYPE" --parallel
-    log_success "Throne.app and warp-client built"
-}
-
-package_app() {
-    local throne_app="$ROOT_DIR/build/Throne.app"
-    local throne_core="$ROOT_DIR/core/server/ThroneCore"
-    local warp_client="$ROOT_DIR/build/warp-client-src/bin/warp-client"
-    local bin_dir="$ROOT_DIR/bin"
-
-    if [[ ! -d "$throne_app" ]]; then
-        log_error "Missing release artifact: $throne_app"
-        exit 1
-    fi
-    if [[ ! -x "$throne_core" ]]; then
-        log_error "Missing release artifact: $throne_core"
-        exit 1
-    fi
-    if [[ ! -x "$warp_client" ]]; then
-        log_error "Missing release artifact: $warp_client"
-        exit 1
-    fi
-
-    rm -rf "$throne_app/Contents/MacOS/config"
-    "$QT_BUILD_DIR/bin/macdeployqt" "$throne_app" -no-plugins -verbose=2
-    cp "$throne_core" "$throne_app/Contents/MacOS/"
-    cp "$warp_client" "$throne_app/Contents/MacOS/warp-client"
-    chmod +x "$throne_app/Contents/MacOS/warp-client"
-    if [[ ! -x "$throne_app/Contents/MacOS/warp-client" ]]; then
-        log_error "warp-client is not executable in the app bundle"
-        exit 1
-    fi
-    dsymutil "$throne_app/Contents/MacOS/Throne" 2>/dev/null || true
-    strip -S "$throne_app/Contents/MacOS/Throne" 2>/dev/null || true
-    codesign --force --deep --sign - "$throne_app"
-    codesign --verify --deep --strict --verbose=2 "$throne_app"
-
-    mkdir -p "$bin_dir"
-    rm -rf "$bin_dir/Throne.app"
-    cp -R "$throne_app" "$bin_dir/"
-    log_success "Release app copied to $bin_dir/Throne.app"
-}
-
-build_release() {
-    log_info "Building Throne for macOS $ARCH ($BUILD_TYPE)"
-    preflight
-    build_core
-    configure_project
-    build_project
-    package_app
-}
-
-while (( $# > 0 )); do
-    case "$1" in
-        --update)
-            UPDATE=true
-            ;;
-        --update-only)
-            UPDATE=true
-            BUILD=false
-            ;;
-        --bootstrap)
-            BOOTSTRAP=true
-            ;;
-        --help|-h)
-            usage
-            exit 0
-            ;;
-        *)
-            printf 'Unknown option: %s\n' "$1" >&2
-            usage >&2
-            exit 2
-            ;;
-    esac
-    shift
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --debug) DEBUG=true; shift ;;
+    --skip-core) SKIP_CORE=true; shift ;;
+    --skip-npm) SKIP_NPM=true; shift ;;
+    --open) OPEN_AFTER=true; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown option: $1 (try --help)" ;;
+  esac
 done
 
-if [[ "$BUILD" == true || "$BOOTSTRAP" == true ]] && [[ "$(uname -s)" != Darwin ]]; then
-    printf 'The local release entry currently targets macOS; cross-platform releases use .github/workflows/build.yml.\n' >&2
-    exit 1
+[[ "$(uname -s)" == "Darwin" ]] || die "macOS only"
+need go
+need cargo
+need npm
+need rustc
+if ! xcode-select -p >/dev/null 2>&1; then
+  die "Xcode CLT not configured (xcode-select -p)"
 fi
 
-if [[ "$BOOTSTRAP" == true ]]; then
-    "$ROOT_DIR/script/bootstrap_macos.sh"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
+TRIPLE="$(target_triple)"
+log "root=$ROOT triple=$TRIPLE debug=$DEBUG"
+
+# --- 1) NexusCore ---
+mkdir -p "$BIN_DIR" "$BINARIES_DIR"
+if $SKIP_CORE && [[ -f "$CORE_OUT" ]]; then
+  log "reuse $CORE_OUT"
+else
+  log "building NexusCore (go)…"
+  (
+    cd "$CORE_SRC"
+    # CGO often needed for tun/stack bits on macOS
+    CGO_ENABLED="${CGO_ENABLED:-1}" go build -trimpath -ldflags="-s -w" -o "$CORE_OUT" .
+  )
+  ok "NexusCore → $CORE_OUT"
 fi
-if [[ "$UPDATE" == true ]]; then
-    "$ROOT_DIR/script/update_core_forks.sh"
+[[ -f "$CORE_OUT" ]] || die "NexusCore missing at $CORE_OUT"
+chmod +x "$CORE_OUT"
+
+# Stage for Tauri externalBin (name must match tauri.conf externalBin entry)
+STAGED="$BINARIES_DIR/NexusCore-${TRIPLE}"
+cp -f "$CORE_OUT" "$STAGED"
+chmod +x "$STAGED"
+ok "staged $STAGED"
+
+# --- 2) frontend deps ---
+if [[ ! -d "$APP_DIR/node_modules" ]] || ! $SKIP_NPM; then
+  if [[ -d "$APP_DIR/node_modules" ]] && $SKIP_NPM; then
+    log "node_modules present, --skip-npm"
+  else
+    log "npm install…"
+    (cd "$APP_DIR" && npm install)
+  fi
+else
+  log "skip npm install"
 fi
-if [[ "$BUILD" == true ]]; then
-    build_release
+
+# Prefer local CLI
+TAURI_CLI=(npx --no-install tauri)
+if ! (cd "$APP_DIR" && npx --no-install tauri --version >/dev/null 2>&1); then
+  if command -v cargo-tauri >/dev/null 2>&1 || cargo tauri --version >/dev/null 2>&1; then
+    TAURI_CLI=(cargo tauri)
+  else
+    log "installing @tauri-apps/cli in app/…"
+    (cd "$APP_DIR" && npm install --save-dev @tauri-apps/cli@^2)
+  fi
+fi
+
+# --- 3) tauri build ---
+log "tauri build…"
+BUILD_ARGS=(build)
+if $DEBUG; then
+  BUILD_ARGS+=(--debug)
+fi
+(
+  cd "$APP_DIR"
+  # ensure shell can find core during any build-time checks
+  export NEXUS_CORE_BIN="$CORE_OUT"
+  "${TAURI_CLI[@]}" "${BUILD_ARGS[@]}"
+)
+
+# --- 4) locate .app ---
+PROFILE="release"
+$DEBUG && PROFILE="debug"
+APP_CANDIDATES=(
+  "$TAURI_DIR/target/${PROFILE}/bundle/macos/Nexus.app"
+  "$TAURI_DIR/target/${TRIPLE}/${PROFILE}/bundle/macos/Nexus.app"
+)
+APP_PATH=""
+for c in "${APP_CANDIDATES[@]}"; do
+  if [[ -d "$c" ]]; then
+    APP_PATH="$c"
+    break
+  fi
+done
+if [[ -z "$APP_PATH" ]]; then
+  APP_PATH="$(find "$TAURI_DIR/target" -type d -name 'Nexus.app' 2>/dev/null | head -1 || true)"
+fi
+[[ -n "$APP_PATH" && -d "$APP_PATH" ]] || die "Nexus.app not found under $TAURI_DIR/target"
+
+# Ensure NexusCore sits next to the main binary (MacOS/) even if externalBin naming differs
+MACOS_DIR="$APP_PATH/Contents/MacOS"
+if [[ -d "$MACOS_DIR" ]]; then
+  cp -f "$CORE_OUT" "$MACOS_DIR/NexusCore"
+  chmod +x "$MACOS_DIR/NexusCore"
+  ok "embedded $MACOS_DIR/NexusCore"
+
+  # Bundle official Cloudflare warp-cli (not full WARP.app)
+  WARP_STAGE="$ROOT/third_party/cloudflare-warp/warp-cli"
+  WARP_SYS="/Applications/Cloudflare WARP.app/Contents/Resources/warp-cli"
+  if [[ ! -f "$WARP_STAGE" && -f "$WARP_SYS" ]]; then
+    mkdir -p "$(dirname "$WARP_STAGE")"
+    cp -f "$WARP_SYS" "$WARP_STAGE"
+    chmod +x "$WARP_STAGE"
+    log "staged warp-cli from system WARP.app → $WARP_STAGE"
+  fi
+  if [[ -f "$WARP_STAGE" ]]; then
+    cp -f "$WARP_STAGE" "$MACOS_DIR/warp-cli"
+    chmod +x "$MACOS_DIR/warp-cli"
+    ok "embedded $MACOS_DIR/warp-cli"
+  else
+    log "warp-cli not staged (third_party/cloudflare-warp or system WARP.app missing)"
+  fi
+fi
+
+# Convenience copy under repo bin/
+DEST_APP="$BIN_DIR/Nexus.app"
+rm -rf "$DEST_APP"
+cp -R "$APP_PATH" "$DEST_APP"
+ok "copied → $DEST_APP"
+
+echo
+ok "build complete"
+echo "  app:  $DEST_APP"
+echo "  also: $APP_PATH"
+echo "  core: $CORE_OUT"
+echo "  run:  open \"$DEST_APP\""
+echo "  note: connect is still CheckConfig-only until Start() is wired"
+
+if $OPEN_AFTER; then
+  open "$DEST_APP"
 fi

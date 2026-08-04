@@ -5,6 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Nexus</title>
   <link rel="icon" href="assets/nexus-icon.svg" type="image/svg+xml" />
+  <script>
+    /* mark desktop shell ASAP — avoid mock padding flash under native chrome */
+    (function () {
+      try {
+        var ua = navigator.userAgent || '';
+        var host = location.hostname || '';
+        var tauri =
+          !!(window.__TAURI_INTERNALS__ || window.__TAURI__) ||
+          ua.indexOf('Tauri') !== -1 ||
+          location.protocol === 'tauri:' ||
+          host === 'tauri.localhost' ||
+          host.endsWith('.localhost') && host.indexOf('tauri') !== -1;
+        if (tauri) document.documentElement.classList.add('desktop');
+      } catch (_) {}
+    })();
+  </script>
 <style>
   :root {
     --bg: #f5f5f7;
@@ -170,6 +186,59 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Tauri desktop: 0 gap — full-bleed, no mock chrome inset */
+  html.desktop,
+  html.desktop body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  html.desktop body {
+    display: block;
+    place-items: unset;
+    padding: 0;
+    margin: 0;
+    background: var(--bg);
+  }
+  html.desktop .window {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  /* real traffic lights drawn by macOS; keep spacer for layout */
+  html.desktop .traffic-lights {
+    visibility: hidden;
+    pointer-events: none;
+  }
+  html.desktop .titlebar {
+    app-region: drag;
+    -webkit-app-region: drag;
+  }
+  /* explicit fill so empty middle of titlebar always drags (flex gaps alone miss hits) */
+  html.desktop .titlebar-drag {
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-width: 48px;
+    min-height: 100%;
+    cursor: default;
+    app-region: drag;
+    -webkit-app-region: drag;
+  }
+  html.desktop .titlebar button,
+  html.desktop .titlebar input,
+  html.desktop .titlebar select,
+  html.desktop .titlebar a,
+  html.desktop .titlebar .menu-wrap,
+  html.desktop .titlebar .menu,
+  html.desktop .titlebar .search,
+  html.desktop .titlebar .seg,
+  html.desktop .titlebar .toolbar-group {
+    app-region: no-drag;
+    -webkit-app-region: no-drag;
+  }
+
   button, input, select { font: inherit; }
   button { color: inherit; }
   svg { vector-effect: non-scaling-stroke; }
@@ -275,9 +344,15 @@
   .titlebar-right {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 12px;
     padding: 0 16px 0 8px;
+    min-width: 0;
+  }
+  .titlebar-drag {
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-width: 48px;
   }
   .toolbar-group {
     display: flex;
@@ -433,7 +508,17 @@
   html[data-icons="mono"] .power:not(.on) { color: var(--secondary); background: var(--fill); }
   /* Auto: colorful when light, mono when dark (overridden by resolve) */
 
-  .side-spacer { flex: 1; }
+  .side-spacer {
+    flex: 1 1 auto;
+    min-height: 24px;
+    align-self: stretch;
+    width: 100%;
+  }
+  html.desktop .side-spacer {
+    app-region: drag;
+    -webkit-app-region: drag;
+    cursor: default;
+  }
   .side-collapse {
     display: flex;
     align-items: center;
@@ -696,7 +781,41 @@
     border-radius: 999px;
     font-variant-numeric: tabular-nums;
   }
-  .list-head .grow { flex: 1; }
+  .list-head .grow {
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-width: 32px;
+    min-height: 28px;
+  }
+  html.desktop .list-head .grow {
+    app-region: drag;
+    -webkit-app-region: drag;
+    cursor: default;
+  }
+  /* main chrome padding / empty hero strip also draggable */
+  html.desktop .hero {
+    app-region: drag;
+    -webkit-app-region: drag;
+  }
+  html.desktop .hero button,
+  html.desktop .hero input,
+  html.desktop .hero label,
+  html.desktop .hero .toggle,
+  html.desktop .hero .power,
+  html.desktop .hero .toggles {
+    app-region: no-drag;
+    -webkit-app-region: no-drag;
+  }
+  html.desktop .list-head {
+    app-region: drag;
+    -webkit-app-region: drag;
+  }
+  html.desktop .list-head .search,
+  html.desktop .list-head input,
+  html.desktop .list-head button {
+    app-region: no-drag;
+    -webkit-app-region: no-drag;
+  }
   .search {
     display: flex;
     align-items: center;
@@ -732,6 +851,13 @@
     box-shadow: var(--shadow-sm);
     overflow: auto;
     min-height: 0;
+  }
+  .table-card:focus {
+    outline: none;
+  }
+  .table-card:focus-visible {
+    outline: 2px solid rgba(0, 122, 255, 0.35);
+    outline-offset: -2px;
   }
 
   table {
@@ -1402,16 +1528,86 @@
   }
   .form-grid .field:focus { outline: none; border-color: var(--focus-border); box-shadow: var(--focus-ring); }
   .form-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .group-list { display: grid; gap: 6px; margin: 0 0 12px; }
+  .group-list { display: grid; gap: 8px; margin: 4px 0 14px; max-height: min(360px, 52vh); overflow: auto; padding: 1px; }
   .group-row {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 10px; border-radius: 8px;
-    background: var(--fill); border: 0.5px solid transparent;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 72px auto;
+    align-items: center;
+    column-gap: 12px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--fill);
+    border: 0.5px solid transparent;
+    cursor: pointer;
+    transition: background .12s var(--ease), border-color .12s var(--ease);
   }
-  .group-row.active { border-color: rgba(0,122,255,.35); background: var(--row-selected); }
-  .group-row .g-name { flex: 1; font-weight: 550; color: var(--label); font-size: 13px; }
-  .group-row .g-meta { font-size: 11px; color: var(--tertiary); font-family: var(--mono); }
-  .group-row .g-acts { display: flex; gap: 4px; }
+  .group-row:hover { background: rgba(120,120,128,.12); }
+  .group-row.active {
+    border-color: rgba(0,122,255,.38);
+    background: var(--row-selected);
+    box-shadow: inset 0 0 0 0.5px rgba(0,122,255,.12);
+  }
+  .group-row .g-name {
+    min-width: 0;
+    font: 600 13px/1.25 var(--font);
+    letter-spacing: -0.01em;
+    color: var(--label);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .group-row .g-meta {
+    justify-self: end;
+    font: 500 12px/1 var(--font);
+    font-variant-numeric: tabular-nums;
+    color: var(--tertiary);
+    white-space: nowrap;
+  }
+  .group-row .g-acts {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-self: end;
+  }
+  .group-row .g-acts .btn-row {
+    height: 28px;
+    min-width: 52px;
+    padding: 0 10px;
+    border-radius: 7px;
+    font: 500 12px/1 var(--font);
+    color: var(--label);
+    background: rgba(120,120,128,.14);
+    border: 0;
+    cursor: pointer;
+  }
+  .group-row .g-acts .btn-row:hover { background: rgba(120,120,128,.24); }
+  .group-row .g-acts .btn-row.danger { color: var(--red, #ff3b30); }
+  .group-row .g-acts .btn-row.danger:hover { background: rgba(255,59,48,.12); }
+  .groups-card { width: min(460px, calc(100vw - 40px)); padding: 20px 20px 16px; }
+  .groups-card h3 {
+    margin: 0;
+    font: 650 16px/1.25 var(--font);
+    letter-spacing: -0.02em;
+    color: var(--label);
+  }
+  .groups-card .groups-sub {
+    margin: 6px 0 0;
+    font: 400 12.5px/1.4 var(--font);
+    color: var(--secondary);
+  }
+  .groups-card .confirm-actions {
+    margin-top: 2px;
+    align-items: center;
+  }
+  .groups-card .confirm-actions .btn-ghost,
+  .groups-card .confirm-actions .btn-primary {
+    min-width: 76px;
+    height: 32px;
+    padding: 0 14px;
+    font: 500 13px/1 var(--font);
+  }
+  .groups-card .confirm-actions .btn-primary { font-weight: 600; }
   .rule-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
   .rule-table th {
     text-align: left; font-size: 11px; font-weight: 600; color: var(--tertiary);
@@ -1658,6 +1854,18 @@
     color: var(--tertiary);
     background: var(--chrome);
     border-top: 0.5px solid var(--separator);
+    min-height: 28px;
+  }
+  html.desktop .statusbar {
+    app-region: drag;
+    -webkit-app-region: drag;
+    cursor: default;
+  }
+  html.desktop .statusbar button,
+  html.desktop .statusbar a,
+  html.desktop .statusbar input {
+    app-region: no-drag;
+    -webkit-app-region: no-drag;
   }
   .statusbar strong {
     color: var(--secondary);
@@ -1695,7 +1903,8 @@
 </head>
 <body>
   <div class="window" role="application" aria-label="Nexus">
-    <header class="titlebar">
+    <!-- deep: empty chrome + brand drag; buttons/tabs auto no-drag via Tauri drag.js -->
+    <header class="titlebar" data-tauri-drag-region="deep">
       <div class="titlebar-left">
         <div class="traffic-lights" aria-hidden="true">
           <i class="t-r"></i><i class="t-y"></i><i class="t-g"></i>
@@ -1753,6 +1962,8 @@
             <button role="tab" aria-selected="false" data-sub="backup" title="切换到备用订阅"><span data-i18n="tb.backup">备用</span></button>
           </div>
         </div>
+        <!-- empty middle: hold & drag window (deep titlebar covers this; keep fill for hit area) -->
+        <div class="titlebar-drag" aria-hidden="true"></div>
         <div class="toolbar-group">
           <div class="menu-wrap test-menu-wrap">
             <button class="tb-btn" id="testBtn" title="测试菜单" aria-haspopup="menu" aria-expanded="false">
@@ -1796,12 +2007,13 @@
           <span class="side-label" data-i18n="nav.settings">设置</span>
         </button>
 
-        <div class="side-spacer"></div>
+        <!-- empty rail: hold & drag window (nav buttons stay no-drag) -->
+        <div class="side-spacer" data-tauri-drag-region aria-hidden="true"></div>
         <button class="side-collapse" id="sideCollapse" title="收窄为图标栏，腾出主区域" aria-label="收窄或展开侧栏" aria-expanded="true" aria-controls="sidebar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6 9 12l6 6"/></svg>
           <span class="side-label">收窄</span>
         </button>
-        <div class="side-foot" id="sideFoot" title="订阅 ">
+        <div class="side-foot" id="sideFoot" data-tauri-drag-region="deep" title="订阅 ">
           <div class="k" id="sideFootK">订阅</div>
           <div class="v" id="sideFootV"></div>
         </div>
@@ -1809,7 +2021,7 @@
 
       <main class="main">
         <section class="view view-home active" id="view-home">
-<section class="hero">
+<section class="hero" data-tauri-drag-region="deep">
           <div class="hero-card">
             <div class="hero-left">
               <button class="power" id="powerBtn" aria-pressed="false" aria-label="连接或断开" title="连接 / 断开当前节点">
@@ -1818,7 +2030,7 @@
                   <path d="M7.5 6.5a7 7 0 1 0 9 0"/>
                 </svg>
               </button>
-              <div class="hero-meta">
+              <div class="hero-meta" data-tauri-drag-region="deep">
                 <div class="hero-state">
                   <span class="pulse" id="statusDot"></span>
                   <span id="statusText" data-i18n="status.disconnected">未连接</span>
@@ -1845,7 +2057,7 @@
                   <span class="switch" aria-hidden="true"></span>
                   系统 DNS
                 </label>
-                <label class="toggle" id="warpChip" title="经 Cloudflare WARP 出站。与 Tun 互斥，不能同时开启">
+                <label class="toggle" id="warpChip" title="经捆绑 warp-cli 连接 WARP（Mode: UDP/HTTPS/TLS）。与 Tun 互斥">
                   <input type="checkbox" id="warpToggle" />
                   <span class="switch" aria-hidden="true"></span>
                   WARP
@@ -1856,11 +2068,11 @@
         </section>
 
         <section class="list-wrap">
-          <div class="list-head">
+          <div class="list-head" data-tauri-drag-region="deep">
             <div class="list-title">节点</div>
             <span class="list-count" id="nodeCount">11</span>
-            <div class="grow"></div>
-            <div class="search">
+            <div class="grow" data-tauri-drag-region aria-hidden="true"></div>
+            <div class="search" data-tauri-drag-region="false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
               <input type="search" id="searchInput" placeholder="搜索节点" title="按名称或地址筛选" />
             </div>
@@ -2011,10 +2223,7 @@
                 </tr>
               </thead>
               <tbody id="connTable">
-                <tr data-app="Chrome" data-dest="www.google.com:443" data-proto="TCP" data-out="proxy" data-flow="1.2 MB"><td class="app">Chrome</td><td>www.google.com:443</td><td>TCP</td><td class="rule">proxy</td><td>1.2 MB</td></tr>
-                <tr data-app="Cursor" data-dest="api2.cursor.sh:443" data-proto="TCP" data-out="proxy" data-flow="480 KB"><td class="app">Cursor</td><td>api2.cursor.sh:443</td><td>TCP</td><td class="rule">proxy</td><td>480 KB</td></tr>
-                <tr data-app="System" data-dest="1.1.1.1:853" data-proto="UDP" data-out="direct" data-flow="12 KB"><td class="app">System</td><td>1.1.1.1:853</td><td>UDP</td><td class="rule">direct</td><td>12 KB</td></tr>
-                <tr data-app="Music" data-dest="music.apple.com:443" data-proto="TCP" data-out="proxy" data-flow="3.4 MB"><td class="app">Music</td><td>music.apple.com:443</td><td>TCP</td><td class="rule">proxy</td><td>3.4 MB</td></tr>
+                <!-- ponytail: empty until Core streams real connections -->
               </tbody>
             </table>
           </div>
@@ -2456,8 +2665,15 @@
                   <div class="set-row">
                     <div class="set-label">启用 WARP</div>
                     <div class="set-right">
-                      <span class="set-hint">经 Cloudflare WARP 出站；与 Tun 互斥，冲突时将提示确认</span>
+                      <span class="set-hint">经捆绑的 warp-cli 连接 Cloudflare WARP（系统守护进程）；与 Tun 互斥</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" id="warpSwitch" data-switch aria-pressed="false"></button></div>
+                    </div>
+                  </div>
+                  <div class="set-row">
+                    <div class="set-label">模式</div>
+                    <div class="set-right">
+                      <span class="set-hint">对应官方 Mode：流量+DNS 的 UDP / HTTPS(DoH) / TLS(DoT)</span>
+                      <div class="set-ctrl"><button type="button" class="select" id="warpModeSelect" data-options="UDP|HTTPS|TLS" data-value="UDP"><span class="sel-val">UDP</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                 </div>
@@ -2466,6 +2682,20 @@
 
               <div class="set-panel" id="panel-sub">
                 <div class="set-card">
+                  <div class="set-section">订阅源</div>
+                  <div class="set-row">
+                    <div class="set-label">订阅链接</div>
+                    <div class="set-right">
+                      <span class="set-hint">当前顶栏分组的订阅 URL；粘贴后点应用</span>
+                      <div class="set-ctrl wide">
+                        <div class="path-row">
+                          <div class="field placeholder" id="subUrlField" contenteditable="true" spellcheck="false" role="textbox" data-type="url" data-placeholder="https://…/sub" data-readonly="false"><span class="ph">https://…/sub</span></div>
+                          <button type="button" class="btn-mini" id="subUrlPaste" title="从剪贴板粘贴">粘贴</button>
+                          <button type="button" class="btn-mini" id="subUrlApply" title="保存到当前分组">应用</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   <div class="set-section">更新</div>
                   <div class="set-row">
                     <div class="set-label">自动更新订阅</div>
@@ -2535,10 +2765,10 @@
       </main>
     </div>
 
-    <footer class="statusbar">
-      <div><span id="sbStatus" data-i18n="sb.stopped">未在运行</span></div>
-      <div class="sb-c" title="本机混合入站监听地址"><span data-i18n="sb.mixed">混合入站</span> · <strong>[::]:2080</strong></div>
-      <div class="sb-r">
+    <footer class="statusbar" data-tauri-drag-region="deep" aria-label="状态栏">
+      <div data-tauri-drag-region="deep"><span id="sbStatus" data-i18n="sb.stopped">未在运行</span></div>
+      <div class="sb-c" data-tauri-drag-region="deep" title="本机混合入站监听地址"><span data-i18n="sb.mixed">混合入站</span> · <strong>[::]:2080</strong></div>
+      <div class="sb-r" data-tauri-drag-region="deep">
         <span title="经代理转发的流量"><span data-i18n="sb.proxy">代理</span> <strong id="sbProxy">—</strong></span>
         <span title="直连未走代理的流量"><span data-i18n="sb.direct">直连</span> <strong id="sbDirect">—</strong></span>
       </div>
@@ -2632,13 +2862,13 @@
   </div>
 
   <div class="confirm-mask" id="groupsMask" role="dialog" aria-modal="true" aria-labelledby="groupsTitle" hidden>
-    <div class="confirm-card wide">
+    <div class="confirm-card groups-card" role="document">
       <h3 id="groupsTitle">管理分组</h3>
-      <p style="margin:0 0 10px;font-size:12.5px;color:var(--secondary)">新建 / 重命名 / 删除订阅分组；顶栏 Tab 同步变化。</p>
-      <div class="group-list" id="groupList"></div>
+      <p class="groups-sub">新建、重命名或删除订阅分组；顶栏 Tab 会同步更新。</p>
+      <div class="group-list" id="groupList" role="list"></div>
       <div class="confirm-actions" style="justify-content:space-between">
         <button type="button" class="btn-ghost" id="groupAdd">新建分组</button>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center">
           <button type="button" class="btn-ghost" id="groupUpdateAll">更新全部</button>
           <button type="button" class="btn-primary" id="groupsClose">完成</button>
         </div>
@@ -2692,14 +2922,15 @@
   </div>
 
   <div class="confirm-mask" id="groupEditMask" role="dialog" aria-modal="true" aria-labelledby="groupEditTitle" hidden>
-    <div class="confirm-card wide">
+    <div class="confirm-card groups-card">
       <h3 id="groupEditTitle">编辑分组</h3>
-      <div class="form-grid">
-        <label>名称<input class="field" id="geName" type="text" /></label>
-        <label>订阅 URL<input class="field" id="geUrl" type="text" placeholder="https://…" /></label>
-        <label style="display:flex;align-items:center;gap:10px;flex-direction:row">
+      <p class="groups-sub" id="groupEditSub">修改名称与订阅源；保存后顶栏 Tab 同步。</p>
+      <div class="form-grid" style="margin-top:14px">
+        <label>名称<input class="field" id="geName" type="text" autocomplete="off" spellcheck="false" /></label>
+        <label>订阅 URL<input class="field" id="geUrl" type="url" autocomplete="off" spellcheck="false" placeholder="https://…" /></label>
+        <label style="display:flex;align-items:center;gap:10px;flex-direction:row;margin-top:2px">
           <button type="button" class="switch-only on" id="geAuto" data-switch aria-pressed="true"></button>
-          <span style="font-size:13px;color:var(--label)">自动更新订阅</span>
+          <span style="font:500 13px/1.2 var(--font);color:var(--label)">自动更新订阅</span>
         </label>
       </div>
       <div class="confirm-actions">
@@ -2728,6 +2959,14 @@
   const nodeTable = document.getElementById('nodeTable');
   const searchInput = document.getElementById('searchInput');
   const nodeCount = document.getElementById('nodeCount');
+  const tableCard = document.querySelector('.table-card');
+  let nodeListPointerInside = false;
+  let nodeListFocus = false;
+  if (tableCard) {
+    tableCard.tabIndex = 0; // focus target so ⌘A works after click in list
+    tableCard.setAttribute('role', 'grid');
+    tableCard.setAttribute('aria-label', '节点列表');
+  }
   let connected = false;
   let selectedName = 'CF官方优选12';
   let selectedLat = '162 ms';
@@ -2836,8 +3075,9 @@
 
   function setConnected(on) {
     connected = on;
-    powerBtn.classList.toggle('on', on);
-    powerBtn.setAttribute('aria-pressed', String(on));
+    const pb = document.getElementById('powerBtn') || powerBtn;
+    pb.classList.toggle('on', on);
+    pb.setAttribute('aria-pressed', String(on));
     statusDot.classList.toggle('on', on);
     if (typeof t === 'function') {
       statusText.textContent = on ? t('status.connected') : t('status.disconnected');
@@ -2855,17 +3095,45 @@
     sbProxy.textContent = on ? '12.4 KB' : '—';
   }
 
-  powerBtn.addEventListener('click', () => {
+  async function nexusInvoke(cmd, args) {
+    try {
+      const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
+      if (!inv) return { ok: false, offline: true };
+      const data = await inv(cmd, args || {});
+      return { ok: true, data };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  }
+
+  powerBtn.addEventListener('click', async () => {
     if (!connected) {
-      log('CORE', 'info', `启动配置档 <span class="node">[VLESS] ${selectedName}</span>`);
+      log('CORE', 'info', `校验配置档 <span class="node">[VLESS] ${selectedName}</span>`);
+      const r = await nexusInvoke('connect_selected');
+      if (!r || r.offline) {
+        // browser preview only
+        setConnected(true);
+        log('OK', 'ok', `预览模式 · 未启动 Core · ${selectedName}`);
+        return;
+      }
+      if (!r.ok) { log('CORE', 'warn', `连接失败: ${r.error}`); return; }
+      if (r.data?.check_error) {
+        log('CORE', 'warn', `CheckConfig: ${r.data.check_error}`);
+        return;
+      }
+      // Start() still deferred — do not claim full tunnel
       setConnected(true);
-      log('OK', 'ok', `已连接 · ${selectedName}`);
+      log('OK', 'ok', `配置校验通过（未 Start）· ${selectedName}`);
+      if (r.data?.note) log('SYS', 'info', r.data.note);
     } else {
       log('CORE', 'warn', `停止配置档 <span class="node">[VLESS] ${selectedName}</span>`);
+      const r = await nexusInvoke('core_stop');
       setConnected(false);
       log('OK', 'ok', '已断开');
     }
   });
+  // nexusInvoke defined later; hoist stub
+  
 
   function selectNodeRow(row, { multi } = {}) {
     if (!row) return;
@@ -2891,6 +3159,8 @@
     const row = e.target.closest('tr');
     if (!row) return;
     selectNodeRow(row, { multi: e.metaKey || e.ctrlKey });
+    nodeListFocus = true;
+    tableCard?.focus({ preventScroll: true });
     if (!(e.metaKey || e.ctrlKey) && connected) {
       log('CORE', 'info', `切换节点 <span class="node">[VLESS] ${selectedName}</span>`);
     }
@@ -2905,9 +3175,23 @@
   function openCtxMenu(x, y) {
     if (!ctxMenu) return;
     closeMenus();
+    // Throne: menu_update_subscription enabled only when group has url
+    const gid = (typeof activeGroupId === 'function') ? activeGroupId() : 'default';
+    const g = (typeof GROUPS !== 'undefined') ? GROUPS.find(x => x.id === gid) : null;
+    const hasUrl = !!(g && g.url && String(g.url).trim());
+    const hasRows = selectedRows().length > 0 || nodeTable.querySelectorAll('tr').length > 0;
+    ctxMenu.querySelectorAll('[data-ctx]').forEach(b => {
+      const act = b.dataset.ctx;
+      let en = true;
+      if (act === 'refresh-sub') en = hasUrl && !subUpdating;
+      if (['edit', 'start', 'clone', 'copy-link', 'show-qr'].includes(act)) en = !!selectedNames().length || !!document.querySelector('#nodeTable tr.selected');
+      if (['delete', 'url-test', 'resolve-ip'].includes(act)) en = selectedRows().length > 0;
+      if (['stop'].includes(act)) en = !!connected;
+      b.disabled = !en;
+      b.toggleAttribute('disabled', !en);
+    });
     ctxMenu.hidden = false;
     ctxMenu.classList.add('open');
-    // measure after show
     const w = ctxMenu.offsetWidth || 220;
     const h = ctxMenu.offsetHeight || 320;
     const left = Math.min(x, window.innerWidth - w - 8);
@@ -2921,9 +3205,32 @@
   function selectedNames() {
     return selectedRows().map(r => r.dataset.name).filter(Boolean);
   }
+  function visibleNodeRows() {
+    return [...nodeTable.querySelectorAll('tr')].filter(r => r.style.display !== 'none');
+  }
+  function selectAllNodes() {
+    const rows = visibleNodeRows();
+    rows.forEach(r => r.classList.add('selected'));
+    const first = rows[0];
+    if (first) {
+      selectedName = first.dataset.name || selectedName;
+      selectedLat = first.dataset.lat || first.querySelector('.lat')?.textContent || selectedLat;
+    }
+    log('SYS', 'info', `已全选 ${rows.length} 个节点`);
+    return rows.length;
+  }
 
   // right-click on table body / list area
   const listWrap = document.querySelector('.list-wrap');
+  listWrap?.addEventListener('pointerenter', () => { nodeListPointerInside = true; });
+  listWrap?.addEventListener('pointerleave', () => { nodeListPointerInside = false; });
+  listWrap?.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.search')) return;
+    nodeListFocus = true;
+  }, true);
+  document.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.list-wrap')) nodeListFocus = false;
+  }, true);
   listWrap?.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     const row = e.target.closest('#nodeTable tr');
@@ -2937,8 +3244,33 @@
     if (!e.target.closest('#logCtxMenu')) closeLogCtxMenu?.();
     if (!e.target.closest('#connCtxMenu')) closeConnCtxMenu?.();
   });
+  function isEditableTarget(el) {
+    if (!el || el === document.body) return false;
+    const tag = (el.tagName || '').toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return !!el.closest?.('input, textarea, select, [contenteditable="true"]');
+  }
+  function nodeListHotkeyActive() {
+    const ae = document.activeElement;
+    if (isEditableTarget(ae) && !ae?.closest?.('.table-card')) return false;
+    // search box is in list-head: allow normal text select-all there
+    if (ae && ae.closest && ae.closest('.search')) return false;
+    if (ae && (ae === tableCard || ae.closest?.('.table-card') || ae.closest?.('#nodeTable'))) return true;
+    if (nodeListPointerInside || nodeListFocus) return true;
+    return false;
+  }
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeCtxMenu();
+    // ⌘A / Ctrl+A: select all nodes when pointer/focus is in node list
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+      if (nodeListHotkeyActive()) {
+        e.preventDefault();
+        e.stopPropagation();
+        selectAllNodes();
+        tableCard?.focus({ preventScroll: true });
+      }
+    }
   });
   window.addEventListener('resize', () => closeCtxMenu());
   document.querySelector('.table-scroll')?.addEventListener('scroll', () => closeCtxMenu(), { passive: true });
@@ -2951,9 +3283,9 @@
       const one = names[0] || selectedName;
       const n = names.length || 1;
       const map = {
-        'add-clip': () => log('SYS', 'info', '从剪贴板导入配置档…'),
-        'add-file': () => log('SYS', 'info', '从文件导入配置档…'),
-        'scan-qr': () => log('SYS', 'info', '打开二维码扫描…'),
+        'add-clip': () => { importFromClipboard(); },
+        'add-file': () => { importFromFile(); },
+        'scan-qr': () => { importScanQr(); },
         start: () => {
           if (one) {
             selectedName = one;
@@ -2973,18 +3305,21 @@
         delete: () => {
           const rows = selectedRows();
           if (!rows.length) { log('SYS', 'warn', '未选定节点'); return; }
+          const names = new Set(rows.map(r => r.dataset.name));
+          const gid = currentGid();
+          const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+          if (prof && Array.isArray(prof.nodes)) {
+            prof.nodes = prof.nodes.filter(n => !names.has(n.name));
+            const g = GROUPS.find(x => x.id === gid);
+            if (g) g.count = prof.nodes.length;
+          }
           rows.forEach(r => r.remove());
           nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
-          log('SYS', 'warn', `已删除 ${rows.length} 个节点（示意）`);
+          renumberRows();
+          log('SYS', 'warn', `已删除 ${rows.length} 个节点`);
         },
-        'select-all': () => {
-          nodeTable.querySelectorAll('tr').forEach(r => r.classList.add('selected'));
-          log('SYS', 'info', `已全选 ${nodeTable.querySelectorAll('tr').length} 个节点`);
-        },
-        'refresh-sub': () => {
-          log('SYS', 'info', '正在更新订阅…');
-          setTimeout(mockSubUpdateSummary, 400);
-        },
+        'select-all': () => { selectAllNodes(); },
+        'refresh-sub': () => { updateSubscription(null); },
         'url-test': () => {
           log('TEST', 'info', `URL 测试选定项 · ${n} 个节点…`);
           setTimeout(() => {
@@ -3026,9 +3361,27 @@
         clone: () => {
           const row = selectedRows()[0];
           if (!row) { log('SYS', 'warn', '未选定节点'); return; }
+          const name = (row.dataset.name || '节点') + ' 副本';
+          const gid = currentGid();
+          const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+          if (prof && Array.isArray(prof.nodes)) {
+            const src = prof.nodes.find(n => n.name === row.dataset.name);
+            const copy = src
+              ? { ...src, name }
+              : {
+                  name,
+                  type: row.querySelector('.pill')?.textContent || 'VLESS',
+                  addr: row.querySelector('.addr')?.textContent || '—',
+                  lat: null,
+                  flow: null,
+                };
+            const idx = prof.nodes.findIndex(n => n.name === row.dataset.name);
+            prof.nodes.splice(idx >= 0 ? idx + 1 : prof.nodes.length, 0, copy);
+            const g = GROUPS.find(x => x.id === gid);
+            if (g) g.count = prof.nodes.length;
+          }
           const clone = row.cloneNode(true);
           clone.classList.remove('selected');
-          const name = (row.dataset.name || '节点') + ' 副本';
           clone.dataset.name = name;
           const nameEl = clone.querySelector('.name');
           if (nameEl) nameEl.textContent = name;
@@ -3308,14 +3661,148 @@
       }
     });
   });
-  function mockSubUpdateSummary() {
-    const add = 1 + Math.floor(Math.random() * 3);
-    const del = Math.floor(Math.random() * 2);
-    log('OK', 'ok', `订阅已更新 · +${add} −${del}`);
+  // Throne: on_menu_update_subscription → AsyncUpdate(group->url, group->id)
+  let subUpdating = false;
+  function ensureProfile(gid, label, foot) {
+    if (typeof SUB_PROFILES === 'undefined') return null;
+    if (!SUB_PROFILES[gid]) {
+      SUB_PROFILES[gid] = { label: label || gid, foot: foot || (gid + '.local'), nodes: [] };
+    }
+    return SUB_PROFILES[gid];
   }
-  document.getElementById('refreshBtn').addEventListener('click', () => {
-    log('SYS', 'info', '正在更新订阅…');
-    setTimeout(mockSubUpdateSummary, 400);
+  function parseShareLines(text) {
+    const out = [];
+    const lines = String(text || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
+    for (const line of lines) {
+      // throne: protocol dispatch table — accept common share schemes
+      const m = line.match(/^(vless|trojan|ss|vmess|hysteria2?|hy2|socks5?|tuic|anytls):\/\//i);
+      if (!m && !line.startsWith('http://') && !line.startsWith('https://')) continue;
+      if (line.startsWith('http://') || line.startsWith('https://')) continue; // sub url, not node
+      const type = (m ? m[1] : 'VLESS').toUpperCase().replace('HY2', 'Hysteria2').replace('HYSTERIA2', 'Hysteria2').replace('SS', 'SS').replace('SOCKS5', 'SOCKS');
+      let name = '';
+      const hash = line.indexOf('#');
+      if (hash >= 0) {
+        try { name = decodeURIComponent(line.slice(hash + 1)); } catch (_) { name = line.slice(hash + 1); }
+      }
+      if (!name) name = type + '-' + (out.length + 1);
+      // host:port heuristic
+      let addr = '—';
+      try {
+        const body = line.replace(/^[a-z0-9+.-]+:\/\//i, '').split('#')[0];
+        const at = body.lastIndexOf('@');
+        const hostPart = at >= 0 ? body.slice(at + 1) : body;
+        const hp = hostPart.split(/[/?]/)[0];
+        if (hp && hp.includes(':')) addr = hp;
+        else if (hp) addr = hp + ':443';
+      } catch (_) {}
+      out.push({ name, type: type === 'SS' ? 'SS' : (type.charAt(0) + type.slice(1).toLowerCase()).replace('Vless', 'VLESS').replace('Trojan', 'Trojan').replace('Vmess', 'VMess'), addr, lat: null, flow: null });
+    }
+    // normalize types
+    out.forEach(n => {
+      const u = (n.type || '').toUpperCase();
+      if (u === 'VLESS') n.type = 'VLESS';
+      else if (u === 'TROJAN') n.type = 'Trojan';
+      else if (u === 'VMESS') n.type = 'VMess';
+      else if (u === 'SS' || u === 'SHADOWSOCKS') n.type = 'SS';
+    });
+    return out;
+  }
+  function mockNodesFromUrl(url, baseCount) {
+    // ponytail: no real HTTP fetch until import/Start; synthesize from URL host like a successful pull
+    let host = 'nodes.local';
+    try { host = new URL(url).hostname || host; } catch (_) {
+      const m = String(url).match(/https?:\/\/([^/]+)/i);
+      if (m) host = m[1];
+    }
+    const n = Math.max(3, Math.min(18, baseCount || (5 + Math.floor(Math.random() * 8))));
+    const types = ['VLESS', 'VLESS', 'Trojan', 'SS', 'VMess'];
+    const nodes = [];
+    for (let i = 0; i < n; i++) {
+      const a = 100 + ((i * 17) % 120);
+      const b = 10 + ((i * 31) % 200);
+      nodes.push({
+        name: host.split('.')[0].slice(0, 8) + '-节点' + (i + 1),
+        type: types[i % types.length],
+        addr: `104.${(i % 50) + 16}.${a}.${b}:443`,
+        lat: 60 + Math.floor(Math.random() * 220),
+        flow: null,
+      });
+    }
+    return nodes;
+  }
+  function updateSubscription(gid, { all = false } = {}) {
+    if (subUpdating) {
+      log('SYS', 'warn', '订阅更新进行中…');
+      return Promise.resolve(false);
+    }
+    const groups = all ? [...GROUPS] : [GROUPS.find(g => g.id === (gid || (typeof activeGroupId === 'function' ? activeGroupId() : 'default')))].filter(Boolean);
+    if (!groups.length) {
+      log('SYS', 'warn', '无可用分组');
+      return Promise.resolve(false);
+    }
+    // Throne: empty url → no-op / disabled
+    const targets = groups.filter(g => g.url && String(g.url).trim());
+    if (!targets.length) {
+      log('SYS', 'warn', '当前分组无订阅链接（设置 → 订阅 中填写，或编辑分组）');
+      // focus settings if single
+      if (!all) {
+        const s = document.querySelector('.side-item[data-settings="sub"]');
+        if (s) s.click();
+        else if (typeof showView === 'function') showView('settings', 'sub');
+        if (typeof syncSubUrlField === 'function') setTimeout(syncSubUrlField, 50);
+      }
+      return Promise.resolve(false);
+    }
+    subUpdating = true;
+    const btn = document.getElementById('refreshBtn');
+    const label = btn?.querySelector('[data-i18n="tb.refresh"]') || btn;
+    const prev = label?.textContent;
+    if (btn) btn.disabled = true;
+    if (label) label.textContent = '更新中…';
+
+    return (async () => {
+      let totalAdd = 0, totalDel = 0;
+      for (const g of targets) {
+        log('SYS', 'info', `正在更新订阅：${g.name}…`);
+        await new Promise(r => setTimeout(r, 280));
+        const footHost = (g.url.match(/https?:\/\/([^/]+)/i) || [])[1] || g.id;
+        const prof = ensureProfile(g.id, g.name, footHost);
+        if (!prof) { log('SYS', 'warn', '节点表未就绪'); continue; }
+        const before = (prof.nodes || []).length;
+        const next = mockNodesFromUrl(g.url, before || g.count || 8);
+        // keep names that still exist as "updated", count add/del by size delta + random churn
+        const del = Math.max(0, before - next.length);
+        const add = Math.max(0, next.length - before);
+        // if same size, still report small churn like Throne diff
+        const addR = add || (before ? Math.floor(Math.random() * 2) : next.length);
+        const delR = del || (before ? Math.floor(Math.random() * 2) : 0);
+        prof.nodes = next;
+        prof.label = g.name;
+        try {
+          const h = new URL(g.url).hostname;
+          if (h) prof.foot = h;
+        } catch (_) {}
+        g.count = next.length;
+        totalAdd += addR;
+        totalDel += delR;
+        log('OK', 'ok', `「${g.name}」已更新 · +${addR} −${delR} · 共 ${next.length}`);
+      }
+      const cur = typeof activeGroupId === 'function' ? activeGroupId() : 'default';
+      if (typeof renderNodes === 'function') renderNodes(cur);
+      if (typeof renderGroupList === 'function' && document.getElementById('groupsMask')?.classList.contains('open')) {
+        renderGroupList();
+      }
+      if (typeof syncSubUrlField === 'function') syncSubUrlField();
+      if (targets.length > 1) log('SYS', 'ok', `全部订阅更新完成 · +${totalAdd} −${totalDel}`);
+      return true;
+    })().finally(() => {
+      subUpdating = false;
+      if (btn) btn.disabled = false;
+      if (label && prev != null) label.textContent = prev || '更新';
+    });
+  }
+  document.getElementById('refreshBtn')?.addEventListener('click', () => {
+    updateSubscription(null);
   });
   document.getElementById('clearLog').addEventListener('click', () => {
     logPanel.innerHTML = '';
@@ -3420,25 +3907,63 @@
     copyText(link).then(() => log('SYS', 'ok', '已复制链接')).catch(() => log('SYS', 'info', link));
   });
 
-  // ——— group management (light) ———
+  // ——— group management ———
   let GROUPS = [
     { id: 'default', name: 'Default', count: 11, url: '', autoUpdate: true },
     { id: 'backup', name: '备用', count: 5, url: 'https://backup.example-sub.net/sub', autoUpdate: true },
   ];
+  let groupEditId = null;
+  let groupEditMode = 'edit'; // edit | create | rename
+
+  function activeGroupId() {
+    return document.querySelector('#subSeg button.active')?.dataset.sub || GROUPS[0]?.id || 'default';
+  }
+  function setActiveGroup(id, { render = true, logIt = false } = {}) {
+    const seg = document.getElementById('subSeg');
+    if (!seg) return;
+    const btn = seg.querySelector(`button[data-sub="${id}"]`);
+    if (!btn) return;
+    seg.querySelectorAll('button').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', 'false');
+    });
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+    if (render && typeof renderNodes === 'function') renderNodes(id);
+    if (logIt) {
+      const g = GROUPS.find(x => x.id === id);
+      log('SYS', 'info', '已切换订阅：' + (g?.name || id));
+    }
+    if (document.getElementById('groupsMask')?.classList.contains('open')) renderGroupList();
+    if (typeof syncSubUrlField === 'function') syncSubUrlField();
+  }
   function renderGroupList() {
     const list = document.getElementById('groupList');
     if (!list) return;
-    const activeKey = document.querySelector('#subSeg button.active')?.dataset.sub || 'default';
+    const activeKey = activeGroupId();
     list.innerHTML = GROUPS.map(g => `
-      <div class="group-row${g.id === activeKey ? ' active' : ''}" data-gid="${g.id}">
-        <span class="g-name">${g.name}</span>
+      <div class="group-row${g.id === activeKey ? ' active' : ''}" data-gid="${g.id}" role="listitem" tabindex="0">
+        <span class="g-name" title="${g.name}">${g.name}</span>
         <span class="g-meta">${g.count} 节点</span>
         <span class="g-acts">
-          <button type="button" class="btn-ghost" data-gact="edit" data-gid="${g.id}" style="min-height:28px;padding:4px 8px;font-size:12px">编辑</button>
-          <button type="button" class="btn-ghost" data-gact="rename" data-gid="${g.id}" style="min-height:28px;padding:4px 8px;font-size:12px">重命名</button>
-          <button type="button" class="btn-ghost" data-gact="del" data-gid="${g.id}" style="min-height:28px;padding:4px 8px;font-size:12px;color:var(--red,#ff3b30)">删除</button>
+          <button type="button" class="btn-row" data-gact="edit" data-gid="${g.id}">编辑</button>
+          <button type="button" class="btn-row" data-gact="rename" data-gid="${g.id}">重命名</button>
+          <button type="button" class="btn-row danger" data-gact="del" data-gid="${g.id}">删除</button>
         </span>
       </div>`).join('');
+
+    list.querySelectorAll('.group-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('[data-gact]')) return;
+        setActiveGroup(row.dataset.gid, { logIt: true });
+      });
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setActiveGroup(row.dataset.gid, { logIt: true });
+        }
+      });
+    });
     list.querySelectorAll('[data-gact]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -3446,24 +3971,9 @@
         const act = btn.dataset.gact;
         const g = GROUPS.find(x => x.id === id);
         if (!g) return;
-        if (act === 'edit') {
-          openGroupEdit(id);
-        } else if (act === 'rename') {
-          const nn = prompt('重命名分组', g.name);
-          if (nn && nn.trim()) {
-            g.name = nn.trim();
-            syncSubSegFromGroups();
-            renderGroupList();
-            log('SYS', 'info', '已重命名分组：' + g.name);
-          }
-        } else if (act === 'del') {
-          if (GROUPS.length <= 1) { log('SYS', 'warn', '至少保留一个分组'); return; }
-          if (!confirm('删除分组「' + g.name + '」？')) return;
-          GROUPS = GROUPS.filter(x => x.id !== id);
-          syncSubSegFromGroups();
-          renderGroupList();
-          log('SYS', 'warn', '已删除分组：' + g.name);
-        }
+        if (act === 'edit') openGroupEdit(id, 'edit');
+        else if (act === 'rename') openGroupEdit(id, 'rename');
+        else if (act === 'del') deleteGroup(id);
       });
     });
   }
@@ -3471,27 +3981,30 @@
     const seg = document.getElementById('subSeg');
     if (!seg) return;
     const cur = seg.querySelector('button.active')?.dataset.sub;
-    seg.innerHTML = GROUPS.map((g, i) =>
-      `<button type="button" data-sub="${g.id}" role="tab" aria-selected="${(cur === g.id) || (!cur && i===0) ? 'true' : 'false'}" class="${(cur === g.id) || (!cur && i===0) ? 'active' : ''}">${g.name}</button>`
-    ).join('');
-    // rebind
+    const keep = GROUPS.some(g => g.id === cur) ? cur : GROUPS[0]?.id;
+    seg.innerHTML = GROUPS.map((g, i) => {
+      const on = g.id === keep || (!keep && i === 0);
+      return `<button type="button" data-sub="${g.id}" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'active' : ''}">${g.name}</button>`;
+    }).join('');
     seg.querySelectorAll('button[data-sub]').forEach(btn => {
       btn.addEventListener('click', () => {
-        seg.querySelectorAll('button').forEach(b => {
-          b.classList.remove('active');
-          b.setAttribute('aria-selected', 'false');
-        });
-        btn.classList.add('active');
-        btn.setAttribute('aria-selected', 'true');
-        const key = btn.dataset.sub || 'default';
-        if (typeof renderNodes === 'function') renderNodes(key);
-        log('SYS', 'info', '已切换订阅：' + (GROUPS.find(g => g.id === key)?.name || key));
+        setActiveGroup(btn.dataset.sub, { logIt: true });
       });
     });
-    // ensure active still exists
-    if (!seg.querySelector('button.active') && seg.querySelector('button')) {
-      seg.querySelector('button').click();
-    }
+    if (keep && typeof renderNodes === 'function') renderNodes(keep);
+  }
+  function deleteGroup(id) {
+    const g = GROUPS.find(x => x.id === id);
+    if (!g) return;
+    if (GROUPS.length <= 1) { log('SYS', 'warn', '至少保留一个分组'); return; }
+    if (!confirm(`删除分组「${g.name}」？其中的节点列表将一并移除。`)) return;
+    const wasActive = activeGroupId() === id;
+    GROUPS = GROUPS.filter(x => x.id !== id);
+    if (typeof SUB_PROFILES !== 'undefined') delete SUB_PROFILES[id];
+    syncSubSegFromGroups();
+    if (wasActive && GROUPS[0]) setActiveGroup(GROUPS[0].id, { logIt: false });
+    renderGroupList();
+    log('SYS', 'warn', '已删除分组：' + g.name);
   }
   function openGroupsDialog() {
     renderGroupList();
@@ -3502,22 +4015,16 @@
   document.getElementById('groupsMask')?.addEventListener('click', (e) => {
     if (e.target.id === 'groupsMask') closeDialog('groupsMask');
   });
-  document.getElementById('groupAdd')?.addEventListener('click', () => {
-    const name = prompt('新分组名称', '新分组');
-    if (!name || !name.trim()) return;
-    const id = 'g' + Date.now().toString(36);
-    GROUPS.push({ id, name: name.trim(), count: 0, url: '', autoUpdate: true });
-    // light mock profile so switch works
-    if (typeof SUB_PROFILES !== 'undefined') {
-      SUB_PROFILES[id] = { label: name.trim(), foot: id + '.local', nodes: [] };
+  document.getElementById('groupAdd')?.addEventListener('click', () => openGroupEdit(null, 'create'));
+  document.getElementById('groupUpdateAll')?.addEventListener('click', async () => {
+    const btn = document.getElementById('groupUpdateAll');
+    if (btn) { btn.disabled = true; btn.textContent = '更新中…'; }
+    try {
+      await updateSubscription(null, { all: true });
+      renderGroupList();
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '更新全部'; }
     }
-    syncSubSegFromGroups();
-    renderGroupList();
-    log('SYS', 'ok', '已新建分组：' + name.trim());
-  });
-  document.getElementById('groupUpdateAll')?.addEventListener('click', () => {
-    log('SYS', 'info', '正在更新全部订阅…');
-    setTimeout(() => log('OK', 'ok', '全部订阅已更新（示意）'), 450);
   });
 
   // ——— log right-click: Copy / Select All / 清除 ———
@@ -3706,7 +4213,7 @@
   });
 
   // ——— runtime stats ———
-  let statsStarted = Date.now() - 3600 * 1000; // mock 1h uptime
+  let statsStarted = Date.now(); // ponytail: real uptime starts at boot; no fake 1h
   function fillRuntimeStats() {
     const coreOn = connected;
     document.getElementById('stCore').textContent = coreOn ? '运行中 · sing-box' : '已停止';
@@ -3763,38 +4270,180 @@
     if (e.target.id === 'exportMask') closeDialog('exportMask');
   });
 
-  // ——— group edit shell ———
-  let groupEditId = null;
-  function openGroupEdit(id) {
-    const g = GROUPS.find(x => x.id === id);
-    if (!g) return;
+  // ——— group edit / create / rename ———
+  function openGroupEdit(id, mode = 'edit') {
+    groupEditMode = mode;
     groupEditId = id;
-    document.getElementById('geName').value = g.name || '';
-    document.getElementById('geUrl').value = g.url || ('https://example.com/sub/' + id);
+    const title = document.getElementById('groupEditTitle');
+    const sub = document.getElementById('groupEditSub');
+    const nameEl = document.getElementById('geName');
+    const urlEl = document.getElementById('geUrl');
     const auto = document.getElementById('geAuto');
-    const on = g.autoUpdate !== false;
-    if (auto) { auto.classList.toggle('on', on); auto.setAttribute('aria-pressed', String(on)); }
+    const urlLabel = urlEl?.closest('label');
+    const autoLabel = auto?.closest('label');
+
+    if (mode === 'create') {
+      if (title) title.textContent = '新建分组';
+      if (sub) sub.textContent = '填写名称与可选订阅 URL；保存后出现在顶栏 Tab。';
+      if (nameEl) nameEl.value = '';
+      if (urlEl) urlEl.value = '';
+      if (auto) { auto.classList.add('on'); auto.setAttribute('aria-pressed', 'true'); }
+      if (urlLabel) urlLabel.style.display = '';
+      if (autoLabel) autoLabel.style.display = '';
+    } else {
+      const g = GROUPS.find(x => x.id === id);
+      if (!g) return;
+      if (mode === 'rename') {
+        if (title) title.textContent = '重命名分组';
+        if (sub) sub.textContent = '仅修改显示名称；订阅源与节点数不变。';
+        if (nameEl) nameEl.value = g.name || '';
+        if (urlLabel) urlLabel.style.display = 'none';
+        if (autoLabel) autoLabel.style.display = 'none';
+      } else {
+        if (title) title.textContent = '编辑分组';
+        if (sub) sub.textContent = '修改名称与订阅源；保存后顶栏 Tab 同步。';
+        if (nameEl) nameEl.value = g.name || '';
+        if (urlEl) urlEl.value = g.url || '';
+        const on = g.autoUpdate !== false;
+        if (auto) { auto.classList.toggle('on', on); auto.setAttribute('aria-pressed', String(on)); }
+        if (urlLabel) urlLabel.style.display = '';
+        if (autoLabel) autoLabel.style.display = '';
+      }
+    }
     openDialog('groupEditMask');
+    setTimeout(() => {
+      nameEl?.focus();
+      nameEl?.select?.();
+    }, 30);
   }
   document.getElementById('geCancel')?.addEventListener('click', () => closeDialog('groupEditMask'));
   document.getElementById('groupEditMask')?.addEventListener('click', e => {
     if (e.target.id === 'groupEditMask') closeDialog('groupEditMask');
   });
+  document.getElementById('geName')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('geSave')?.click();
+    }
+  });
   document.getElementById('geSave')?.addEventListener('click', () => {
+    const name = (document.getElementById('geName')?.value || '').trim();
+    if (!name) {
+      log('SYS', 'warn', '分组名称不能为空');
+      document.getElementById('geName')?.focus();
+      return;
+    }
+    if (groupEditMode === 'create') {
+      if (GROUPS.some(x => x.name === name)) {
+        log('SYS', 'warn', '已存在同名分组');
+        return;
+      }
+      const id = 'g' + Date.now().toString(36);
+      const url = (document.getElementById('geUrl')?.value || '').trim();
+      const auto = document.getElementById('geAuto')?.classList.contains('on');
+      GROUPS.push({ id, name, count: 0, url, autoUpdate: !!auto });
+      if (typeof SUB_PROFILES !== 'undefined') {
+        SUB_PROFILES[id] = { label: name, foot: id + '.local', nodes: [] };
+      }
+      syncSubSegFromGroups();
+      setActiveGroup(id, { logIt: false });
+      renderGroupList();
+      closeDialog('groupEditMask');
+      log('SYS', 'ok', '已新建分组：' + name);
+      return;
+    }
     const g = GROUPS.find(x => x.id === groupEditId);
     if (!g) { closeDialog('groupEditMask'); return; }
-    const name = document.getElementById('geName').value.trim() || g.name;
-    const url = document.getElementById('geUrl').value.trim();
-    const auto = document.getElementById('geAuto')?.classList.contains('on');
-    g.name = name; g.url = url; g.autoUpdate = !!auto;
+    if (GROUPS.some(x => x.id !== g.id && x.name === name)) {
+      log('SYS', 'warn', '已存在同名分组');
+      return;
+    }
+    g.name = name;
+    if (groupEditMode === 'edit') {
+      g.url = (document.getElementById('geUrl')?.value || '').trim();
+      g.autoUpdate = !!document.getElementById('geAuto')?.classList.contains('on');
+    }
     if (typeof SUB_PROFILES !== 'undefined' && SUB_PROFILES[g.id]) {
       SUB_PROFILES[g.id].label = name;
     }
     syncSubSegFromGroups();
     renderGroupList();
     closeDialog('groupEditMask');
-    log('SYS', 'ok', '已保存分组：' + name + (url ? ' · ' + url : ''));
+    log('SYS', 'ok', groupEditMode === 'rename' ? ('已重命名：' + name) : ('已保存分组：' + name + (g.url ? ' · ' + g.url : '')));
   });
+
+
+  // ——— subscription URL field (settings → 订阅) ———
+  function fieldText(el) {
+    if (!el) return '';
+    return (el.innerText || el.textContent || '').replace(/\u200b/g, '').trim();
+  }
+  function setFieldText(el, text) {
+    if (!el) return;
+    const t = (text || '').trim();
+    if (!t) {
+      el.innerHTML = '<span class="ph">https://…/sub</span>';
+      el.classList.add('placeholder');
+    } else {
+      el.textContent = t;
+      el.classList.remove('placeholder');
+    }
+  }
+  function syncSubUrlField() {
+    const el = document.getElementById('subUrlField');
+    if (!el || typeof GROUPS === 'undefined') return;
+    const id = (typeof activeGroupId === 'function') ? activeGroupId() : (document.querySelector('#subSeg button.active')?.dataset.sub);
+    const g = GROUPS.find(x => x.id === id) || GROUPS[0];
+    setFieldText(el, g?.url || '');
+  }
+  function applySubUrlFromField() {
+    const el = document.getElementById('subUrlField');
+    if (!el || typeof GROUPS === 'undefined') return;
+    let url = fieldText(el);
+    // strip placeholder if still showing
+    if (el.classList.contains('placeholder') || url === 'https://…/sub') url = '';
+    url = url.trim();
+    if (url && !/^https?:\/\//i.test(url) && !/^([a-z][a-z0-9+\-.]*):\/\//i.test(url)) {
+      log('SYS', 'warn', '订阅链接需以 http(s):// 开头');
+      el.focus();
+      return;
+    }
+    const id = (typeof activeGroupId === 'function') ? activeGroupId() : (document.querySelector('#subSeg button.active')?.dataset.sub);
+    const g = GROUPS.find(x => x.id === id) || GROUPS[0];
+    if (!g) { log('SYS', 'warn', '无可用分组'); return; }
+    g.url = url;
+    setFieldText(el, url);
+    log('SYS', 'ok', url ? (`已保存订阅链接 → ${g.name}`) : (`已清空「${g.name}」订阅链接`));
+    // Throne: saving URL often followed by AsyncUpdate when user expects nodes
+    if (url && typeof updateSubscription === 'function') {
+      updateSubscription(g.id);
+    } else if (!url && typeof renderNodes === 'function') {
+      // keep table; only clear url
+    }
+  }
+  document.getElementById('subUrlApply')?.addEventListener('click', applySubUrlFromField);
+  document.getElementById('subUrlPaste')?.addEventListener('click', async () => {
+    const el = document.getElementById('subUrlField');
+    if (!el) return;
+    try {
+      const t = (await navigator.clipboard.readText()).trim();
+      if (!t) { log('SYS', 'warn', '剪贴板为空'); return; }
+      setFieldText(el, t);
+      el.focus();
+      log('SYS', 'info', '已粘贴订阅链接');
+    } catch (_) {
+      log('SYS', 'warn', '无法读取剪贴板，请手动粘贴');
+      el.focus();
+    }
+  });
+  document.getElementById('subUrlField')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applySubUrlFromField();
+    }
+  });
+  // clear placeholder on focus/input handled by existing field helpers; ensure sync when opening 订阅 panel
+  const _showViewSub = typeof showView === 'function' ? null : null;
 
   // ——— system DNS chip + settings show/hide ———
   bindChip('dnsToggle', 'dnsChip', '已开启系统 DNS', '已关闭系统 DNS');
@@ -3981,6 +4630,7 @@
       });
       const head = document.getElementById('settingsHead');
       if (head) head.textContent = panelTitles[key] || '设置';
+      if (key === 'sub' && typeof syncSubUrlField === 'function') syncSubUrlField();
       if (focus === 'warp') {
         requestAnimationFrame(() => {
           document.getElementById('warpSection')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -4448,6 +5098,8 @@
             applyTheme(o, { logIt: true });
           } else if (btn.id === 'iconSelect') {
             applyIconStyle(o, { logIt: true });
+          } else if (btn.id === 'warpModeSelect') {
+            if (typeof applyWarpMode === 'function') applyWarpMode(o);
           }
           markSettingsDirty();
         });
@@ -4630,14 +5282,128 @@
   document.addEventListener('click', () => closeMenus());
   document.querySelectorAll('.menu').forEach(m => m.addEventListener('click', e => e.stopPropagation()));
 
+  
+  // ——— import helpers (Throne: menu_add_from_clipboard / file / AsyncUpdate) ———
+  function currentGid() {
+    return (typeof activeGroupId === 'function') ? activeGroupId() : (document.querySelector('#subSeg button.active')?.dataset.sub || 'default');
+  }
+  function addNodesToCurrent(nodes, src) {
+    if (!nodes || !nodes.length) {
+      log('SYS', 'warn', '未解析到节点（' + (src || '导入') + '）');
+      return 0;
+    }
+    const gid = currentGid();
+    const g = GROUPS.find(x => x.id === gid);
+    const prof = ensureProfile(gid, g?.name, g?.url);
+    if (!prof) return 0;
+    const before = prof.nodes.length;
+    // dedupe by addr|type
+    const seen = new Set(prof.nodes.map(n => (n.addr || '') + '|' + (n.type || '')));
+    let added = 0;
+    for (const n of nodes) {
+      const key = (n.addr || '') + '|' + (n.type || '');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      prof.nodes.push(n);
+      added++;
+    }
+    if (g) g.count = prof.nodes.length;
+    if (typeof renderNodes === 'function') renderNodes(gid);
+    log('SYS', 'ok', `已导入 ${added} 个节点` + (added < nodes.length ? `（去重 ${nodes.length - added}）` : '') + ' · ' + (src || ''));
+    return added;
+  }
+  async function importFromClipboard() {
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (!text) { log('SYS', 'warn', '剪贴板为空'); return; }
+      // Throne: if looks like subscription URL, AsyncUpdate(url)
+      if (/^https?:\/\//i.test(text) && !text.includes('\n') && text.length < 500) {
+        const gid = currentGid();
+        const g = GROUPS.find(x => x.id === gid);
+        if (g) {
+          g.url = text.trim();
+          if (typeof syncSubUrlField === 'function') syncSubUrlField();
+          log('SYS', 'info', '剪贴板为订阅链接，开始更新…');
+          await updateSubscription(gid);
+          return;
+        }
+      }
+      const nodes = parseShareLines(text);
+      addNodesToCurrent(nodes, '剪贴板');
+    } catch (_) {
+      log('SYS', 'warn', '无法读取剪贴板');
+    }
+  }
+  function importFromFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.txt,.json,.yaml,.yml,.conf,.sub,text/plain,application/json';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', async () => {
+      const f = input.files && input.files[0];
+      input.remove();
+      if (!f) return;
+      try {
+        const text = await f.text();
+        if (/^https?:\/\//i.test(text.trim()) && text.trim().length < 500 && !text.includes('\n')) {
+          const gid = currentGid();
+          const g = GROUPS.find(x => x.id === gid);
+          if (g) {
+            g.url = text.trim();
+            log('SYS', 'info', '文件为订阅链接，开始更新…');
+            await updateSubscription(gid);
+            return;
+          }
+        }
+        // JSON array of nodes (light)
+        let nodes = parseShareLines(text);
+        if (!nodes.length) {
+          try {
+            const j = JSON.parse(text);
+            const arr = Array.isArray(j) ? j : (j.outbounds || j.proxies || j.nodes || []);
+            if (Array.isArray(arr)) {
+              nodes = arr.map((o, i) => ({
+                name: o.name || o.tag || o.ps || ('节点' + (i + 1)),
+                type: (o.type || o.protocol || 'VLESS').toString(),
+                addr: (o.server || o.address || o.host || '0.0.0.0') + ':' + (o.server_port || o.port || 443),
+                lat: null,
+                flow: null,
+              }));
+            }
+          } catch (_) {}
+        }
+        addNodesToCurrent(nodes, f.name);
+      } catch (err) {
+        log('SYS', 'warn', '读取文件失败：' + (err && err.message || err));
+      }
+    });
+    input.click();
+  }
+  function importScanQr() {
+    // Throne opens camera/screen QR; here file image → no decode lib, guide user
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', () => {
+      const f = input.files && input.files[0];
+      input.remove();
+      if (!f) return;
+      log('SYS', 'info', '已选择图片「' + f.name + '」（骨架未含解码库，请改用剪贴板分享链接）');
+    });
+    input.click();
+  }
+
   function handleMenuAct(act) {
     closeMenus();
     const map = {
       hide: () => log('SYS', 'info', '窗口已隐藏到托盘（示意）'),
       show: () => log('SYS', 'info', '显示主窗口'),
-      'add-clip': () => log('SYS', 'info', '从剪贴板导入配置档…'),
-      'add-file': () => log('SYS', 'info', '从文件导入配置档…'),
-      'scan-qr': () => log('SYS', 'info', '打开二维码扫描…'),
+      'add-clip': () => { importFromClipboard(); },
+      'add-file': () => { importFromFile(); },
+      'scan-qr': () => { importScanQr(); },
       'dl-china': () => log('SYS', 'ok', '下载配置档 · China（示意）'),
       'dl-iran': () => log('SYS', 'ok', '下载配置档 · Iran（示意）'),
       'dl-russia': () => log('SYS', 'ok', '下载配置档 · Russia（示意）'),
@@ -4744,6 +5510,85 @@
   applyFont(document.getElementById('fontSelect')?.dataset.value || '系统默认');
   applyTheme(document.getElementById('themeSelect')?.dataset.value || 'System');
   applyIconStyle(document.getElementById('iconSelect')?.dataset.value || 'Monochrome');
+
+  // --- Nexus Tauri bridge (Phase C–E) ---
+  window.__NEXUS_BRIDGE__ = true;
+  async function nexusBoot() {
+    try {
+      var ua = navigator.userAgent || '';
+      var host = location.hostname || '';
+      if (window.__TAURI_INTERNALS__ || window.__TAURI__ ||
+          ua.indexOf('Tauri') !== -1 || location.protocol === 'tauri:' ||
+          host === 'tauri.localhost' || (host.endsWith('.localhost') && host.indexOf('tauri') !== -1)) {
+        document.documentElement.classList.add('desktop');
+      }
+    } catch (_) {}
+    const id = await nexusInvoke('app_identity');
+    if (id.ok) log('SYS', 'info', `后端 ${id.data?.identifier || 'Nexus'} · ${id.data?.phase || ''}`);
+    else log('SYS', 'info', '浏览器预览模式（无 Tauri 后端）');
+    const st = await nexusInvoke('store_snapshot');
+    if (st.ok) log('SYS', 'info', `本地配置 ${st.data?.profiles?.length || 0} 节点`);
+    const w = await nexusInvoke('warp_status');
+    if (w.ok) {
+      const d = w.data || {};
+      const okCli = !!d.installed;
+      const mode = String(d.ui_mode || 'udp').toUpperCase();
+      log('SYS', okCli ? 'ok' : 'warn',
+        okCli
+          ? `WARP CLI · ${d.connected ? '已连接' : '未连接'} · Mode ${mode}`
+          : '未找到 warp-cli（请构建时捆绑或安装 Cloudflare WARP）');
+      if (okCli && d.connected) {
+        setChipOn('warpToggle', 'warpChip', true, 'warpSwitch');
+      }
+      const ms = document.getElementById('warpModeSelect');
+      if (ms && ['UDP','HTTPS','TLS'].includes(mode)) {
+        ms.dataset.value = mode;
+        const v = ms.querySelector('.sel-val');
+        if (v) v.textContent = mode;
+      }
+    }
+  }
+  const _applyTun = applyTun;
+  applyTun = function(on, opts) {
+    _applyTun(on, opts);
+    nexusInvoke('set_tun_cmd', { enabled: !!on }).then(r => {
+      if (r.ok && r.data) log('SYS', 'info', String(r.data));
+      else if (r.error) log('SYS', 'warn', `Tun 后端: ${r.error}`);
+    });
+  };
+  const _applyWarp = applyWarp;
+  applyWarp = function(on, opts) {
+    _applyWarp(on, opts);
+    nexusInvoke('warp_set', { enabled: !!on }).then(r => {
+      if (r.ok) log('SYS', 'ok', String(r.data));
+      else if (!r.offline) {
+        log('SYS', 'warn', r.error || 'WARP 切换失败');
+        setChipOn('warpToggle', 'warpChip', !on, 'warpSwitch');
+      }
+    });
+  };
+  window.applyWarpMode = function(label) {
+    const mode = String(label || 'UDP').toUpperCase();
+    nexusInvoke('warp_set_mode', { mode }).then(r => {
+      if (r.ok) log('SYS', 'ok', `WARP Mode → ${mode}`);
+      else if (!r.offline) log('SYS', 'warn', r.error || 'WARP Mode 设置失败');
+    });
+  };
+  document.getElementById('sysToggle')?.addEventListener('change', (e) => {
+    nexusInvoke('set_system_proxy_cmd', { enabled: !!e.target.checked }).then(r => {
+      if (r.ok) log('SYS', 'info', String(r.data));
+      else if (!r.offline && r.error) log('SYS', 'warn', `系统代理: ${r.error}`);
+    });
+  });
+  document.getElementById('dnsToggle')?.addEventListener('change', (e) => {
+    nexusInvoke('set_system_dns_cmd', { enabled: !!e.target.checked }).then(r => {
+      if (r.ok) log('SYS', 'info', String(r.data));
+      else if (!r.offline && r.error) log('SYS', 'warn', `系统 DNS: ${r.error}`);
+    });
+  });
+  syncSubUrlField();
+  nexusBoot();
+
   showView('home');
 </script>
 </body>

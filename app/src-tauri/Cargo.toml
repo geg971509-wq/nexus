@@ -4,10 +4,19 @@ version = "0.1.0"
 description = "Nexus VPN — Tauri shell (macOS MVP)"
 authors = ["Nexus"]
 edition = "2021"
+default-run = "nexus"
 
 [lib]
 name = "nexus_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "nexus"
+path = "src/main.rs"
+
+[[bin]]
+name = "core_smoke"
+path = "src/bin/core_smoke.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
