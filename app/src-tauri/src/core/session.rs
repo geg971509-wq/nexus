@@ -1,8 +1,9 @@
 //! GUI-side session: listen unix socket, spawn NexusCore, accept, libcore calls.
+use super::elevate::{ensure_setuid_core, path_has_setuid, privileged_core_path};
 use super::frame::LibcoreClient;
 use super::proto_min::{
-        decode_core_state, decode_error_resp, decode_query_connections, encode_load_config_core_json,
-        encode_load_config_req, ConnRow,
+        decode_core_state, decode_error_resp, decode_has_privilege, decode_query_connections,
+        encode_load_config_core_json, encode_load_config_req, ConnRow,
     };
 use std::io;
 use std::path::{Path, PathBuf};
@@ -31,7 +32,8 @@ impl CoreSession {
         dir.join(format!("nexus-core-{}.sock", std::process::id()))
     }
 
-    pub fn resolve_core_binary() -> PathBuf {
+    /// Bundle / env Core (may be on nosuid volume — not for Tun).
+    pub fn resolve_bundle_core() -> PathBuf {
         if let Ok(p) = std::env::var("NEXUS_CORE_BIN") {
             let pb = PathBuf::from(&p);
             // only absolute existing file — refuse PATH hijack via bare name
@@ -74,6 +76,24 @@ impl CoreSession {
         }
         // missing — caller must error; do not spawn from PATH
         PathBuf::from("")
+    }
+
+    /// Prefer setuid Application Support copy when present (Tun); else bundle.
+    pub fn resolve_core_binary() -> PathBuf {
+        let priv_p = privileged_core_path();
+        if priv_p.is_file() && path_has_setuid(&priv_p) {
+            return priv_p;
+        }
+        Self::resolve_bundle_core()
+    }
+
+    /// Throne get_elevated_permissions: setuid copy + password sheet if needed.
+    pub fn ensure_privileged_core() -> Result<PathBuf, String> {
+        let src = Self::resolve_bundle_core();
+        if src.as_os_str().is_empty() || !src.is_file() {
+            return Err(format!("NexusCore not found at {}", src.display()));
+        }
+        ensure_setuid_core(&src)
     }
 
     /// Core child stdout/stderr. Piped+unread → kernel pipe fills → Core blocks
@@ -224,6 +244,21 @@ impl CoreSession {
         let c = self.client.as_mut().ok_or("no client")?;
         let data = c.call("QueryState", &[]).map_err(|e| e.to_string())?;
         Ok(decode_core_state(&data))
+    }
+
+    /// Core euid==0 (setuid child). Throne IsPrivileged RPC.
+    pub fn is_privileged(&mut self) -> Result<bool, String> {
+        let c = self.client.as_mut().ok_or("no client")?;
+        let data = c.call("IsPrivileged", &[]).map_err(|e| e.to_string())?;
+        Ok(decode_has_privilege(&data))
+    }
+
+    /// Kill live unprivileged Core and spawn setuid copy (Tun path).
+    pub fn recycle_privileged(&mut self) -> Result<(), String> {
+        let bin = Self::ensure_privileged_core()?;
+        let _ = self.stop_core_process();
+        *self = Self::start(&bin).map_err(|e| format!("restart privileged core: {e}"))?;
+        Ok(())
     }
 
     pub fn check_config(&mut self, json: &str) -> Result<Option<String>, String> {

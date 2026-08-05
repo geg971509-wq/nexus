@@ -48,6 +48,35 @@ pub fn decode_error_resp(data: &[u8]) -> Option<String> {
     parse_string_field(data, 1)
 }
 
+/// IsPrivilegedResponse { optional bool has_privilege = 1 }
+pub fn decode_has_privilege(data: &[u8]) -> bool {
+    let mut i = 0;
+    while i < data.len() {
+        let (key, ni) = read_varint(data, i);
+        i = ni;
+        let field = (key >> 3) as u32;
+        let wt = (key & 7) as u8;
+        match (field, wt) {
+            (1, 0) => {
+                let (v, _ni) = read_varint(data, i);
+                return v != 0;
+            }
+            (_, 0) => {
+                let (_, ni) = read_varint(data, i);
+                i = ni;
+            }
+            (_, 1) => i += 8,
+            (_, 2) => {
+                let (len, ni) = read_varint(data, i);
+                i = ni + len as usize;
+            }
+            (_, 5) => i += 4,
+            _ => break,
+        }
+    }
+    false
+}
+
 /// CoreStateResponse { optional bool running = 1; optional int32 profile_id = 2 }
 pub fn decode_core_state(data: &[u8]) -> (bool, i32) {
     let mut running = false;
@@ -117,6 +146,8 @@ fn parse_string_field(data: &[u8], want: u32) -> Option<String> {
 #[derive(Debug, Clone, Default)]
 pub struct ConnRow {
     pub id: String,
+    /// Unix ms from Core `created_at` (0 if absent).
+    pub created_at: i64,
     pub process: String,
     pub dest: String,
     pub domain: String,
@@ -194,6 +225,12 @@ fn decode_conn_meta(data: &[u8]) -> ConnRow {
                 } else {
                     break;
                 }
+            }
+            (2, 0) => {
+                // created_at (unix ms)
+                let (v, ni) = read_varint(data, i);
+                i = ni;
+                row.created_at = v as i64;
             }
             (3, 0) => {
                 let (v, ni) = read_varint(data, i);
@@ -334,6 +371,9 @@ mod tests {
         meta.push(0x0a);
         write_varint(&mut meta, id.len() as u64);
         meta.extend_from_slice(id.as_bytes());
+        // created_at field 2 = 1_700_000_000_000 ms
+        meta.push(0x10);
+        write_varint(&mut meta, 1_700_000_000_000);
         meta.push(0x18);
         write_varint(&mut meta, 100);
         meta.push(0x20);
@@ -363,6 +403,7 @@ mod tests {
         let rows = decode_query_connections(&resp);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, "c1");
+        assert_eq!(rows[0].created_at, 1_700_000_000_000);
         assert_eq!(rows[0].process, "Chrome");
         assert_eq!(rows[0].dest, "1.1.1.1:443");
         assert_eq!(rows[0].outbound, "proxy");

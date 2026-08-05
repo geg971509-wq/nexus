@@ -3,6 +3,8 @@ identifier = "allow-nexus-commands"
 description = "Allow Nexus app IPC commands (Phase B–E)"
 commands.allow = [
   "app_identity",
+  "app_quit",
+  "qr_svg",
   "core_start",
   "core_query_state",
   "core_check_config",
@@ -14,6 +16,7 @@ commands.allow = [
   "set_tun_cmd",
   "connect_selected",
   "disconnect_selected",
+  "query_connections",
   "warp_status",
   "warp_set",
   "warp_set_mode",

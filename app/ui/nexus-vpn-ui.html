@@ -434,6 +434,29 @@
     z-index: 1;
     overflow: hidden;
   }
+  /* vertical splitter: drag to set --sidebar; persist last width */
+  .side-resizer {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    bottom: 0;
+    cursor: col-resize;
+    z-index: 6;
+    touch-action: none;
+  }
+  .side-resizer:hover,
+  .window.sidebar-resizing .side-resizer {
+    background: rgba(0, 122, 255, 0.22);
+  }
+  .window.sidebar-resizing .titlebar,
+  .window.sidebar-resizing .body {
+    transition: none;
+    user-select: none;
+  }
+  .window.sidebar-collapsed .side-resizer {
+    display: none;
+  }
   .side-section {
     font-size: 11px;
     font-weight: 600;
@@ -1087,6 +1110,12 @@
     text-overflow: ellipsis;
     max-width: 160px;
   }
+  .conn-table td.time {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    white-space: nowrap;
+    width: 4.5em;
+  }
   .conn-table td.app { font-family: var(--font); color: var(--label); font-weight: 500; max-width: 100px; }
   .conn-table td.rule { color: var(--blue); font-family: var(--font); font-size: 11px; }
   .conn-table tbody tr { cursor: default; }
@@ -1661,19 +1690,19 @@
   }
   .rule-table .pill-out.direct { background: rgba(52,199,89,.14); color: var(--green); }
   .qr-box {
-    width: 160px; height: 160px; margin: 8px auto 12px;
-    border-radius: 10px; background:
-      repeating-linear-gradient(0deg, #111 0 8px, #f5f5f7 8px 16px),
-      repeating-linear-gradient(90deg, #111 0 8px, #f5f5f7 8px 16px);
-    background-size: 16px 16px; background-blend-mode: multiply;
+    width: 200px; height: 200px; margin: 8px auto 12px;
+    border-radius: 10px;
+    background: #fff;
     border: 0.5px solid var(--separator);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
   }
-  html[data-theme="dark"] .qr-box {
-    background:
-      repeating-linear-gradient(0deg, #eee 0 8px, #2c2c2e 8px 16px),
-      repeating-linear-gradient(90deg, #eee 0 8px, #2c2c2e 8px 16px);
-    background-size: 16px 16px; background-blend-mode: multiply;
+  .qr-box svg { width: 100%; height: 100%; display: block; }
+  .qr-box .qr-empty {
+    font-size: 12px; color: var(--tertiary); text-align: center; padding: 12px;
+    line-height: 1.4;
   }
+  html[data-theme="dark"] .qr-box { background: #fff; }
   .tray-float {
     position: fixed; right: 18px; bottom: 48px; z-index: 280;
     width: 220px; padding: 6px;
@@ -1981,7 +2010,7 @@
               </div>
               <div class="menu-sep"></div>
               <button class="menu-item" data-act="toggle-autostart" role="menuitem"><span class="check"></span><span class="grow" title="登录系统后自动打开 Nexus">随系统启动</span></button>
-              <button class="menu-item checked" data-act="toggle-remember" role="menuitem"><span class="check">✓</span><span class="grow" title="下次启动沿用上次选中的配置">记住配置档</span></button>
+              <button class="menu-item checked" data-act="toggle-remember" role="menuitem"><span class="check">✓</span><span class="grow" title="示意：未接线，不会在启动时恢复选中配置">记住配置档</span></button>
               <button class="menu-item checked" data-act="toggle-lan" role="menuitem"><span class="check">✓</span><span class="grow" title="其它设备可连本机入站端口">允许局域网连接</span></button>
               <div class="menu-sep"></div>
               <button class="menu-item" data-act="manage-groups" role="menuitem"><span class="grow" title="新建、重命名、删除订阅分组">管理分组…</span></button>
@@ -2053,6 +2082,7 @@
           <div class="k" id="sideFootK">订阅</div>
           <div class="v" id="sideFootV"></div>
         </div>
+        <div class="side-resizer" id="sideResizer" title="拖动调节侧栏宽度" role="separator" aria-orientation="vertical" aria-label="调节侧栏宽度"></div>
       </nav>
 
       <main class="main">
@@ -2164,6 +2194,7 @@
             <table class="conn-table" aria-label="活跃连接">
               <thead>
                 <tr>
+                  <th class="sortable" data-csort="time" role="columnheader" tabindex="0" title="连接建立时间">时间</th>
                   <th class="sortable" data-csort="app" role="columnheader" tabindex="0">进程</th>
                   <th class="sortable" data-csort="dest" role="columnheader" tabindex="0">目标</th>
                   <th class="sortable" data-csort="proto" role="columnheader" tabindex="0">协议</th>
@@ -2245,8 +2276,8 @@
                   <div class="set-row">
                     <div class="set-label">启动时连接</div>
                     <div class="set-right">
-                      <span class="set-hint">打开应用后自动连接上次节点</span>
-                      <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
+                      <span class="set-hint">未实现：不会在启动时自动连接上次节点</span>
+                      <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false" disabled aria-disabled="true" title="未实现"></button></div>
                     </div>
                   </div>
                   <div class="set-section" data-i18n="sec.core">核心</div>
@@ -2856,7 +2887,7 @@
     <div class="confirm-card">
       <h3 id="qrTitle">节点二维码</h3>
       <p id="qrName" style="text-align:center;margin:0 0 4px;font-size:13px;color:var(--secondary)"></p>
-      <div class="qr-box" aria-hidden="true"></div>
+      <div class="qr-box" id="qrBox" aria-hidden="true"><span class="qr-empty">生成中…</span></div>
       <p id="qrLink" style="font-family:var(--mono);font-size:11px;color:var(--tertiary);word-break:break-all;text-align:center"></p>
       <div class="confirm-actions">
         <button type="button" class="btn-ghost" id="qrCopy">复制链接</button>
@@ -5032,19 +5063,48 @@
     log('SYS', 'ok', '已保存节点：' + name);
   });
 
-  function openQrDialog(name) {
+  let _qrCopyPayload = '';
+  function setQrBox(html) {
+    const box = document.getElementById('qrBox');
+    if (box) box.innerHTML = html;
+  }
+  async function openQrDialog(name) {
     const n = name || selectedName || '节点';
     const link = nodeShareLink(n);
+    _qrCopyPayload = link || '';
     document.getElementById('qrName').textContent = n;
     document.getElementById('qrLink').textContent = link || '（无真实分享链接 — 节点仅有 outbound 或未导入凭证）';
+    setQrBox('<span class="qr-empty">生成中…</span>');
     openDialog('qrMask');
+    if (!link) {
+      setQrBox('<span class="qr-empty">无可编码内容<br>请用含分享链接的节点，或先「复制链接」检查凭证</span>');
+      return;
+    }
+    try {
+      const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
+      if (typeof inv !== 'function') {
+        setQrBox('<span class="qr-empty">二维码需在 Nexus.app 内显示<br>下方仍可复制链接</span>');
+        return;
+      }
+      const res = await inv('qr_svg', { text: link });
+      const svg = res && res.svg;
+      if (!svg) throw new Error('empty svg');
+      setQrBox(svg);
+    } catch (e) {
+      setQrBox('<span class="qr-empty">生成失败：' + escHtml(String(e?.message || e)) + '</span>');
+      log('SYS', 'warn', '二维码生成失败：' + (e?.message || e));
+    }
   }
   document.getElementById('qrClose')?.addEventListener('click', () => closeDialog('qrMask'));
   document.getElementById('qrMask')?.addEventListener('click', (e) => {
     if (e.target.id === 'qrMask') closeDialog('qrMask');
   });
   document.getElementById('qrCopy')?.addEventListener('click', () => {
-    const link = document.getElementById('qrLink').textContent || '';
+    const link = _qrCopyPayload || document.getElementById('qrLink').textContent || '';
+    if (!link || link.startsWith('（')) {
+      log('SYS', 'warn', '无真实链接可复制');
+      return;
+    }
     copyText(link).then(() => log('SYS', 'ok', '已复制链接')).catch(() => log('SYS', 'info', link));
   });
 
@@ -5457,6 +5517,14 @@
     if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
     return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
   }
+  function fmtConnTime(ms) {
+    const n = Number(ms) || 0;
+    if (n <= 0) return '—';
+    const d = new Date(n);
+    if (Number.isNaN(d.getTime())) return '—';
+    const p = (x) => String(x).padStart(2, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
   function escHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -5471,6 +5539,8 @@
       return;
     }
     tb.innerHTML = rows.map(c => {
+      const tms = Number(c.created_at) || 0;
+      const time = fmtConnTime(tms);
       const app = c.process || '—';
       const dest = c.domain || c.dest || '—';
       let proto = c.network || '';
@@ -5479,7 +5549,8 @@
       const out = c.outbound || '—';
       const flow = `${fmtBytes(c.upload)}↑ ${fmtBytes(c.download)}↓`;
       const flowBytes = (Number(c.upload) || 0) + (Number(c.download) || 0);
-      return `<tr data-id="${escHtml(c.id || '')}" data-app="${escHtml(app)}" data-dest="${escHtml(dest)}" data-proto="${escHtml(proto)}" data-out="${escHtml(out)}" data-flow="${flowBytes}">
+      return `<tr data-id="${escHtml(c.id || '')}" data-time="${tms}" data-app="${escHtml(app)}" data-dest="${escHtml(dest)}" data-proto="${escHtml(proto)}" data-out="${escHtml(out)}" data-flow="${flowBytes}">
+        <td class="time">${escHtml(time)}</td>
         <td class="app">${escHtml(app)}</td>
         <td>${escHtml(dest)}</td>
         <td>${escHtml(proto)}</td>
@@ -5520,7 +5591,7 @@
   function parseConnFlow(row) {
     const t = row.dataset.flow;
     if (t != null && t !== '' && isFinite(Number(t))) return Number(t);
-    const txt = row.cells[4]?.textContent || '';
+    const txt = row.cells[5]?.textContent || '';
     const m = String(txt).match(/([\d.]+)\s*([KMG]?B)/i);
     if (!m) return -1;
     let n = parseFloat(m[1]);
@@ -5532,10 +5603,14 @@
   }
   function connSortValue(row, key) {
     switch (key) {
-      case 'app': return (row.dataset.app || row.cells[0]?.textContent || '').toLowerCase();
-      case 'dest': return (row.dataset.dest || row.cells[1]?.textContent || '').toLowerCase();
-      case 'proto': return (row.dataset.proto || row.cells[2]?.textContent || '').toLowerCase();
-      case 'out': return (row.dataset.out || row.cells[3]?.textContent || '').toLowerCase();
+      case 'time': {
+        const n = Number(row.dataset.time);
+        return Number.isFinite(n) ? n : -1;
+      }
+      case 'app': return (row.dataset.app || row.cells[1]?.textContent || '').toLowerCase();
+      case 'dest': return (row.dataset.dest || row.cells[2]?.textContent || '').toLowerCase();
+      case 'proto': return (row.dataset.proto || row.cells[3]?.textContent || '').toLowerCase();
+      case 'out': return (row.dataset.out || row.cells[4]?.textContent || '').toLowerCase();
       case 'flow': return parseConnFlow(row);
       default: return '';
     }
@@ -5981,7 +6056,7 @@
           if (t) { t.checked = !t.checked; t.dispatchEvent(new Event('change')); }
         }
         refreshTrayMenu();
-      } else if (act === 'quit') log('SYS', 'warn', '退出（示意）');
+      } else if (act === 'quit') handleMenuAct('quit');
     });
   });
   document.addEventListener('click', (e) => {
@@ -6085,10 +6160,73 @@
     });
   })();
 
+  const SIDE_W_KEY = 'nexus.sidebarW';
+  const SIDE_W_MIN = 140;
+  const SIDE_W_DEFAULT = 216;
+  const SIDE_W_COLLAPSED = 56;
+  function sideMaxW() {
+    const w = win.clientWidth || 720;
+    // leave main usable (~320px min)
+    return Math.max(SIDE_W_MIN + 40, Math.min(360, Math.floor(w * 0.45)));
+  }
+  function clampSideW(px) {
+    return Math.min(sideMaxW(), Math.max(SIDE_W_MIN, Math.round(px)));
+  }
+  function applySidebarWidth(px, { save } = {}) {
+    const w = clampSideW(px);
+    win.style.setProperty('--sidebar', w + 'px');
+    if (save) {
+      try { localStorage.setItem(SIDE_W_KEY, String(w)); } catch (_) {}
+    }
+    return w;
+  }
+  function loadSidebarWidth() {
+    let n = SIDE_W_DEFAULT;
+    try {
+      const raw = localStorage.getItem(SIDE_W_KEY);
+      if (raw != null && raw !== '') n = parseInt(raw, 10) || SIDE_W_DEFAULT;
+    } catch (_) {}
+    applySidebarWidth(n);
+  }
+  loadSidebarWidth();
+  (function bindSideResize() {
+    const sideResizer = document.getElementById('sideResizer');
+    if (!sideResizer) return;
+    let startX = 0, startW = 0, dragging = false;
+    function onMove(e) {
+      if (!dragging) return;
+      applySidebarWidth(startW + (e.clientX - startX));
+    }
+    function onUp() {
+      if (!dragging) return;
+      dragging = false;
+      win.classList.remove('sidebar-resizing');
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      const cur = parseInt(getComputedStyle(win).getPropertyValue('--sidebar'), 10) || SIDE_W_DEFAULT;
+      applySidebarWidth(cur, { save: true });
+    }
+    sideResizer.addEventListener('pointerdown', (e) => {
+      if (win.classList.contains('sidebar-collapsed')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      startX = e.clientX;
+      startW = document.getElementById('sidebar')?.getBoundingClientRect().width || SIDE_W_DEFAULT;
+      win.classList.add('sidebar-resizing');
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  })();
+
   function setSidebarCollapsed(collapsed) {
     win.classList.toggle('sidebar-collapsed', collapsed);
     sideCollapse.setAttribute('aria-expanded', String(!collapsed));
     sideCollapse.title = collapsed ? '展开侧栏' : '收窄侧栏';
+    // Inline --sidebar (from drag/load) beats .sidebar-collapsed CSS.
+    // Collapse: drop inline so --sidebar-collapsed (56px) wins; expand: restore remembered width.
+    if (collapsed) win.style.removeProperty('--sidebar');
+    else loadSidebarWidth();
   }
   sideCollapse.addEventListener('click', () => {
     setSidebarCollapsed(!win.classList.contains('sidebar-collapsed'));
@@ -6910,8 +7048,20 @@
   function handleMenuAct(act) {
     closeMenus();
     const map = {
-      hide: () => log('SYS', 'info', '窗口已隐藏到托盘（示意）'),
-      show: () => log('SYS', 'info', '显示主窗口'),
+      hide: async () => {
+        try {
+          const w = window.__TAURI__?.window?.getCurrentWindow?.();
+          if (w) { await w.hide(); log('SYS', 'info', '已隐藏到菜单栏'); return; }
+        } catch (e) { log('SYS', 'warn', '隐藏失败: ' + e); }
+        log('SYS', 'info', '窗口已隐藏到托盘（示意）');
+      },
+      show: async () => {
+        try {
+          const w = window.__TAURI__?.window?.getCurrentWindow?.();
+          if (w) { await w.show(); await w.setFocus(); return; }
+        } catch (_) {}
+        log('SYS', 'info', '显示主窗口');
+      },
       'add-clip': () => { importFromClipboard(); },
       'add-file': () => { importFromFile(); },
       'scan-qr': () => { importScanQr(); },
@@ -6975,7 +7125,11 @@
         if (s) { s.classList.add('active'); s.setAttribute('aria-current', 'page'); }
         showView('settings', 'basic');
       },
-      quit: () => log('SYS', 'warn', '退出（示意）'),
+      quit: async () => {
+        const r = await nexusInvoke('app_quit');
+        if (!r.ok && !r.offline) log('SYS', 'warn', '退出失败: ' + (r.error || ''));
+        else if (r.offline) log('SYS', 'warn', '退出（示意）');
+      },
       'manage-groups': () => openGroupsDialog(),
       'runtime-stats': () => openStatsDialog(),
       'export-config': () => openExportDialog(),
@@ -7094,9 +7248,47 @@
   const _applyTun = applyTun;
   applyTun = function(on, opts) {
     _applyTun(on, opts);
-    nexusInvoke('set_tun_cmd', { enabled: !!on }).then(r => {
-      if (r.ok && r.data) log('SYS', 'info', String(r.data));
-      else if (r.error) log('SYS', 'warn', `Tun 后端: ${r.error}`);
+    // Throne set_spmode_vpn: elevate (osascript password sheet) + re-Start if tunnel live.
+    nexusInvoke('set_tun_cmd', { enabled: !!on }).then(async (r) => {
+      if (!r || r.offline) return;
+      if (!r.ok) {
+        // elevate cancel / fail → revert chip
+        setChipOn('tunToggle', 'tunChip', !on);
+        log('SYS', 'warn', r.error || 'Tun 切换失败');
+        return;
+      }
+      const d = r.data;
+      const note = (d && typeof d === 'object' && d.note) ? d.note : String(d || '');
+      if (note) log('SYS', 'info', note);
+      // Live tunnel must re-Start so generate includes/excludes tun-in.
+      if (typeof connected !== 'undefined' && connected) {
+        const name = (typeof connectedName !== 'undefined' && connectedName) || selectedName;
+        const payload = (typeof nodeConnectPayload === 'function') ? nodeConnectPayload(name) : null;
+        if (!payload) {
+          log('SYS', 'warn', 'Tun 已记录，但当前节点无连接配置 — 请重新连接以应用');
+          return;
+        }
+        log('CORE', 'info', on ? 'Tun 开启 · 重新 Start…' : 'Tun 关闭 · 重新 Start…');
+        const cr = await nexusInvoke('connect_selected', Object.assign({
+          profile_id: 1,
+          tun: !!on,
+          system_proxy: !!document.getElementById('sysToggle')?.checked,
+        }, payload));
+        if (!cr || cr.offline) return;
+        if (!cr.ok) {
+          log('CORE', 'warn', `Tun re-Start 失败: ${cr.error}`);
+          return;
+        }
+        if (cr.data?.start_error) {
+          log('CORE', 'warn', `Tun re-Start: ${cr.data.start_error}`);
+          // privilege/start fail with tun on → chip stays on (store already true); user can retry
+          return;
+        }
+        if (cr.data?.started) {
+          log('OK', 'ok', on ? 'Tun 隧道已应用' : '已切回系统代理模式');
+          if (cr.data?.proxy_note) log('SYS', 'info', cr.data.proxy_note);
+        }
+      }
     });
   };
   const _applyWarp = applyWarp;

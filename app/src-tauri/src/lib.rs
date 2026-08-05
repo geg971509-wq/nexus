@@ -17,6 +17,40 @@ fn app_identity() -> serde_json::Value {
     })
 }
 
+/// Share-link → SVG QR (offline; for 显示二维码 dialog).
+#[tauri::command]
+fn qr_svg(text: String) -> Result<serde_json::Value, String> {
+    let t = text.trim();
+    if t.is_empty() {
+        return Err("empty qr payload".into());
+    }
+    if t.len() > 2000 {
+        return Err("内容过长，无法生成二维码".into());
+    }
+    use qrcode::render::svg;
+    use qrcode::QrCode;
+    let code = QrCode::new(t.as_bytes()).map_err(|e| format!("qr encode: {e}"))?;
+    let svg = code
+        .render::<svg::Color>()
+        .min_dimensions(200, 200)
+        .dark_color(svg::Color("#111111"))
+        .light_color(svg::Color("#ffffff"))
+        .build();
+    Ok(serde_json::json!({ "svg": svg, "len": t.len() }))
+}
+
+#[cfg(test)]
+mod qr_tests {
+    use super::*;
+    #[test]
+    fn qr_svg_vless_sample() {
+        let v = qr_svg("vless://11111111-1111-1111-1111-111111111111@1.1.1.1:443?encryption=none&type=ws#n".into()).unwrap();
+        let s = v["svg"].as_str().unwrap();
+        assert!(s.contains("<svg"), "{s}");
+        assert!(s.len() > 200);
+    }
+}
+
 /// Off async runtime: spawn + socket accept can take seconds and freezes UI if sync.
 #[tauri::command]
 async fn core_start() -> Result<String, String> {
@@ -170,17 +204,61 @@ async fn set_system_dns_cmd(enabled: bool) -> Result<String, String> {
     .map_err(|e| format!("system dns join: {e}"))?
 }
 
+/// Throne set_spmode_vpn: persist + elevate Core (osascript password sheet).
+/// Live tunnel re-Start is UI-side (needs node payload); here only privilege + flag.
 #[tauri::command]
-async fn set_tun_cmd(enabled: bool) -> Result<String, String> {
+async fn set_tun_cmd(enabled: bool) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         use data::store::Store;
         let mut st = Store::load();
-        if enabled && st.system_proxy {
-            // soft note: tun+proxy both ok in many setups; WARP mutex later
-        }
+        let prev = st.tun;
         st.tun = enabled;
         st.save()?;
-        Ok(format!("tun={enabled} (applied on next generate/start)"))
+        if !enabled {
+            return Ok(serde_json::json!({
+                "tun": false,
+                "elevated": false,
+                "note": "tun=off (applied on next generate/start)",
+            }));
+        }
+        // Tun needs root Core. Bundle may be on nosuid → Application Support setuid copy.
+        match CoreSession::ensure_privileged_core() {
+            Ok(path) => {
+                // If Core already running unprivileged, recycle so next Start is root.
+                let mut recycled = false;
+                if let Ok(mut g) = SESSION.lock() {
+                    if let Some(s) = g.as_mut() {
+                        let priv_now = s.is_privileged().unwrap_or(false);
+                        if !priv_now {
+                            match s.recycle_privileged() {
+                                Ok(()) => recycled = true,
+                                Err(e) => {
+                                    st.tun = prev;
+                                    let _ = st.save();
+                                    return Err(format!("Tun elevate recycle failed: {e}"));
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(serde_json::json!({
+                    "tun": true,
+                    "elevated": true,
+                    "recycled": recycled,
+                    "core": path.display().to_string(),
+                    "note": if recycled {
+                        "tun=on · Core elevated (re-Start to apply Tun inbound)"
+                    } else {
+                        "tun=on · Core setuid ready (re-Start to apply Tun inbound)"
+                    },
+                }))
+            }
+            Err(e) => {
+                st.tun = prev;
+                let _ = st.save();
+                Err(format!("Tun needs admin: {e}"))
+            }
+        }
     })
     .await
     .map_err(|e| format!("set_tun join: {e}"))?
@@ -259,6 +337,12 @@ fn connect_selected_sync(
     let cfg = generate_with_outbound(ob, port, use_tun);
     let json = serde_json::to_string(&cfg).map_err(|e| e.to_string())?;
 
+    // Tun: setuid Core before LoadConfig (Throne profile_start elevation).
+    // osascript password sheet runs here if setuid copy missing — outside SESSION.
+    if use_tun {
+        CoreSession::ensure_privileged_core()?;
+    }
+
     // Hold SESSION only for Core IPC. networksetup must not sit under the lock
     // (blocks query_connections poll + other commands for ~0.2–1s+).
     let (start_err, running, qpid) = {
@@ -271,6 +355,14 @@ fn connect_selected_sync(
             *g = Some(CoreSession::start(&bin).map_err(|e| e.to_string())?);
         }
         let s = g.as_mut().unwrap();
+
+        // Tun requires euid=0. Recycle unprivileged live Core onto setuid copy.
+        if use_tun {
+            let priv_now = s.is_privileged().unwrap_or(false);
+            if !priv_now {
+                s.recycle_privileged()?;
+            }
+        }
 
         // Throne: Start may replace running instance; Stop first if already running
         if let Ok((running, _)) = s.query_state() {
@@ -351,6 +443,7 @@ async fn query_connections() -> Result<serde_json::Value, String> {
             .map(|r| {
                 serde_json::json!({
                     "id": r.id,
+                    "created_at": r.created_at,
                     "process": r.process,
                     "dest": r.dest,
                     "domain": r.domain,
@@ -530,12 +623,27 @@ async fn net_resolve_hosts(
     .map_err(|e| format!("resolve join: {e}"))
 }
 
+#[tauri::command]
+fn app_quit(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             app_identity,
+            app_quit,
+            qr_svg,
             core_start,
             core_query_state,
             core_check_config,
@@ -558,6 +666,63 @@ pub fn run() {
             net_resolve_host,
             net_resolve_hosts
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        // traffic-light close → tray (not quit)
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
+        .setup(|app| {
+            use tauri::menu::{Menu, MenuItem};
+            use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+            use tauri::Manager;
+
+            let show_i = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+            let icon = app
+                .default_window_icon()
+                .cloned()
+                .ok_or("missing default window icon")?;
+
+            let _tray = TrayIconBuilder::with_id("main")
+                .icon(icon)
+                .menu(&menu)
+                .tooltip("Nexus")
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main_window(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main_window(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+            // tray registered with app on build; retain handle for process life
+            app.manage(_tray);
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // dock icon click while hidden → show again
+            if let tauri::RunEvent::Reopen {
+                has_visible_windows,
+                ..
+            } = event
+            {
+                if !has_visible_windows {
+                    show_main_window(app);
+                }
+            }
+        });
 }
