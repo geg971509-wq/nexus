@@ -1,7 +1,6 @@
 pub mod core;
 mod data;
 mod sys;
-mod warp;
 mod sub;
 mod net;
 
@@ -13,7 +12,6 @@ fn app_identity() -> serde_json::Value {
         "name": "Nexus",
         "identifier": "app.nexus.desktop",
         "phase": "CDE-mvp-bridge",
-        "warp": "bundled-warp-cli",
     })
 }
 
@@ -500,38 +498,6 @@ fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
     }))
 }
 
-/// warp-cli status can block on daemon IPC — never on UI thread.
-#[tauri::command]
-async fn warp_status() -> serde_json::Value {
-    tauri::async_runtime::spawn_blocking(warp::status_json)
-        .await
-        .unwrap_or_else(|e| serde_json::json!({ "error": format!("warp_status join: {e}") }))
-}
-
-/// Enable/disable WARP via bundled or resolved `warp-cli` (connect/disconnect).
-#[tauri::command]
-async fn warp_set(enabled: bool) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || warp::set_enabled(enabled))
-        .await
-        .map_err(|e| format!("warp_set join: {e}"))?
-}
-
-/// Official GUI Mode: udp|https|tls → warp|warp+doh|warp+dot
-#[tauri::command]
-async fn warp_set_mode(mode: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || warp::set_mode(&mode))
-        .await
-        .map_err(|e| format!("warp_set_mode join: {e}"))?
-}
-
-/// Optional: open full Cloudflare WARP.app GUI if installed.
-#[tauri::command]
-async fn warp_open() -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(warp::open_warp_app)
-        .await
-        .map_err(|e| format!("warp_open join: {e}"))?
-}
-
 /// Throne GroupUpdater::HttpGet — download subscription body (no parse).
 #[tauri::command]
 async fn sub_fetch(url: String) -> Result<serde_json::Value, String> {
@@ -656,10 +622,6 @@ pub fn run() {
             connect_selected,
             disconnect_selected,
             query_connections,
-            warp_status,
-            warp_set,
-            warp_set_mode,
-            warp_open,
             sub_fetch,
             net_tcp_probe,
             net_tcp_probe_stop,

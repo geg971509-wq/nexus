@@ -2108,7 +2108,7 @@
             </div>
             <div class="hero-actions">
               <div class="toggles">
-                <label class="toggle" id="tunChip" title="虚拟网卡：接管本机几乎全部流量（需权限）。与 WARP 互斥，不能同时开启">
+                <label class="toggle" id="tunChip" title="虚拟网卡：接管本机几乎全部流量（需权限）">
                   <input type="checkbox" id="tunToggle" />
                   <span class="switch" aria-hidden="true"></span>
                   Tun
@@ -2122,11 +2122,6 @@
                   <input type="checkbox" id="dnsToggle" />
                   <span class="switch" aria-hidden="true"></span>
                   系统 DNS
-                </label>
-                <label class="toggle" id="warpChip" title="经捆绑 warp-cli 连接 WARP（Mode: UDP/HTTPS/TLS）。与 Tun 互斥">
-                  <input type="checkbox" id="warpToggle" />
-                  <span class="switch" aria-hidden="true"></span>
-                  WARP
                 </label>
               </div>
             </div>
@@ -2226,7 +2221,7 @@
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">字体</div>
+                    <div class="set-label" data-i18n="label.font">字体</div>
                     <div class="set-right">
                       <span class="set-hint" data-i18n="hint.font">切换后立即预览界面字体</span>
                       <div class="set-ctrl"><button type="button" class="select" id="fontSelect" data-options="系统默认|SF Pro|PingFang SC" data-value="系统默认"><span class="sel-val">系统默认</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
@@ -2247,100 +2242,100 @@
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">隐藏托盘图标</div>
+                    <div class="set-label" data-i18n="label.hideTray">隐藏托盘图标</div>
                     <div class="set-right">
-                      <span class="set-hint">仅保留主窗口入口，不在菜单栏显示</span>
+                      <span class="set-hint" data-i18n="hint.hideTray">仅保留主窗口入口，不在菜单栏显示</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">显示系统 DNS 选项</div>
+                    <div class="set-label" data-i18n="label.showDns">显示系统 DNS 选项</div>
                     <div class="set-right">
-                      <span class="set-hint">关闭后隐藏首页「系统 DNS」开关</span>
+                      <span class="set-hint" data-i18n="hint.showDns">关闭后隐藏首页「系统 DNS」开关</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" id="showDnsSwitch" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-section" data-i18n="sec.launch">启动与窗口</div>
                   <div class="set-row">
-                    <div class="set-label">开启时显示主窗口</div>
+                    <div class="set-label" data-i18n="label.showMain">开启时显示主窗口</div>
                     <div class="set-right">
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">启动时检查更新</div>
+                    <div class="set-label" data-i18n="label.checkUpdateBoot">启动时检查更新</div>
                     <div class="set-right">
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">启动时连接</div>
+                    <div class="set-label" data-i18n="label.autoConnect">启动时连接</div>
                     <div class="set-right">
-                      <span class="set-hint">未实现：不会在启动时自动连接上次节点</span>
+                      <span class="set-hint" data-i18n="hint.autoConnect">未实现：不会在启动时自动连接上次节点</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false" disabled aria-disabled="true" title="未实现"></button></div>
                     </div>
                   </div>
                   <div class="set-section" data-i18n="sec.core">核心</div>
                   <div class="set-row">
-                    <div class="set-label">核心类型</div>
+                    <div class="set-label" data-i18n="label.coreType">核心类型</div>
                     <div class="set-right">
-                      <span class="set-hint">底层代理引擎；一般保持 sing-box</span>
+                      <span class="set-hint" data-i18n="hint.coreType">底层代理引擎；一般保持 sing-box</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="sing-box|mihomo|xray" data-value="sing-box"><span class="sel-val">sing-box</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">额外核心路径</div>
+                    <div class="set-label" data-i18n="label.extraCore">额外核心路径</div>
                     <div class="set-right">
-                      <span class="set-hint">使用自定义核心二进制时填写</span>
-                      <div class="set-ctrl wide"><div class="path-row"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="可选" data-readonly="false"><span class="ph">可选</span></div><button type="button" class="btn-mini" title="选择核心文件">浏览</button></div></div>
+                      <span class="set-hint" data-i18n="hint.extraCore">使用自定义核心二进制时填写</span>
+                      <div class="set-ctrl wide"><div class="path-row"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="可选" data-readonly="false"><span class="ph" data-i18n="ph.optional">可选</span></div><button type="button" class="btn-mini" title="选择核心文件" data-i18n="btn.browse">浏览</button></div></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">启用 Clash API</div>
+                    <div class="set-label" data-i18n="label.clashApi">启用 Clash API</div>
                     <div class="set-right">
-                      <span class="set-hint">供外部工具查询连接与切换节点</span>
+                      <span class="set-hint" data-i18n="hint.clashApi">供外部工具查询连接与切换节点</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">控制器地址</div>
+                    <div class="set-label" data-i18n="label.controller">控制器地址</div>
                     <div class="set-right">
-                      <span class="set-hint">Clash API 监听地址与端口</span>
+                      <span class="set-hint" data-i18n="hint.controller">Clash API 监听地址与端口</span>
                       <div class="set-ctrl"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="" data-readonly="false">127.0.0.1:9090</div></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">控制器密钥</div>
+                    <div class="set-label" data-i18n="label.controllerSecret">控制器密钥</div>
                     <div class="set-right">
-                      <span class="set-hint">API 访问密钥；留空则不校验</span>
-                      <div class="set-ctrl"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="可选" data-readonly="false"><span class="ph">可选</span></div></div>
+                      <span class="set-hint" data-i18n="hint.controllerSecret">API 访问密钥；留空则不校验</span>
+                      <div class="set-ctrl"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="可选" data-readonly="false"><span class="ph" data-i18n="ph.optional">可选</span></div></div>
                     </div>
                   </div>
                   <div class="set-section" data-i18n="sec.about">关于</div>
                   <div class="set-row">
-                    <div class="set-label">检查更新</div>
+                    <div class="set-label" data-i18n="label.checkUpdate">检查更新</div>
                     <div class="set-right">
-                      <div class="set-ctrl"><button type="button" class="btn-mini" title="立即检查新版本">检查</button></div>
+                      <div class="set-ctrl" data-i18n-skip><button type="button" class="btn-mini" data-i18n="btn.check" title="立即检查新版本">检查</button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">更新通道</div>
+                    <div class="set-label" data-i18n="label.updateChannel">更新通道</div>
                     <div class="set-right">
-                      <span class="set-hint">测试版功能更新更快，可能不稳定</span>
+                      <span class="set-hint" data-i18n="hint.updateChannel">测试版功能更新更快，可能不稳定</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="稳定版|测试版" data-value="稳定版"><span class="sel-val">稳定版</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">开启 CSP</div>
+                    <div class="set-label" data-i18n="label.csp">开启 CSP</div>
                     <div class="set-right">
-                      <span class="set-hint">限制页面脚本来源，提升安全性</span>
+                      <span class="set-hint" data-i18n="hint.csp">限制页面脚本来源，提升安全性</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">数据存储路径</div>
+                    <div class="set-label" data-i18n="label.dataPath">数据存储路径</div>
                     <div class="set-right">
-                      <span class="set-hint">配置、日志与缓存所在目录</span>
+                      <span class="set-hint" data-i18n="hint.dataPath">配置、日志与缓存所在目录</span>
                       <div class="set-ctrl wide"><div class="field readonly" contenteditable="false" spellcheck="false" role="textbox" data-type="text" data-placeholder="" data-readonly="true">~/Library/Application Support/Nexus</div></div>
                     </div>
                   </div>
@@ -2350,33 +2345,33 @@
 
               <div class="set-panel" id="panel-routing">
                 <div class="set-card">
-                  <div class="set-section">策略</div>
+                  <div class="set-section" data-i18n="sec.66914536">策略</div>
                   <div class="set-row">
-                    <div class="set-label">解析域策略<span class="set-req">*</span></div>
+                    <div class="set-label"><span data-i18n="label.domainStrategy">解析域策略</span><span class="set-req">*</span></div>
                     <div class="set-right">
-                      <span class="set-hint">域名先解析再匹配规则：AsIs 用域名；IPIfNonMatch 未命中再解析 IP</span>
+                      <span class="set-hint" data-i18n="hint.domainStrategy">域名先解析再匹配规则：AsIs 用域名；IPIfNonMatch 未命中再解析 IP</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="AsIs|IPIfNonMatch|IPOnDemand" data-value="IPIfNonMatch"><span class="sel-val">IPIfNonMatch</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">默认域策略<span class="set-req">*</span></div>
+                    <div class="set-label"><span data-i18n="label.defaultDomainStrategy">默认域策略</span><span class="set-req">*</span></div>
                     <div class="set-right">
-                      <span class="set-hint">所有规则都未命中时的域名处理方式</span>
+                      <span class="set-hint" data-i18n="hint.defaultDomainStrategy">所有规则都未命中时的域名处理方式</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="AsIs|IPIfNonMatch|IPOnDemand" data-value="AsIs"><span class="sel-val">AsIs</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">路由配置档</div>
+                    <div class="set-label" data-i18n="label.routeProfile">路由配置档</div>
                     <div class="set-right">
-                      <span class="set-hint">完整规则：全局代理优先；大陆直连：国内域名/IP 走直连</span>
+                      <span class="set-hint" data-i18n="hint.routeProfile">完整规则：全局代理优先；大陆直连：国内域名/IP 走直连</span>
                       <div class="set-ctrl"><button type="button" class="select" id="routeProfileSelect" data-options="完整规则|大陆直连" data-value="完整规则"><span class="sel-val">完整规则</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
-                  <div class="set-section">规则</div>
+                  <div class="set-section" data-i18n="sec.b0fae043">规则</div>
                   <div class="set-row" style="display:block;padding-bottom:12px">
-                    <span class="set-hint" style="display:block;margin-bottom:8px">轻量示意：域名匹配 → 出站；完整规则 DSL 在 Qt 实现</span>
+                    <span class="set-hint" style="display:block;margin-bottom:8px" data-i18n="hint.ruleTable">轻量示意：域名匹配 → 出站；完整规则 DSL 在 Qt 实现</span>
                     <table class="rule-table" id="routeRuleTable">
-                      <thead><tr><th>匹配</th><th>出站</th><th>启用</th></tr></thead>
+                      <thead><tr><th data-i18n="th.match">匹配</th><th data-i18n="th.outbound">出站</th><th data-i18n="th.enable">启用</th></tr></thead>
                       <tbody>
                         <tr><td class="domain">geosite:cn</td><td><span class="pill-out direct">direct</span></td><td><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></td></tr>
                         <tr><td class="domain">geoip:private</td><td><span class="pill-out direct">direct</span></td><td><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></td></tr>
@@ -2387,124 +2382,124 @@
                     </table>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">远程规则集镜像</div>
+                    <div class="set-label" data-i18n="label.ruleMirror">远程规则集镜像</div>
                     <div class="set-right">
-                      <span class="set-hint">拉取 GeoIP/域名规则时的 CDN 源；访问 GitHub 慢可换 jsDelivr</span>
+                      <span class="set-hint" data-i18n="hint.ruleMirror">拉取 GeoIP/域名规则时的 CDN 源；访问 GitHub 慢可换 jsDelivr</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="GitHub|jsDelivr|ghproxy" data-value="GitHub"><span class="sel-val">GitHub</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">决策超时</div>
+                    <div class="set-label" data-i18n="label.ruleTimeout">决策超时</div>
                     <div class="set-right">
-                      <span class="set-hint">路由判定最长等待；0 为不限制</span>
+                      <span class="set-hint" data-i18n="hint.ruleTimeout">路由判定最长等待；0 为不限制</span>
                       <div class="set-ctrl"><div class="unit-field"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="number" data-placeholder="" data-readonly="false">0</div><span class="unit">ms</span></div></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">默认出站</div>
+                    <div class="set-label" data-i18n="label.defaultOutbound">默认出站</div>
                     <div class="set-right">
-                      <span class="set-hint">未匹配规则时走代理 / 直连 / 阻断</span>
+                      <span class="set-hint" data-i18n="hint.defaultOutbound">未匹配规则时走代理 / 直连 / 阻断</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="proxy|direct|block" data-value="proxy"><span class="sel-val">proxy</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
-                  <div class="set-section">嗅探</div>
+                  <div class="set-section" data-i18n="sec.bef1b81f">嗅探</div>
                   <div class="set-row">
-                    <div class="set-label">启用嗅探</div>
+                    <div class="set-label" data-i18n="label.sniff">启用嗅探</div>
                     <div class="set-right">
-                      <span class="set-hint">从流量中识别真实域名与协议，改善分流</span>
+                      <span class="set-hint" data-i18n="hint.sniff">从流量中识别真实域名与协议，改善分流</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">覆盖目标地址</div>
+                    <div class="set-label" data-i18n="label.sniffOverride">覆盖目标地址</div>
                     <div class="set-right">
-                      <span class="set-hint">用嗅探到的域名改写连接目标</span>
+                      <span class="set-hint" data-i18n="hint.sniffOverride">用嗅探到的域名改写连接目标</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">强制域名嗅探</div>
+                    <div class="set-label" data-i18n="label.forceSniff">强制域名嗅探</div>
                     <div class="set-right">
-                      <span class="set-hint">即使已有域名也再嗅探一次</span>
+                      <span class="set-hint" data-i18n="hint.forceSniff">即使已有域名也再嗅探一次</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">嗅探超时</div>
+                    <div class="set-label" data-i18n="label.sniffTimeout">嗅探超时</div>
                     <div class="set-right">
-                      <span class="set-hint">等待协议特征的最长时间</span>
+                      <span class="set-hint" data-i18n="hint.sniffTimeout">等待协议特征的最长时间</span>
                       <div class="set-ctrl"><div class="unit-field"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="number" data-placeholder="" data-readonly="false">300</div><span class="unit">ms</span></div></div>
                     </div>
                   </div>
-                  <div class="set-section">DNS</div>
+                  <div class="set-section" data-i18n="sec.ed5f2bde">DNS</div>
                   <div class="set-row">
-                    <div class="set-label">远程 DNS</div>
+                    <div class="set-label" data-i18n="label.remoteDns">远程 DNS</div>
                     <div class="set-right">
-                      <span class="set-hint">代理流量使用的 DNS（可填 DoH）</span>
+                      <span class="set-hint" data-i18n="hint.remoteDns">代理流量使用的 DNS（可填 DoH）</span>
                       <div class="set-ctrl wide"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="" data-readonly="false">https://1.1.1.1/dns-query</div></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">直连 DNS</div>
+                    <div class="set-label" data-i18n="label.directDns">直连 DNS</div>
                     <div class="set-right">
-                      <span class="set-hint">国内/直连流量使用的 DNS</span>
+                      <span class="set-hint" data-i18n="hint.directDns">国内/直连流量使用的 DNS</span>
                       <div class="set-ctrl"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="" data-readonly="false">223.5.5.5</div></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">DNS 劫持</div>
+                    <div class="set-label" data-i18n="label.dnsHijack">DNS 劫持</div>
                     <div class="set-right">
-                      <span class="set-hint">拦截系统 DNS 请求并由本机解析</span>
+                      <span class="set-hint" data-i18n="hint.dnsHijack">拦截系统 DNS 请求并由本机解析</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">FakeIP</div>
+                    <div class="set-label" data-i18n="label.9ad77606">FakeIP</div>
                     <div class="set-right">
-                      <span class="set-hint">返回虚拟 IP 加速解析；少数应用可能异常</span>
+                      <span class="set-hint" data-i18n="hint.fakeIp">返回虚拟 IP 加速解析；少数应用可能异常</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
-                  <div class="set-section">规则</div>
+                  <div class="set-section" data-i18n="sec.b0fae043">规则</div>
                   <div class="set-row">
-                    <div class="set-label">路由模式</div>
+                    <div class="set-label" data-i18n="label.routeMode">路由模式</div>
                     <div class="set-right">
-                      <span class="set-hint">规则按列表分流；全局全走代理；直连不代理</span>
+                      <span class="set-hint" data-i18n="hint.b565e862">规则按列表分流；全局全走代理；直连不代理</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="规则|全局|直连" data-value="规则"><span class="sel-val">规则</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">启用 AdBlock</div>
+                    <div class="set-label" data-i18n="label.adblock">启用 AdBlock</div>
                     <div class="set-right">
-                      <span class="set-hint">按规则集拦截广告域名</span>
+                      <span class="set-hint" data-i18n="hint.4382ce79">按规则集拦截广告域名</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" id="adblockSwitch" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">绕过中国大陆</div>
+                    <div class="set-label" data-i18n="label.bypassCn">绕过中国大陆</div>
                     <div class="set-right">
-                      <span class="set-hint">国内网站与 IP 直连，不走代理</span>
+                      <span class="set-hint" data-i18n="hint.cdc63401">国内网站与 IP 直连，不走代理</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" id="bypassCnSwitch" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">绕过局域网</div>
+                    <div class="set-label" data-i18n="label.bypassLan">绕过局域网</div>
                     <div class="set-right">
-                      <span class="set-hint">内网地址直连，避免代理环路</span>
+                      <span class="set-hint" data-i18n="hint.e5702751">内网地址直连，避免代理环路</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">严格路由</div>
+                    <div class="set-label" data-i18n="label.strictRoute">严格路由</div>
                     <div class="set-right">
-                      <span class="set-hint">更严格匹配；可能影响兼容性</span>
+                      <span class="set-hint" data-i18n="hint.25c7106c">更严格匹配；可能影响兼容性</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">自定义规则</div>
+                    <div class="set-label" data-i18n="label.customRules">自定义规则</div>
                     <div class="set-right">
-                      <span class="set-hint">每行一条，如 domain:example.com 或 geoip:cn</span>
+                      <span class="set-hint" data-i18n="hint.91337c1a">每行一条，如 domain:example.com 或 geoip:cn</span>
                       <div class="set-ctrl wide"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="domain: 或 geoip:" data-readonly="false"><span class="ph">domain: 或 geoip:</span></div></div>
                     </div>
                   </div>
@@ -2514,119 +2509,119 @@
 
               <div class="set-panel" id="panel-vpn">
                 <div class="set-card">
-                  <div class="set-section">入站</div>
+                  <div class="set-section" data-i18n="sec.0768a8ae">入站</div>
                   <div class="set-row">
-                    <div class="set-label">入站地址</div>
+                    <div class="set-label" data-i18n="label.inbound">入站地址</div>
                     <div class="set-right">
-                      <span class="set-hint">本机代理监听地址；默认仅本机</span>
+                      <span class="set-hint" data-i18n="hint.f600ea4a">本机代理监听地址；默认仅本机</span>
                       <div class="set-ctrl"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="" data-readonly="false">127.0.0.1</div></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">允许局域网连接</div>
+                    <div class="set-label" data-i18n="label.allowLan">允许局域网连接</div>
                     <div class="set-right">
-                      <span class="set-hint">其它设备可通过本机 IP 使用代理</span>
+                      <span class="set-hint" data-i18n="hint.1a68215a">其它设备可通过本机 IP 使用代理</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">日志级别</div>
+                    <div class="set-label" data-i18n="label.logLevel">日志级别</div>
                     <div class="set-right">
-                      <span class="set-hint">越详细越占空间；排错可临时开 debug</span>
+                      <span class="set-hint" data-i18n="hint.97fee25f">越详细越占空间；排错可临时开 debug</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="trace|debug|info|warn|error" data-value="info"><span class="sel-val">info</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">多路复用</div>
+                    <div class="set-label" data-i18n="label.b3946b88">多路复用</div>
                     <div class="set-right">
-                      <span class="set-hint">单连接承载多路请求；默认仅对探测支持 mux 的节点开启（unknown/no 不注入）</span>
+                      <span class="set-hint" data-i18n="hint.7caf7245">单连接承载多路请求；默认仅对探测支持 mux 的节点开启（unknown/no 不注入）</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="h2mux|smux|yamux" data-value="h2mux"><span class="sel-val">h2mux</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
-                  <div class="set-section">系统代理</div>
+                  <div class="set-section" data-i18n="sec.90c0bb9a">系统代理</div>
                   <div class="set-row">
-                    <div class="set-label">开启系统代理</div>
+                    <div class="set-label" data-i18n="label.e090c506">开启系统代理</div>
                     <div class="set-right">
-                      <span class="set-hint">写入系统 HTTP/HTTPS/SOCKS 代理设置</span>
+                      <span class="set-hint" data-i18n="hint.4a7d95d3">写入系统 HTTP/HTTPS/SOCKS 代理设置</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">修改系统 DNS</div>
+                    <div class="set-label" data-i18n="label.4ee3e499">修改系统 DNS</div>
                     <div class="set-right">
-                      <span class="set-hint">核心启动时改写系统 DNS 以配合分流</span>
+                      <span class="set-hint" data-i18n="hint.56a62864">核心启动时改写系统 DNS 以配合分流</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">系统代理旁路</div>
+                    <div class="set-label" data-i18n="label.5f2e3188">系统代理旁路</div>
                     <div class="set-right">
-                      <span class="set-hint">这些主机不走系统代理，逗号分隔</span>
+                      <span class="set-hint" data-i18n="hint.d1a97ead">这些主机不走系统代理，逗号分隔</span>
                       <div class="set-ctrl wide"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="" data-readonly="false">localhost,127.0.0.1,*.local</div></div>
                     </div>
                   </div>
-                  <div class="set-section">Tun</div>
+                  <div class="set-section" data-i18n="sec.6f9bbe3d">Tun</div>
                   <div class="set-row">
-                    <div class="set-label">开启虚拟网卡</div>
+                    <div class="set-label" data-i18n="label.c29847ee">开启虚拟网卡</div>
                     <div class="set-right">
-                      <span class="set-hint">Tun 模式接管全局流量，需管理员权限</span>
+                      <span class="set-hint" data-i18n="hint.0182946b">Tun 模式接管全局流量，需管理员权限</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">协议栈</div>
+                    <div class="set-label" data-i18n="label.e82554fd">协议栈</div>
                     <div class="set-right">
-                      <span class="set-hint">gvisor 用户态栈更稳；system 性能更好</span>
+                      <span class="set-hint" data-i18n="hint.b0a3a450">gvisor 用户态栈更稳；system 性能更好</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="gvisor|system|mixed" data-value="gvisor"><span class="sel-val">gvisor</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">MTU</div>
+                    <div class="set-label" data-i18n="label.1a03f672">MTU</div>
                     <div class="set-right">
-                      <span class="set-hint">最大传输单元；一般保持 1500</span>
+                      <span class="set-hint" data-i18n="hint.3394a233">最大传输单元；一般保持 1500</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="1500|1400|1280|9000" data-value="1500"><span class="sel-val">1500</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">Tun 启用 IPv6</div>
+                    <div class="set-label" data-i18n="label.19ff32b9">Tun 启用 IPv6</div>
                     <div class="set-right">
-                      <span class="set-hint">在 Tun 上同时处理 IPv6 流量</span>
+                      <span class="set-hint" data-i18n="hint.bbe2ce8a">在 Tun 上同时处理 IPv6 流量</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">严格路由</div>
+                    <div class="set-label" data-i18n="label.strictRoute">严格路由</div>
                     <div class="set-right">
-                      <span class="set-hint">更严格的 Tun 路由表；可能影响兼容性</span>
+                      <span class="set-hint" data-i18n="hint.06c3f4e6">更严格的 Tun 路由表；可能影响兼容性</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">启用 Tun 路由<span class="set-req">*</span></div>
+                    <div class="set-label"><span data-i18n="label.1537bbc1">启用 Tun 路由</span><span class="set-req">*</span></div>
                     <div class="set-right">
-                      <span class="set-hint">由核心管理 Tun 默认路由</span>
+                      <span class="set-hint" data-i18n="hint.67558c6e">由核心管理 Tun 默认路由</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">局域网绕过 Tun<span class="set-req">*</span></div>
+                    <div class="set-label"><span data-i18n="label.e587565a">局域网绕过 Tun</span><span class="set-req">*</span></div>
                     <div class="set-right">
-                      <span class="set-hint">内网流量不进 Tun，避免环路</span>
+                      <span class="set-hint" data-i18n="hint.e2ac38c9">内网流量不进 Tun，避免环路</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
-                  <div class="set-section">Tun 地址</div>
+                  <div class="set-section" data-i18n="sec.6dd33f42">Tun 地址</div>
                   <div class="set-row">
-                    <div class="set-label">IPv4 CIDR</div>
+                    <div class="set-label" data-i18n="label.3bed1a91">IPv4 CIDR</div>
                     <div class="set-right">
-                      <span class="set-hint">虚拟网卡 IPv4 地址段；勿与现有网段冲突</span>
+                      <span class="set-hint" data-i18n="hint.ead4b529">虚拟网卡 IPv4 地址段；勿与现有网段冲突</span>
                       <div class="set-ctrl"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="" data-readonly="false">172.19.0.1/24</div></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">IPv6 CIDR</div>
+                    <div class="set-label" data-i18n="label.06b8b77d">IPv6 CIDR</div>
                     <div class="set-right">
-                      <span class="set-hint">虚拟网卡 IPv6 地址段</span>
+                      <span class="set-hint" data-i18n="hint.bbfc8d89">虚拟网卡 IPv6 地址段</span>
                       <div class="set-ctrl"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="" data-readonly="false">fdfe:dcba:9876::1/96</div></div>
                     </div>
                   </div>
@@ -2635,25 +2630,10 @@
                     <button type="button" class="btn-mini" id="tunResetAddr" title="恢复默认 Tun 地址">恢复默认地址</button>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">排除故障</div>
+                    <div class="set-label" data-i18n="label.11d439ac">排除故障</div>
                     <div class="set-right">
-                      <span class="set-hint">重置 Tun 相关设置并输出诊断信息（示意）</span>
+                      <span class="set-hint" data-i18n="hint.a1daa533">重置 Tun 相关设置并输出诊断信息（示意）</span>
                       <div class="set-ctrl inline"><button type="button" class="btn-mini" id="tunTroubleshoot">排除故障</button></div>
-                    </div>
-                  </div>
-                  <div class="set-section" id="warpSection">WARP</div>
-                  <div class="set-row">
-                    <div class="set-label">启用 WARP</div>
-                    <div class="set-right">
-                      <span class="set-hint">经捆绑的 warp-cli 连接 Cloudflare WARP（系统守护进程）；与 Tun 互斥</span>
-                      <div class="set-ctrl"><button type="button" class="switch-only" id="warpSwitch" data-switch aria-pressed="false"></button></div>
-                    </div>
-                  </div>
-                  <div class="set-row">
-                    <div class="set-label">模式</div>
-                    <div class="set-right">
-                      <span class="set-hint">对应官方 Mode：流量+DNS 的 UDP / HTTPS(DoH) / TLS(DoT)</span>
-                      <div class="set-ctrl"><button type="button" class="select" id="warpModeSelect" data-options="UDP|HTTPS|TLS" data-value="UDP"><span class="sel-val">UDP</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
                 </div>
@@ -2662,11 +2642,11 @@
 
               <div class="set-panel" id="panel-sub">
                 <div class="set-card">
-                  <div class="set-section">订阅源</div>
+                  <div class="set-section" data-i18n="sec.0c7d604b">订阅源</div>
                   <div class="set-row">
-                    <div class="set-label">订阅链接</div>
+                    <div class="set-label" data-i18n="label.728c7d71">订阅链接</div>
                     <div class="set-right">
-                      <span class="set-hint">当前顶栏分组的订阅 URL；粘贴后点应用</span>
+                      <span class="set-hint" data-i18n="hint.940fbe3c">当前顶栏分组的订阅 URL；粘贴后点应用</span>
                       <div class="set-ctrl wide">
                         <div class="path-row">
                           <div class="field placeholder" id="subUrlField" contenteditable="true" spellcheck="false" role="textbox" data-type="url" data-placeholder="https://…/sub" data-readonly="false"><span class="ph">https://…/sub</span></div>
@@ -2676,54 +2656,54 @@
                       </div>
                     </div>
                   </div>
-                  <div class="set-section">更新</div>
+                  <div class="set-section" data-i18n="sec.32ac152b">更新</div>
                   <div class="set-row">
-                    <div class="set-label">自动更新订阅</div>
+                    <div class="set-label" data-i18n="label.2ca08bab">自动更新订阅</div>
                     <div class="set-right">
-                      <span class="set-hint">按间隔拉取最新节点列表</span>
+                      <span class="set-hint" data-i18n="hint.0723ab28">按间隔拉取最新节点列表</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">自动更新规则集</div>
+                    <div class="set-label" data-i18n="label.f0b561aa">自动更新规则集</div>
                     <div class="set-right">
-                      <span class="set-hint">自动刷新 GeoIP / 域名规则</span>
+                      <span class="set-hint" data-i18n="hint.872c3afc">自动刷新 GeoIP / 域名规则</span>
                       <div class="set-ctrl"><button type="button" class="switch-only on" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">使用系统代理更新</div>
+                    <div class="set-label" data-i18n="label.8cf16618">使用系统代理更新</div>
                     <div class="set-right">
-                      <span class="set-hint">更新请求走系统代理（网络受限时有用）</span>
+                      <span class="set-hint" data-i18n="hint.0000a834">更新请求走系统代理（网络受限时有用）</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">自动更新间隔</div>
+                    <div class="set-label" data-i18n="label.1045fbc7">自动更新间隔</div>
                     <div class="set-right">
-                      <span class="set-hint">多久检查一次订阅与规则</span>
+                      <span class="set-hint" data-i18n="hint.44584962">多久检查一次订阅与规则</span>
                       <div class="set-ctrl"><div class="unit-field"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="number" data-placeholder="" data-readonly="false">1440</div><span class="unit">分钟</span></div></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">并发</div>
+                    <div class="set-label" data-i18n="label.065a9b80">并发</div>
                     <div class="set-right">
-                      <span class="set-hint">同时更新的订阅数量</span>
+                      <span class="set-hint" data-i18n="hint.0421e95f">同时更新的订阅数量</span>
                       <div class="set-ctrl"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="number" data-placeholder="" data-readonly="false">5</div></div>
                     </div>
                   </div>
-                  <div class="set-section">安全</div>
+                  <div class="set-section" data-i18n="sec.fdbc77bd">安全</div>
                   <div class="set-row">
-                    <div class="set-label">跳过证书验证</div>
+                    <div class="set-label" data-i18n="label.d7f483ab">跳过证书验证</div>
                     <div class="set-right">
-                      <span class="set-hint">忽略 HTTPS 证书错误；仅调试时开启</span>
+                      <span class="set-hint" data-i18n="hint.0a6baedd">忽略 HTTPS 证书错误；仅调试时开启</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
-                    <div class="set-label">清除订阅代理前缀</div>
+                    <div class="set-label" data-i18n="label.85341566">清除订阅代理前缀</div>
                     <div class="set-right">
-                      <span class="set-hint">去掉节点名前的地区/套餐前缀</span>
+                      <span class="set-hint" data-i18n="hint.6ec41acc">去掉节点名前的地区/套餐前缀</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
@@ -2805,19 +2785,6 @@
     </div>
   </div>
 
-  <div class="confirm-mask" id="mutexMask" role="alertdialog" aria-modal="true" aria-labelledby="mutexTitle" hidden>
-    <div class="confirm-card warn">
-      <h3 id="mutexTitle">无法同时开启</h3>
-      <p id="mutexMsg">Tun 与 Cloudflare WARP 目前不能同时使用。继续将关闭另一方并开启所选模式。</p>
-      <label class="confirm-check" for="mutexDontShow">
-        <input type="checkbox" id="mutexDontShow" />
-        <span>今后不再弹出此提示（静默切换）</span>
-      </label>
-      <div class="confirm-actions">
-        <button type="button" class="btn-ghost" id="mutexCancel">取消</button>
-        <button type="button" class="btn-primary" id="mutexOk">继续</button>
-      </div>
-    </div>
   </div>
 
   <div class="confirm-mask" id="editMask" role="dialog" aria-modal="true" aria-labelledby="editTitle" hidden>
@@ -3641,161 +3608,16 @@
       log('SYS', 'info', e.target.checked ? onMsg : offMsg);
     });
   }
-  // Tun ↔ WARP 互斥：冲突时弹窗确认；用户可选择今后不再提示
-  const MUTEX_ALERT_KEY = 'nexus.mutexAlert';
-  let mutexPending = null; // { want: 'tun'|'warp' }
-  function mutexAlertEnabled() {
-    try {
-      const v = localStorage.getItem(MUTEX_ALERT_KEY);
-      if (v === '0' || v === 'false') return false;
-    } catch (_) {}
-    return true; // default: show alert
-  }
-  function setMutexAlertEnabled(on) {
-    try { localStorage.setItem(MUTEX_ALERT_KEY, on ? '1' : '0'); } catch (_) {}
-  }
   function isTunOn() { return !!document.getElementById('tunToggle')?.checked; }
-  function isWarpOn() { return !!document.getElementById('warpToggle')?.checked; }
-  function applyTun(on, { silentPeer } = {}) {
+  function applyTun(on) {
     setChipOn('tunToggle', 'tunChip', on);
-    if (on && isWarpOn()) {
-      setChipOn('warpToggle', 'warpChip', false, 'warpSwitch');
-      if (!silentPeer) log('SYS', 'warn', '已关闭 WARP（与 Tun 互斥）');
-    }
     log('SYS', 'info', on ? '已开启 Tun 模式' : '已关闭 Tun 模式');
     if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
   }
-  function applyWarp(on, { silentPeer } = {}) {
-    setChipOn('warpToggle', 'warpChip', on, 'warpSwitch');
-    if (on && isTunOn()) {
-      setChipOn('tunToggle', 'tunChip', false);
-      if (!silentPeer) log('SYS', 'warn', '已关闭 Tun（与 WARP 互斥）');
-    }
-    log('SYS', 'info', on ? '已启用 WARP' : '已关闭 WARP');
-  }
-  function openMutexDialog(want) {
-    mutexPending = { want };
-    const mask = document.getElementById('mutexMask');
-    const msg = document.getElementById('mutexMsg');
-    const title = document.getElementById('mutexTitle');
-    const dont = document.getElementById('mutexDontShow');
-    if (dont) dont.checked = false;
-    if (want === 'tun') {
-      if (title) title.textContent = '开启 Tun 将关闭 WARP';
-      if (msg) msg.textContent = 'Tun 与 Cloudflare WARP 目前不能同时使用。继续后将关闭 WARP 并开启 Tun。';
-    } else {
-      if (title) title.textContent = '开启 WARP 将关闭 Tun';
-      if (msg) msg.textContent = 'Cloudflare WARP 与 Tun 目前不能同时使用。继续后将关闭 Tun 并开启 WARP。';
-    }
-    if (!mask) {
-      // fallback silent
-      if (want === 'tun') applyTun(true);
-      else applyWarp(true);
-      return;
-    }
-    mask.hidden = false;
-    mask.classList.add('open');
-  }
-  function closeMutexDialog() {
-    const mask = document.getElementById('mutexMask');
-    if (!mask) return;
-    mask.classList.remove('open');
-    mask.hidden = true;
-    mutexPending = null;
-  }
-  function requestEnableTun() {
-    if (isTunOn()) return;
-    if (isWarpOn() && mutexAlertEnabled()) {
-      // keep WARP on until user confirms; leave Tun off
-      setChipOn('tunToggle', 'tunChip', false);
-      openMutexDialog('tun');
-      return;
-    }
-    applyTun(true);
-  }
-  function requestEnableWarp() {
-    if (isWarpOn()) return;
-    if (isTunOn() && mutexAlertEnabled()) {
-      setChipOn('warpToggle', 'warpChip', false, 'warpSwitch');
-      openMutexDialog('warp');
-      return;
-    }
-    applyWarp(true);
-  }
-  function setTun(on) {
-    if (!on) { applyTun(false); return; }
-    requestEnableTun();
-  }
-  function setWarp(on) {
-    if (!on) { applyWarp(false); return; }
-    requestEnableWarp();
-  }
   document.getElementById('tunToggle')?.addEventListener('change', (e) => {
-    const on = e.target.checked;
-    if (!on) {
-      // Throne set_spmode_vpn(false): persist + regenerate path; must hit set_tun_cmd
-      applyTun(false);
-      return;
-    }
-    // checkbox already on — if conflict needs confirm, revert first
-    if (isWarpOn() && mutexAlertEnabled()) {
-      setChipOn('tunToggle', 'tunChip', false);
-      openMutexDialog('tun');
-      return;
-    }
-    applyTun(true);
+    applyTun(!!e.target.checked);
   });
-  document.getElementById('warpToggle')?.addEventListener('change', (e) => {
-    const on = e.target.checked;
-    if (!on) {
-      setChipOn('warpToggle', 'warpChip', false, 'warpSwitch');
-      log('SYS', 'info', '已关闭 WARP');
-      return;
-    }
-    if (isTunOn() && mutexAlertEnabled()) {
-      setChipOn('warpToggle', 'warpChip', false, 'warpSwitch');
-      openMutexDialog('warp');
-      return;
-    }
-    applyWarp(true);
-  });
-  document.getElementById('mutexOk')?.addEventListener('click', () => {
-    const want = mutexPending?.want;
-    const dont = document.getElementById('mutexDontShow')?.checked;
-    if (dont) {
-      setMutexAlertEnabled(false);
-      log('SYS', 'info', '已关闭 Tun/WARP 冲突弹窗（可清站点数据恢复）');
-    }
-    closeMutexDialog();
-    if (want === 'tun') applyTun(true);
-    else if (want === 'warp') applyWarp(true);
-  });
-  document.getElementById('mutexCancel')?.addEventListener('click', () => {
-    closeMutexDialog();
-    log('SYS', 'info', '已取消模式切换');
-  });
-  document.getElementById('mutexMask')?.addEventListener('click', (e) => {
-    if (e.target.id === 'mutexMask') {
-      closeMutexDialog();
-      log('SYS', 'info', '已取消模式切换');
-    }
-  });
-  bindChip('sysToggle', 'sysChip', '已开启系统代理', '已关闭系统代理');
-  document.getElementById('warpSwitch')?.addEventListener('click', () => {
-    setTimeout(() => {
-      // data-switch flips class before this; route through setWarp for mutex dialog
-      const sw = document.getElementById('warpSwitch');
-      const on = !!sw?.classList.contains('on');
-      // reset switch to home state first, then request
-      const homeOn = isWarpOn();
-      if (sw) {
-        sw.classList.toggle('on', homeOn);
-        sw.setAttribute('aria-pressed', String(homeOn));
-      }
-      if (on) setWarp(true);
-      else setWarp(false);
-    }, 0);
-  });
+
 
   // test menu (slim) — open/close wired after bindMenu; handlers here
 
@@ -6050,10 +5872,11 @@
           refreshTrayMenu();
         }
       } else if (act === 'tun') {
-        if (typeof setTun === 'function') setTun(!isTunOn());
+        const next = !isTunOn();
+        if (typeof applyTun === 'function') applyTun(next);
         else {
           const t = document.getElementById('tunToggle');
-          if (t) { t.checked = !t.checked; t.dispatchEvent(new Event('change')); }
+          if (t) { t.checked = next; t.dispatchEvent(new Event('change')); }
         }
         refreshTrayMenu();
       } else if (act === 'quit') handleMenuAct('quit');
@@ -6271,11 +6094,6 @@
       const head = document.getElementById('settingsHead');
       if (head) head.textContent = panelTitles[key] || '设置';
       if (key === 'sub' && typeof syncSubUrlField === 'function') syncSubUrlField();
-      if (focus === 'warp') {
-        requestAnimationFrame(() => {
-          document.getElementById('warpSection')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        });
-      }
     }
   }
 
@@ -6368,82 +6186,880 @@
   };
   const I18N = {
     'zh-CN': {
-      'nav.home': '节点', 'nav.routing': '路由', 'nav.vpn': '连接', 'nav.sub': '订阅', 'nav.settings': '设置',
-      'tb.test': '测速', 'tb.refresh': '更新', 'tb.backup': '备用',
-      'status.connected': '已连接', 'status.disconnected': '未连接',
-      'status.subOn': '经 <strong>{name}</strong> · 延迟 {lat}',
+      'nav.home': '节点',
+      'nav.routing': '路由',
+      'nav.settings': '设置',
+      'nav.sub': '订阅',
+      'nav.vpn': '连接',
+      'tb.backup': '备用',
+      'tb.refresh': '更新',
+      'tb.test': '测速',
+      'status.connected': '已连接',
+      'status.disconnected': '未连接',
       'status.subOff': '选择节点后点左侧连接 · 当前 <strong>{name}</strong>',
-      'sb.running': '运行中', 'sb.stopped': '未在运行', 'sb.proxy': '代理', 'sb.direct': '直连', 'sb.mixed': '混合入站',
-      'panel.basic': '设置', 'panel.routing': '路由', 'panel.vpn': '连接', 'panel.sub': '订阅',
-      'sec.ui': '界面', 'sec.launch': '启动与窗口', 'sec.core': '核心', 'sec.about': '关于',
-      'label.lang': '语言', 'hint.lang': '切换后立即刷新界面文案', 'hint.font': '切换后立即预览界面字体', 'hint.theme': '切换后立即预览外观', 'label.theme': '主题', 'hint.icons': '切换后立即预览侧栏与工具栏图标配色', 'label.icons': '图标样式',
-      'settings.cancel': '取消', 'settings.ok': '确定', 'settings.dirty': '有未保存的更改', 'settings.discard': '放弃',
-      'confirm.unsavedTitle': '未确认的设置',
+      'status.subOn': '经 <strong>{name}</strong> · 延迟 {lat}',
+      'sb.direct': '直连',
+      'sb.mixed': '混合入站',
+      'sb.proxy': '代理',
+      'sb.running': '运行中',
+      'sb.stopped': '未在运行',
+      'panel.basic': '设置',
+      'panel.routing': '路由',
+      'panel.sub': '订阅',
+      'panel.vpn': '连接',
+      'sec.0768a8ae': '入站',
+      'sec.0c7d604b': '订阅源',
+      'sec.32ac152b': '更新',
+      'sec.66914536': '策略',
+      'sec.6dd33f42': 'Tun 地址',
+      'sec.6f9bbe3d': 'Tun',
+      'sec.90c0bb9a': '系统代理',
+      'sec.about': '关于',
+      'sec.b0fae043': '规则',
+      'sec.bef1b81f': '嗅探',
+      'sec.core': '核心',
+      'sec.dns': 'DNS',
+      'sec.ed5f2bde': 'DNS',
+      'sec.fdbc77bd': '安全',
+      'sec.inbound': '入站',
+      'sec.launch': '启动与窗口',
+      'sec.rules': '规则',
+      'sec.security': '安全',
+      'sec.sniff': '嗅探',
+      'sec.strategy': '策略',
+      'sec.subSource': '订阅源',
+      'sec.sysproxy': '系统代理',
+      'sec.tun': 'Tun',
+      'sec.tunAddr': 'Tun 地址',
+      'sec.ui': '界面',
+      'sec.update': '更新',
+      'label.065a9b80': '并发',
+      'label.06b8b77d': 'IPv6 CIDR',
+      'label.1045fbc7': '自动更新间隔',
+      'label.11d439ac': '排除故障',
+      'label.1537bbc1': '启用 Tun 路由',
+      'label.19ff32b9': 'Tun 启用 IPv6',
+      'label.1a03f672': 'MTU',
+      'label.2ca08bab': '自动更新订阅',
+      'label.3bed1a91': 'IPv4 CIDR',
+      'label.4ee3e499': '修改系统 DNS',
+      'label.5f2e3188': '系统代理旁路',
+      'label.728c7d71': '订阅链接',
+      'label.85341566': '清除订阅代理前缀',
+      'label.8cf16618': '使用系统代理更新',
+      'label.9ad77606': 'FakeIP',
+      'label.adblock': '启用 AdBlock',
+      'label.allowLan': '允许局域网连接',
+      'label.autoConnect': '启动时连接',
+      'label.b3946b88': '多路复用',
+      'label.bypassCn': '绕过中国大陆',
+      'label.bypassLan': '绕过局域网',
+      'label.c29847ee': '开启虚拟网卡',
+      'label.checkUpdate': '检查更新',
+      'label.checkUpdateBoot': '启动时检查更新',
+      'label.clashApi': '启用 Clash API',
+      'label.controller': '控制器地址',
+      'label.controllerSecret': '控制器密钥',
+      'label.coreType': '核心类型',
+      'label.csp': '开启 CSP',
+      'label.customRules': '自定义规则',
+      'label.d7f483ab': '跳过证书验证',
+      'label.dataPath': '数据存储路径',
+      'label.defaultDomainStrategy': '默认域策略',
+      'label.defaultOutbound': '默认出站',
+      'label.directDns': '直连 DNS',
+      'label.dnsHijack': 'DNS 劫持',
+      'label.domainStrategy': '解析域策略',
+      'label.e090c506': '开启系统代理',
+      'label.e587565a': '局域网绕过 Tun',
+      'label.e82554fd': '协议栈',
+      'label.extraCore': '额外核心路径',
+      'label.f0789e79': '模式',
+      'label.f0b561aa': '自动更新规则集',
+      'label.font': '字体',
+      'label.forceSniff': '强制域名嗅探',
+      'label.hideTray': '隐藏托盘图标',
+      'label.icons': '图标样式',
+      'label.inbound': '入站地址',
+      'label.lang': '语言',
+      'label.logLevel': '日志级别',
+      'label.remoteDns': '远程 DNS',
+      'label.routeMode': '路由模式',
+      'label.routeProfile': '路由配置档',
+      'label.ruleMirror': '远程规则集镜像',
+      'label.ruleTimeout': '决策超时',
+      'label.showDns': '显示系统 DNS 选项',
+      'label.showMain': '开启时显示主窗口',
+      'label.sniff': '启用嗅探',
+      'label.sniffOverride': '覆盖目标地址',
+      'label.sniffTimeout': '嗅探超时',
+      'label.strictRoute': '严格路由',
+      'label.theme': '主题',
+      'label.updateChannel': '更新通道',
+      'hint.0000a834': '更新请求走系统代理（网络受限时有用）',
+      'hint.0182946b': 'Tun 模式接管全局流量，需管理员权限',
+      'hint.0421e95f': '同时更新的订阅数量',
+      'hint.06c3f4e6': '更严格的 Tun 路由表；可能影响兼容性',
+      'hint.0723ab28': '按间隔拉取最新节点列表',
+      'hint.0a6baedd': '忽略 HTTPS 证书错误；仅调试时开启',
+      'hint.1a68215a': '其它设备可通过本机 IP 使用代理',
+      'hint.25c7106c': '更严格匹配；可能影响兼容性',
+      'hint.3394a233': '最大传输单元；一般保持 1500',
+      'hint.4382ce79': '按规则集拦截广告域名',
+      'hint.44584962': '多久检查一次订阅与规则',
+      'hint.4a7d95d3': '写入系统 HTTP/HTTPS/SOCKS 代理设置',
+      'hint.56a62864': '核心启动时改写系统 DNS 以配合分流',
+      'hint.67558c6e': '由核心管理 Tun 默认路由',
+      'hint.6ec41acc': '去掉节点名前的地区/套餐前缀',
+      'hint.7caf7245': '单连接承载多路请求；默认仅对探测支持 mux 的节点开启（unknown/no 不注入）',
+      'hint.872c3afc': '自动刷新 GeoIP / 域名规则',
+      'hint.91337c1a': '每行一条，如 domain:example.com 或 geoip:cn',
+      'hint.940fbe3c': '当前顶栏分组的订阅 URL；粘贴后点应用',
+      'hint.97fee25f': '越详细越占空间；排错可临时开 debug',
+      'hint.a1daa533': '重置 Tun 相关设置并输出诊断信息（示意）',
+      'hint.autoConnect': '未实现：不会在启动时自动连接上次节点',
+      'hint.b0a3a450': 'gvisor 用户态栈更稳；system 性能更好',
+      'hint.b565e862': '规则按列表分流；全局全走代理；直连不代理',
+      'hint.bbe2ce8a': '在 Tun 上同时处理 IPv6 流量',
+      'hint.bbfc8d89': '虚拟网卡 IPv6 地址段',
+      'hint.cdc63401': '国内网站与 IP 直连，不走代理',
+      'hint.clashApi': '供外部工具查询连接与切换节点',
+      'hint.controller': 'Clash API 监听地址与端口',
+      'hint.controllerSecret': 'API 访问密钥；留空则不校验',
+      'hint.coreType': '底层代理引擎；一般保持 sing-box',
+      'hint.csp': '限制页面脚本来源，提升安全性',
+      'hint.d1a97ead': '这些主机不走系统代理，逗号分隔',
+      'hint.dataPath': '配置、日志与缓存所在目录',
+      'hint.defaultDomainStrategy': '所有规则都未命中时的域名处理方式',
+      'hint.defaultOutbound': '未匹配规则时走代理 / 直连 / 阻断',
+      'hint.directDns': '国内/直连流量使用的 DNS',
+      'hint.dnsHijack': '拦截系统 DNS 请求并由本机解析',
+      'hint.domainStrategy': '域名先解析再匹配规则：AsIs 用域名；IPIfNonMatch 未命中再解析 IP',
+      'hint.e2ac38c9': '内网流量不进 Tun，避免环路',
+      'hint.e5702751': '内网地址直连，避免代理环路',
+      'hint.ead4b529': '虚拟网卡 IPv4 地址段；勿与现有网段冲突',
+      'hint.extraCore': '使用自定义核心二进制时填写',
+      'hint.f600ea4a': '本机代理监听地址；默认仅本机',
+      'hint.fakeIp': '返回虚拟 IP 加速解析；少数应用可能异常',
+      'hint.font': '切换后立即预览界面字体',
+      'hint.forceSniff': '即使已有域名也再嗅探一次',
+      'hint.hideTray': '仅保留主窗口入口，不在菜单栏显示',
+      'hint.icons': '切换后立即预览侧栏与工具栏图标配色',
+      'hint.lang': '切换后立即刷新界面文案',
+      'hint.remoteDns': '代理流量使用的 DNS（可填 DoH）',
+      'hint.routeProfile': '完整规则：全局代理优先；大陆直连：国内域名/IP 走直连',
+      'hint.ruleMirror': '拉取 GeoIP/域名规则时的 CDN 源；访问 GitHub 慢可换 jsDelivr',
+      'hint.ruleTable': '轻量示意：域名匹配 → 出站；完整规则 DSL 在 Qt 实现',
+      'hint.ruleTimeout': '路由判定最长等待；0 为不限制',
+      'hint.showDns': '关闭后隐藏首页「系统 DNS」开关',
+      'hint.sniff': '从流量中识别真实域名与协议，改善分流',
+      'hint.sniffOverride': '用嗅探到的域名改写连接目标',
+      'hint.sniffTimeout': '等待协议特征的最长时间',
+      'hint.theme': '切换后立即预览外观',
+      'hint.updateChannel': '测试版功能更新更快，可能不稳定',
+      'settings.cancel': '取消',
+      'settings.dirty': '有未保存的更改',
+      'settings.discard': '放弃',
+      'settings.ok': '确定',
+      'confirm.discard': '不保存',
+      'confirm.save': '保存',
+      'confirm.stay': '继续编辑',
       'confirm.unsavedMsg': '界面预览已生效。确定后写入配置；不保存将恢复为上次确认的设置。',
-      'confirm.discard': '不保存', 'confirm.stay': '继续编辑', 'confirm.save': '保存',
-      'log.saved': '设置已保存', 'log.discard': '已放弃未保存更改', 'log.lang': '界面语言：{lang}', 'log.font': '界面字体：{font}', 'log.theme': '界面主题：{theme}', 'log.icons': '图标样式：{icons}',
-      'log.tunReset': '已恢复默认 Tun 地址', 'log.tunTrouble': 'Tun 排除故障：重置路由表并输出诊断（示意）',
-      'lang.简体中文': '简体中文', 'lang.English': 'English', 'lang.Русский': 'Русский', 'lang.繁體中文': '繁體中文',
+      'confirm.unsavedTitle': '未确认的设置',
+      'log.discard': '已放弃未保存更改',
+      'log.font': '界面字体：{font}',
+      'log.icons': '图标样式：{icons}',
+      'log.lang': '界面语言：{lang}',
+      'log.saved': '设置已保存',
+      'log.theme': '界面主题：{theme}',
+      'log.tunReset': '已恢复默认 Tun 地址',
+      'log.tunTrouble': 'Tun 排除故障：重置路由表并输出诊断（示意）',
+      'lang.English': 'English',
+      'lang.Русский': 'Русский',
+      'lang.简体中文': '简体中文',
+      'lang.繁體中文': '繁體中文',
+      'opt.channel.beta': '测试版',
+      'opt.channel.stable': '稳定版',
+      'opt.font.system': '系统默认',
+      'opt.mode.direct': '直连',
+      'opt.mode.global': '全局',
+      'opt.mode.rule': '规则',
+      'opt.route.cn': '大陆直连',
+      'opt.route.full': '完整规则',
+      'opt.theme.dark': '深色',
+      'opt.theme.light': '浅色',
+      'opt.theme.system': '系统',
+      'btn.browse': '浏览',
+      'btn.check': '检查',
+      'ph.optional': '可选',
+      'th.enable': '启用',
+      'th.match': '匹配',
+      'th.outbound': '出站',
     },
     'en': {
-      'nav.home': 'Nodes', 'nav.routing': 'Routing', 'nav.vpn': 'Connection', 'nav.sub': 'Subscription', 'nav.settings': 'Settings',
-      'tb.test': 'Test', 'tb.refresh': 'Update', 'tb.backup': 'Backup',
-      'status.connected': 'Connected', 'status.disconnected': 'Disconnected',
-      'status.subOn': 'Via <strong>{name}</strong> · Latency {lat}',
+      'nav.home': 'Nodes',
+      'nav.routing': 'Routing',
+      'nav.settings': 'Settings',
+      'nav.sub': 'Subscription',
+      'nav.vpn': 'Connection',
+      'tb.backup': 'Backup',
+      'tb.refresh': 'Update',
+      'tb.test': 'Test',
+      'status.connected': 'Connected',
+      'status.disconnected': 'Disconnected',
       'status.subOff': 'Select a node, then connect · Current <strong>{name}</strong>',
-      'sb.running': 'Running', 'sb.stopped': 'Stopped', 'sb.proxy': 'Proxy', 'sb.direct': 'Direct', 'sb.mixed': 'Mixed inbound',
-      'panel.basic': 'Settings', 'panel.routing': 'Routing', 'panel.vpn': 'Connection', 'panel.sub': 'Subscription',
-      'sec.ui': 'Interface', 'sec.launch': 'Startup & Window', 'sec.core': 'Core', 'sec.about': 'About',
-      'label.lang': 'Language', 'hint.lang': 'UI text updates immediately', 'hint.font': 'Font updates immediately', 'hint.theme': 'Appearance updates immediately', 'label.theme': 'Theme', 'hint.icons': 'Sidebar & toolbar icons update immediately', 'label.icons': 'Icon style',
-      'settings.cancel': 'Cancel', 'settings.ok': 'OK', 'settings.dirty': 'Unsaved changes', 'settings.discard': 'Discard',
-      'confirm.unsavedTitle': 'Unconfirmed settings',
+      'status.subOn': 'Via <strong>{name}</strong> · Latency {lat}',
+      'sb.direct': 'Direct',
+      'sb.mixed': 'Mixed inbound',
+      'sb.proxy': 'Proxy',
+      'sb.running': 'Running',
+      'sb.stopped': 'Stopped',
+      'panel.basic': 'Settings',
+      'panel.routing': 'Routing',
+      'panel.sub': 'Subscription',
+      'panel.vpn': 'Connection',
+      'sec.0768a8ae': 'Inbound',
+      'sec.0c7d604b': 'Subscription source',
+      'sec.32ac152b': 'Updates',
+      'sec.66914536': 'Strategy',
+      'sec.6dd33f42': 'Tun addresses',
+      'sec.6f9bbe3d': 'Tun',
+      'sec.90c0bb9a': 'System proxy',
+      'sec.about': 'About',
+      'sec.b0fae043': 'Rules',
+      'sec.bef1b81f': 'Sniffing',
+      'sec.core': 'Core',
+      'sec.dns': 'DNS',
+      'sec.ed5f2bde': 'DNS',
+      'sec.fdbc77bd': 'Security',
+      'sec.inbound': 'Inbound',
+      'sec.launch': 'Startup & Window',
+      'sec.rules': 'Rules',
+      'sec.security': 'Security',
+      'sec.sniff': 'Sniffing',
+      'sec.strategy': 'Strategy',
+      'sec.subSource': 'Subscription source',
+      'sec.sysproxy': 'System proxy',
+      'sec.tun': 'Tun',
+      'sec.tunAddr': 'Tun addresses',
+      'sec.ui': 'Interface',
+      'sec.update': 'Updates',
+      'label.065a9b80': 'Concurrency',
+      'label.06b8b77d': 'IPv6 CIDR',
+      'label.1045fbc7': 'Auto-update interval',
+      'label.11d439ac': 'Troubleshoot',
+      'label.1537bbc1': 'Enable Tun routing',
+      'label.19ff32b9': 'Tun IPv6',
+      'label.1a03f672': 'MTU',
+      'label.2ca08bab': 'Auto-update subscriptions',
+      'label.3bed1a91': 'IPv4 CIDR',
+      'label.4ee3e499': 'Modify system DNS',
+      'label.5f2e3188': 'System proxy bypass',
+      'label.728c7d71': 'Subscription URL',
+      'label.85341566': 'Strip sub name prefixes',
+      'label.8cf16618': 'Update via system proxy',
+      'label.9ad77606': 'FakeIP',
+      'label.adblock': 'Enable AdBlock',
+      'label.allowLan': 'Allow LAN',
+      'label.autoConnect': 'Connect on launch',
+      'label.b3946b88': 'Multiplexing',
+      'label.bypassCn': 'Bypass mainland China',
+      'label.bypassLan': 'Bypass LAN',
+      'label.c29847ee': 'Enable virtual NIC',
+      'label.checkUpdate': 'Check for updates',
+      'label.checkUpdateBoot': 'Check for updates on launch',
+      'label.clashApi': 'Enable Clash API',
+      'label.controller': 'Controller address',
+      'label.controllerSecret': 'Controller secret',
+      'label.coreType': 'Core type',
+      'label.csp': 'Enable CSP',
+      'label.customRules': 'Custom rules',
+      'label.d7f483ab': 'Skip certificate verify',
+      'label.dataPath': 'Data path',
+      'label.defaultDomainStrategy': 'Default domain strategy',
+      'label.defaultOutbound': 'Default outbound',
+      'label.directDns': 'Direct DNS',
+      'label.dnsHijack': 'DNS hijack',
+      'label.domainStrategy': 'Domain strategy',
+      'label.e090c506': 'Enable system proxy',
+      'label.e587565a': 'Bypass Tun for LAN',
+      'label.e82554fd': 'Stack',
+      'label.extraCore': 'Extra core path',
+      'label.f0789e79': 'Mode',
+      'label.f0b561aa': 'Auto-update rule sets',
+      'label.font': 'Font',
+      'label.forceSniff': 'Force domain sniff',
+      'label.hideTray': 'Hide tray icon',
+      'label.icons': 'Icon style',
+      'label.inbound': 'Inbound address',
+      'label.lang': 'Language',
+      'label.logLevel': 'Log level',
+      'label.remoteDns': 'Remote DNS',
+      'label.routeMode': 'Routing mode',
+      'label.routeProfile': 'Routing profile',
+      'label.ruleMirror': 'Rule-set mirror',
+      'label.ruleTimeout': 'Decision timeout',
+      'label.showDns': 'Show system DNS option',
+      'label.showMain': 'Show main window on launch',
+      'label.sniff': 'Enable sniffing',
+      'label.sniffOverride': 'Override destination',
+      'label.sniffTimeout': 'Sniff timeout',
+      'label.strictRoute': 'Strict route',
+      'label.theme': 'Theme',
+      'label.updateChannel': 'Update channel',
+      'hint.0000a834': 'Send update requests via system proxy (useful when network is restricted)',
+      'hint.0182946b': 'Tun mode takes over all traffic; requires admin rights',
+      'hint.0421e95f': 'Number of subscriptions updated at once',
+      'hint.06c3f4e6': 'Stricter Tun routing table; may hurt compatibility',
+      'hint.0723ab28': 'Pull latest node lists on an interval',
+      'hint.0a6baedd': 'Ignore HTTPS certificate errors; enable only for debugging',
+      'hint.1a68215a': 'Other devices can use this machine’s IP as proxy',
+      'hint.25c7106c': 'Stricter matching; may hurt compatibility',
+      'hint.3394a233': 'Max transmission unit; usually keep 1500',
+      'hint.4382ce79': 'Block ad domains via rule sets',
+      'hint.44584962': 'How often to check subscriptions and rules',
+      'hint.4a7d95d3': 'Write system HTTP/HTTPS/SOCKS proxy settings',
+      'hint.56a62864': 'Rewrite system DNS when core starts to aid routing',
+      'hint.67558c6e': 'Let the core manage Tun default routes',
+      'hint.6ec41acc': 'Strip region/plan prefixes from node names',
+      'hint.7caf7245': 'Multiplex many requests on one connection; only nodes probed as mux-capable (skip unknown/no)',
+      'hint.872c3afc': 'Auto-refresh GeoIP / domain rules',
+      'hint.91337c1a': 'One rule per line, e.g. domain:example.com or geoip:cn',
+      'hint.940fbe3c': 'Subscription URL for the current top-bar group; paste then Apply',
+      'hint.97fee25f': 'More detail uses more space; use debug temporarily when troubleshooting',
+      'hint.a1daa533': 'Reset Tun-related settings and dump diagnostics (demo)',
+      'hint.autoConnect': 'Not implemented: will not auto-connect last node on launch',
+      'hint.b0a3a450': 'gvisor user-space stack is stabler; system is faster',
+      'hint.b565e862': 'Rule: match list; Global: all proxy; Direct: no proxy',
+      'hint.bbe2ce8a': 'Also handle IPv6 traffic on Tun',
+      'hint.bbfc8d89': 'Virtual NIC IPv6 address range',
+      'hint.cdc63401': 'Mainland China sites/IPs go direct, not through proxy',
+      'hint.clashApi': 'For external tools to query connections and switch nodes',
+      'hint.controller': 'Clash API listen address and port',
+      'hint.controllerSecret': 'API secret; empty means no auth',
+      'hint.coreType': 'Proxy engine; usually keep sing-box',
+      'hint.csp': 'Restrict page script sources for security',
+      'hint.d1a97ead': 'Hosts that skip system proxy, comma-separated',
+      'hint.dataPath': 'Directory for config, logs, and cache',
+      'hint.defaultDomainStrategy': 'Domain handling when no rule matches',
+      'hint.defaultOutbound': 'When no rule matches: proxy / direct / block',
+      'hint.directDns': 'DNS for direct/domestic traffic',
+      'hint.dnsHijack': 'Intercept system DNS and resolve locally',
+      'hint.domainStrategy': 'Resolve domain before matching: AsIs uses domain; IPIfNonMatch resolves IP if no match',
+      'hint.e2ac38c9': 'Keep LAN off Tun to avoid loops',
+      'hint.e5702751': 'LAN addresses go direct to avoid proxy loops',
+      'hint.ead4b529': 'Virtual NIC IPv4 range; avoid clashing with existing subnets',
+      'hint.extraCore': 'Set when using a custom core binary',
+      'hint.f600ea4a': 'Local proxy listen address; default is localhost only',
+      'hint.fakeIp': 'Return fake IPs for faster resolve; some apps may break',
+      'hint.font': 'Font updates immediately',
+      'hint.forceSniff': 'Sniff again even when a domain is already present',
+      'hint.hideTray': 'Keep only the main window entry; hide menu bar icon',
+      'hint.icons': 'Sidebar & toolbar icons update immediately',
+      'hint.lang': 'UI text updates immediately',
+      'hint.remoteDns': 'DNS for proxied traffic (DoH allowed)',
+      'hint.routeProfile': 'Full rules: proxy-first; China direct: CN domains/IPs go direct',
+      'hint.ruleMirror': 'CDN for GeoIP/domain rules; use jsDelivr if GitHub is slow',
+      'hint.ruleTable': 'Lightweight demo: domain → outbound; full DSL is in Qt',
+      'hint.ruleTimeout': 'Max wait for routing decision; 0 = unlimited',
+      'hint.showDns': 'When off, hide the home “System DNS” switch',
+      'hint.sniff': 'Detect real domain/protocol from traffic for better routing',
+      'hint.sniffOverride': 'Rewrite destination with sniffed domain',
+      'hint.sniffTimeout': 'Max wait for protocol fingerprints',
+      'hint.theme': 'Appearance updates immediately',
+      'hint.updateChannel': 'Beta gets features sooner and may be unstable',
+      'settings.cancel': 'Cancel',
+      'settings.dirty': 'Unsaved changes',
+      'settings.discard': 'Discard',
+      'settings.ok': 'OK',
+      'confirm.discard': 'Don’t Save',
+      'confirm.save': 'Save',
+      'confirm.stay': 'Keep Editing',
       'confirm.unsavedMsg': 'UI preview is live. OK commits; Discard restores last confirmed settings.',
-      'confirm.discard': 'Don’t Save', 'confirm.stay': 'Keep Editing', 'confirm.save': 'Save',
-      'log.saved': 'Settings saved', 'log.discard': 'Unsaved changes discarded', 'log.lang': 'UI language: {lang}', 'log.font': 'UI font: {font}', 'log.theme': 'UI theme: {theme}', 'log.icons': 'Icon style: {icons}',
-      'log.tunReset': 'Tun addresses reset to defaults', 'log.tunTrouble': 'Tun troubleshoot: reset routes & dump diagnostics (demo)',
-      'lang.简体中文': 'Simplified Chinese', 'lang.English': 'English', 'lang.Русский': 'Russian', 'lang.繁體中文': 'Traditional Chinese',
+      'confirm.unsavedTitle': 'Unconfirmed settings',
+      'log.discard': 'Unsaved changes discarded',
+      'log.font': 'UI font: {font}',
+      'log.icons': 'Icon style: {icons}',
+      'log.lang': 'UI language: {lang}',
+      'log.saved': 'Settings saved',
+      'log.theme': 'UI theme: {theme}',
+      'log.tunReset': 'Tun addresses reset to defaults',
+      'log.tunTrouble': 'Tun troubleshoot: reset routes & dump diagnostics (demo)',
+      'lang.English': 'English',
+      'lang.Русский': 'Russian',
+      'lang.简体中文': 'Simplified Chinese',
+      'lang.繁體中文': 'Traditional Chinese',
+      'opt.channel.beta': 'Beta',
+      'opt.channel.stable': 'Stable',
+      'opt.font.system': 'System default',
+      'opt.mode.direct': 'Direct',
+      'opt.mode.global': 'Global',
+      'opt.mode.rule': 'Rule',
+      'opt.route.cn': 'China direct',
+      'opt.route.full': 'Full rules',
+      'opt.theme.dark': 'Dark',
+      'opt.theme.light': 'Light',
+      'opt.theme.system': 'System',
+      'btn.browse': 'Browse',
+      'btn.check': 'Check',
+      'ph.optional': 'Optional',
+      'th.enable': 'On',
+      'th.match': 'Match',
+      'th.outbound': 'Outbound',
     },
     'ru': {
-      'nav.home': 'Узлы', 'nav.routing': 'Маршруты', 'nav.vpn': 'Подключение', 'nav.sub': 'Подписки', 'nav.settings': 'Настройки',
-      'tb.test': 'Тест', 'tb.refresh': 'Обновить', 'tb.backup': 'Резерв',
-      'status.connected': 'Подключено', 'status.disconnected': 'Отключено',
-      'status.subOn': 'Через <strong>{name}</strong> · Задержка {lat}',
+      'nav.home': 'Узлы',
+      'nav.routing': 'Маршруты',
+      'nav.settings': 'Настройки',
+      'nav.sub': 'Подписки',
+      'nav.vpn': 'Подключение',
+      'tb.backup': 'Резерв',
+      'tb.refresh': 'Обновить',
+      'tb.test': 'Тест',
+      'status.connected': 'Подключено',
+      'status.disconnected': 'Отключено',
       'status.subOff': 'Выберите узел и подключитесь · Сейчас <strong>{name}</strong>',
-      'sb.running': 'Работает', 'sb.stopped': 'Остановлен', 'sb.proxy': 'Прокси', 'sb.direct': 'Прямой', 'sb.mixed': 'Смешанный вход',
-      'panel.basic': 'Настройки', 'panel.routing': 'Маршруты', 'panel.vpn': 'Подключение', 'panel.sub': 'Подписки',
-      'sec.ui': 'Интерфейс', 'sec.launch': 'Запуск и окно', 'sec.core': 'Ядро', 'sec.about': 'О программе',
-      'label.lang': 'Язык', 'hint.lang': 'Текст интерфейса обновляется сразу', 'hint.font': 'Шрифт обновляется сразу', 'hint.theme': 'Внешний вид обновляется сразу', 'label.theme': 'Тема', 'hint.icons': 'Иконки обновляются сразу', 'label.icons': 'Стиль иконок',
-      'settings.cancel': 'Отмена', 'settings.ok': 'ОК', 'settings.dirty': 'Есть несохранённые изменения', 'settings.discard': 'Сбросить',
-      'confirm.unsavedTitle': 'Неподтверждённые настройки',
+      'status.subOn': 'Через <strong>{name}</strong> · Задержка {lat}',
+      'sb.direct': 'Прямой',
+      'sb.mixed': 'Смешанный вход',
+      'sb.proxy': 'Прокси',
+      'sb.running': 'Работает',
+      'sb.stopped': 'Остановлен',
+      'panel.basic': 'Настройки',
+      'panel.routing': 'Маршруты',
+      'panel.sub': 'Подписки',
+      'panel.vpn': 'Подключение',
+      'sec.0768a8ae': 'Вход',
+      'sec.0c7d604b': 'Источник подписок',
+      'sec.32ac152b': 'Обновления',
+      'sec.66914536': 'Стратегия',
+      'sec.6dd33f42': 'Адреса Tun',
+      'sec.6f9bbe3d': 'Tun',
+      'sec.90c0bb9a': 'Системный прокси',
+      'sec.about': 'О программе',
+      'sec.b0fae043': 'Правила',
+      'sec.bef1b81f': 'Sniff',
+      'sec.core': 'Ядро',
+      'sec.dns': 'DNS',
+      'sec.ed5f2bde': 'DNS',
+      'sec.fdbc77bd': 'Безопасность',
+      'sec.inbound': 'Вход',
+      'sec.launch': 'Запуск и окно',
+      'sec.rules': 'Правила',
+      'sec.security': 'Безопасность',
+      'sec.sniff': 'Sniff',
+      'sec.strategy': 'Стратегия',
+      'sec.subSource': 'Источник подписок',
+      'sec.sysproxy': 'Системный прокси',
+      'sec.tun': 'Tun',
+      'sec.tunAddr': 'Адреса Tun',
+      'sec.ui': 'Интерфейс',
+      'sec.update': 'Обновления',
+      'label.065a9b80': 'Параллельность',
+      'label.06b8b77d': 'IPv6 CIDR',
+      'label.1045fbc7': 'Интервал автообновления',
+      'label.11d439ac': 'Диагностика',
+      'label.1537bbc1': 'Маршруты Tun',
+      'label.19ff32b9': 'Tun IPv6',
+      'label.1a03f672': 'MTU',
+      'label.2ca08bab': 'Автообновление подписок',
+      'label.3bed1a91': 'IPv4 CIDR',
+      'label.4ee3e499': 'Менять системный DNS',
+      'label.5f2e3188': 'Обход системного прокси',
+      'label.728c7d71': 'Ссылка подписки',
+      'label.85341566': 'Убирать префиксы узлов',
+      'label.8cf16618': 'Обновлять через системный прокси',
+      'label.9ad77606': 'FakeIP',
+      'label.adblock': 'Включить AdBlock',
+      'label.allowLan': 'Разрешить LAN',
+      'label.autoConnect': 'Подключаться при запуске',
+      'label.b3946b88': 'Мультиплексирование',
+      'label.bypassCn': 'Обход материкового Китая',
+      'label.bypassLan': 'Обход LAN',
+      'label.c29847ee': 'Включить вирт. NIC',
+      'label.checkUpdate': 'Проверить обновления',
+      'label.checkUpdateBoot': 'Проверять обновления при запуске',
+      'label.clashApi': 'Включить Clash API',
+      'label.controller': 'Адрес контроллера',
+      'label.controllerSecret': 'Секрет контроллера',
+      'label.coreType': 'Тип ядра',
+      'label.csp': 'Включить CSP',
+      'label.customRules': 'Свои правила',
+      'label.d7f483ab': 'Не проверять сертификат',
+      'label.dataPath': 'Путь данных',
+      'label.defaultDomainStrategy': 'Стратегия по умолчанию',
+      'label.defaultOutbound': 'Исходящий по умолчанию',
+      'label.directDns': 'Прямой DNS',
+      'label.dnsHijack': 'Перехват DNS',
+      'label.domainStrategy': 'Стратегия доменов',
+      'label.e090c506': 'Системный прокси',
+      'label.e587565a': 'LAN в обход Tun',
+      'label.e82554fd': 'Стек',
+      'label.extraCore': 'Путь к доп. ядру',
+      'label.f0789e79': 'Режим',
+      'label.f0b561aa': 'Автообновление наборов правил',
+      'label.font': 'Шрифт',
+      'label.forceSniff': 'Принудительный sniff',
+      'label.hideTray': 'Скрыть значок в меню',
+      'label.icons': 'Стиль иконок',
+      'label.inbound': 'Адрес входа',
+      'label.lang': 'Язык',
+      'label.logLevel': 'Уровень логов',
+      'label.remoteDns': 'Удалённый DNS',
+      'label.routeMode': 'Режим маршрутов',
+      'label.routeProfile': 'Профиль маршрутов',
+      'label.ruleMirror': 'Зеркало наборов правил',
+      'label.ruleTimeout': 'Таймаут решения',
+      'label.showDns': 'Показать системный DNS',
+      'label.showMain': 'Показывать окно при запуске',
+      'label.sniff': 'Включить sniff',
+      'label.sniffOverride': 'Переопределять адрес',
+      'label.sniffTimeout': 'Таймаут sniff',
+      'label.strictRoute': 'Строгий маршрут',
+      'label.theme': 'Тема',
+      'label.updateChannel': 'Канал обновлений',
+      'hint.0000a834': 'Запросы обновлений через системный прокси (при ограниченной сети)',
+      'hint.0182946b': 'Режим Tun перехватывает весь трафик; нужны права администратора',
+      'hint.0421e95f': 'Сколько подписок обновлять одновременно',
+      'hint.06c3f4e6': 'Более строгая таблица маршрутов Tun; может снизить совместимость',
+      'hint.0723ab28': 'Периодически подтягивать списки узлов',
+      'hint.0a6baedd': 'Игнорировать ошибки HTTPS-сертификатов; только для отладки',
+      'hint.1a68215a': 'Другие устройства могут использовать IP этого ПК как прокси',
+      'hint.25c7106c': 'Более строгое сопоставление; может снизить совместимость',
+      'hint.3394a233': 'MTU; обычно оставляйте 1500',
+      'hint.4382ce79': 'Блокировать рекламные домены наборами правил',
+      'hint.44584962': 'Как часто проверять подписки и правила',
+      'hint.4a7d95d3': 'Записывать системные HTTP/HTTPS/SOCKS прокси',
+      'hint.56a62864': 'При старте ядра менять системный DNS для маршрутизации',
+      'hint.67558c6e': 'Ядро управляет маршрутами Tun по умолчанию',
+      'hint.6ec41acc': 'Убирать регион/тариф из имён узлов',
+      'hint.7caf7245': 'Несколько запросов в одном соединении; только узлы с mux (unknown/no не включаются)',
+      'hint.872c3afc': 'Автообновление GeoIP / доменных правил',
+      'hint.91337c1a': 'По одной строке: domain:example.com или geoip:cn',
+      'hint.940fbe3c': 'URL подписки текущей группы; вставьте и нажмите «Применить»',
+      'hint.97fee25f': 'Подробнее — больше места; debug только для разбора',
+      'hint.a1daa533': 'Сбросить настройки Tun и вывести диагностику (демо)',
+      'hint.autoConnect': 'Не реализовано: не подключает последний узел при запуске',
+      'hint.b0a3a450': 'gvisor стабильнее; system быстрее',
+      'hint.b565e862': 'Правила: по списку; Глобальный: весь прокси; Прямой: без прокси',
+      'hint.bbe2ce8a': 'Также обрабатывать IPv6 на Tun',
+      'hint.bbfc8d89': 'Диапазон IPv6 виртуального интерфейса',
+      'hint.cdc63401': 'Сайты/IP материкового Китая идут напрямую, без прокси',
+      'hint.clashApi': 'Для внешних инструментов: соединения и смена узлов',
+      'hint.controller': 'Адрес и порт Clash API',
+      'hint.controllerSecret': 'Секрет API; пусто — без проверки',
+      'hint.coreType': 'Движок прокси; обычно sing-box',
+      'hint.csp': 'Ограничить источники скриптов',
+      'hint.d1a97ead': 'Хосты без системного прокси, через запятую',
+      'hint.dataPath': 'Каталог конфигурации, логов и кэша',
+      'hint.defaultDomainStrategy': 'Обработка домена, если нет правил',
+      'hint.defaultOutbound': 'Без совпадения: proxy / direct / block',
+      'hint.directDns': 'DNS для прямого/внутреннего трафика',
+      'hint.dnsHijack': 'Перехватывать системный DNS локально',
+      'hint.domainStrategy': 'Сначала домен: AsIs; IPIfNonMatch — IP при отсутствии совпадения',
+      'hint.e2ac38c9': 'Не пускать LAN в Tun, чтобы избежать петель',
+      'hint.e5702751': 'Адреса LAN идут напрямую, без прокси-петель',
+      'hint.ead4b529': 'Диапазон IPv4 виртуального NIC; не пересекайте с существующими',
+      'hint.extraCore': 'Укажите путь к своему бинарнику ядра',
+      'hint.f600ea4a': 'Адрес локального прокси; по умолчанию только localhost',
+      'hint.fakeIp': 'Фиктивные IP для скорости; часть приложений может ломаться',
+      'hint.font': 'Шрифт обновляется сразу',
+      'hint.forceSniff': 'Sniff даже при уже известном домене',
+      'hint.hideTray': 'Только окно приложения; без иконки в строке меню',
+      'hint.icons': 'Иконки обновляются сразу',
+      'hint.lang': 'Текст интерфейса обновляется сразу',
+      'hint.remoteDns': 'DNS для прокси (можно DoH)',
+      'hint.routeProfile': 'Полные правила: прокси; Китай напрямую: CN → direct',
+      'hint.ruleMirror': 'CDN для GeoIP/доменов; jsDelivr при медленном GitHub',
+      'hint.ruleTable': 'Демо: домен → исходящий; полный DSL в Qt',
+      'hint.ruleTimeout': 'Макс. ожидание решения; 0 — без лимита',
+      'hint.showDns': 'Выкл. — скрыть переключатель «Системный DNS» на главной',
+      'hint.sniff': 'Определять домен/протокол из трафика',
+      'hint.sniffOverride': 'Подменять цель sniffer-доменом',
+      'hint.sniffTimeout': 'Ожидание отпечатков протокола',
+      'hint.theme': 'Внешний вид обновляется сразу',
+      'hint.updateChannel': 'Бета быстрее, но может быть нестабильной',
+      'settings.cancel': 'Отмена',
+      'settings.dirty': 'Есть несохранённые изменения',
+      'settings.discard': 'Сбросить',
+      'settings.ok': 'ОК',
+      'confirm.discard': 'Не сохранять',
+      'confirm.save': 'Сохранить',
+      'confirm.stay': 'Продолжить',
       'confirm.unsavedMsg': 'Превью интерфейса уже применено. ОК — сохранить; Отмена — вернуть прошлые.',
-      'confirm.discard': 'Не сохранять', 'confirm.stay': 'Продолжить', 'confirm.save': 'Сохранить',
-      'log.saved': 'Настройки сохранены', 'log.discard': 'Изменения отменены', 'log.lang': 'Язык интерфейса: {lang}', 'log.font': 'Шрифт интерфейса: {font}', 'log.theme': 'Тема интерфейса: {theme}', 'log.icons': 'Стиль иконок: {icons}',
-      'log.tunReset': 'Адреса Tun сброшены', 'log.tunTrouble': 'Диагностика Tun: сброс маршрутов (демо)',
-      'lang.简体中文': 'Упрощ. китайский', 'lang.English': 'English', 'lang.Русский': 'Русский', 'lang.繁體中文': 'Трад. китайский',
+      'confirm.unsavedTitle': 'Неподтверждённые настройки',
+      'log.discard': 'Изменения отменены',
+      'log.font': 'Шрифт интерфейса: {font}',
+      'log.icons': 'Стиль иконок: {icons}',
+      'log.lang': 'Язык интерфейса: {lang}',
+      'log.saved': 'Настройки сохранены',
+      'log.theme': 'Тема интерфейса: {theme}',
+      'log.tunReset': 'Адреса Tun сброшены',
+      'log.tunTrouble': 'Диагностика Tun: сброс маршрутов (демо)',
+      'lang.English': 'English',
+      'lang.Русский': 'Русский',
+      'lang.简体中文': 'Упрощ. китайский',
+      'lang.繁體中文': 'Трад. китайский',
+      'opt.channel.beta': 'Бета',
+      'opt.channel.stable': 'Стабильный',
+      'opt.font.system': 'Системный',
+      'opt.mode.direct': 'Прямой',
+      'opt.mode.global': 'Глобальный',
+      'opt.mode.rule': 'Правила',
+      'opt.route.cn': 'Китай напрямую',
+      'opt.route.full': 'Полные правила',
+      'opt.theme.dark': 'Тёмная',
+      'opt.theme.light': 'Светлая',
+      'opt.theme.system': 'Системная',
+      'btn.browse': 'Обзор',
+      'btn.check': 'Проверить',
+      'ph.optional': 'Необяз.',
+      'th.enable': 'Вкл',
+      'th.match': 'Совпад.',
+      'th.outbound': 'Исходящий',
     },
     'zh-TW': {
-      'nav.home': '節點', 'nav.routing': '路由', 'nav.vpn': '連線', 'nav.sub': '訂閱', 'nav.settings': '設定',
-      'tb.test': '測速', 'tb.refresh': '更新', 'tb.backup': '備用',
-      'status.connected': '已連線', 'status.disconnected': '未連線',
-      'status.subOn': '經 <strong>{name}</strong> · 延遲 {lat}',
+      'nav.home': '節點',
+      'nav.routing': '路由',
+      'nav.settings': '設定',
+      'nav.sub': '訂閱',
+      'nav.vpn': '連線',
+      'tb.backup': '備用',
+      'tb.refresh': '更新',
+      'tb.test': '測速',
+      'status.connected': '已連線',
+      'status.disconnected': '未連線',
       'status.subOff': '選擇節點後點左側連線 · 目前 <strong>{name}</strong>',
-      'sb.running': '執行中', 'sb.stopped': '未在執行', 'sb.proxy': '代理', 'sb.direct': '直連', 'sb.mixed': '混合入站',
-      'panel.basic': '設定', 'panel.routing': '路由', 'panel.vpn': '連線', 'panel.sub': '訂閱',
-      'sec.ui': '介面', 'sec.launch': '啟動與視窗', 'sec.core': '核心', 'sec.about': '關於',
-      'label.lang': '語言', 'hint.lang': '切換後立即重新整理介面文案', 'hint.font': '切換後立即預覽介面字體', 'hint.theme': '切換後立即預覽外觀', 'label.theme': '主題', 'hint.icons': '切換後立即預覽側欄與工具列圖示配色', 'label.icons': '圖示樣式',
-      'settings.cancel': '取消', 'settings.ok': '確定', 'settings.dirty': '有未儲存的變更', 'settings.discard': '放棄',
-      'confirm.unsavedTitle': '未確認的設定',
+      'status.subOn': '經 <strong>{name}</strong> · 延遲 {lat}',
+      'sb.direct': '直連',
+      'sb.mixed': '混合入站',
+      'sb.proxy': '代理',
+      'sb.running': '執行中',
+      'sb.stopped': '未在執行',
+      'panel.basic': '設定',
+      'panel.routing': '路由',
+      'panel.sub': '訂閱',
+      'panel.vpn': '連線',
+      'sec.0768a8ae': '入站',
+      'sec.0c7d604b': '訂閱源',
+      'sec.32ac152b': '更新',
+      'sec.66914536': '策略',
+      'sec.6dd33f42': 'Tun 位址',
+      'sec.6f9bbe3d': 'Tun',
+      'sec.90c0bb9a': '系統代理',
+      'sec.about': '關於',
+      'sec.b0fae043': '規則',
+      'sec.bef1b81f': '嗅探',
+      'sec.core': '核心',
+      'sec.dns': 'DNS',
+      'sec.ed5f2bde': 'DNS',
+      'sec.fdbc77bd': '安全',
+      'sec.inbound': '入站',
+      'sec.launch': '啟動與視窗',
+      'sec.rules': '規則',
+      'sec.security': '安全',
+      'sec.sniff': '嗅探',
+      'sec.strategy': '策略',
+      'sec.subSource': '訂閱源',
+      'sec.sysproxy': '系統代理',
+      'sec.tun': 'Tun',
+      'sec.tunAddr': 'Tun 位址',
+      'sec.ui': '介面',
+      'sec.update': '更新',
+      'label.065a9b80': '並行',
+      'label.06b8b77d': 'IPv6 CIDR',
+      'label.1045fbc7': '自動更新間隔',
+      'label.11d439ac': '排除故障',
+      'label.1537bbc1': '啟用 Tun 路由',
+      'label.19ff32b9': 'Tun 啟用 IPv6',
+      'label.1a03f672': 'MTU',
+      'label.2ca08bab': '自動更新訂閱',
+      'label.3bed1a91': 'IPv4 CIDR',
+      'label.4ee3e499': '修改系統 DNS',
+      'label.5f2e3188': '系統代理旁路',
+      'label.728c7d71': '訂閱連結',
+      'label.85341566': '清除訂閱代理前綴',
+      'label.8cf16618': '使用系統代理更新',
+      'label.9ad77606': 'FakeIP',
+      'label.adblock': '啟用 AdBlock',
+      'label.allowLan': '允許區域網路連線',
+      'label.autoConnect': '啟動時連線',
+      'label.b3946b88': '多路複用',
+      'label.bypassCn': '繞過中國大陸',
+      'label.bypassLan': '繞過區域網路',
+      'label.c29847ee': '開啟虛擬網卡',
+      'label.checkUpdate': '檢查更新',
+      'label.checkUpdateBoot': '啟動時檢查更新',
+      'label.clashApi': '啟用 Clash API',
+      'label.controller': '控制器位址',
+      'label.controllerSecret': '控制器金鑰',
+      'label.coreType': '核心類型',
+      'label.csp': '開啟 CSP',
+      'label.customRules': '自訂規則',
+      'label.d7f483ab': '跳過憑證驗證',
+      'label.dataPath': '資料儲存路徑',
+      'label.defaultDomainStrategy': '預設域策略',
+      'label.defaultOutbound': '預設出站',
+      'label.directDns': '直連 DNS',
+      'label.dnsHijack': 'DNS 劫持',
+      'label.domainStrategy': '解析域策略',
+      'label.e090c506': '開啟系統代理',
+      'label.e587565a': '區域網路繞過 Tun',
+      'label.e82554fd': '協定堆疊',
+      'label.extraCore': '額外核心路徑',
+      'label.f0789e79': '模式',
+      'label.f0b561aa': '自動更新規則集',
+      'label.font': '字體',
+      'label.forceSniff': '強制網域嗅探',
+      'label.hideTray': '隱藏選單列圖示',
+      'label.icons': '圖示樣式',
+      'label.inbound': '入站位址',
+      'label.lang': '語言',
+      'label.logLevel': '日誌等級',
+      'label.remoteDns': '遠端 DNS',
+      'label.routeMode': '路由模式',
+      'label.routeProfile': '路由設定檔',
+      'label.ruleMirror': '遠端規則集鏡像',
+      'label.ruleTimeout': '決策逾時',
+      'label.showDns': '顯示系統 DNS 選項',
+      'label.showMain': '啟動時顯示主視窗',
+      'label.sniff': '啟用嗅探',
+      'label.sniffOverride': '覆蓋目標位址',
+      'label.sniffTimeout': '嗅探逾時',
+      'label.strictRoute': '嚴格路由',
+      'label.theme': '主題',
+      'label.updateChannel': '更新通道',
+      'hint.0000a834': '更新請求走系統代理（網路受限時有用）',
+      'hint.0182946b': 'Tun 模式接管全域流量，需管理員權限',
+      'hint.0421e95f': '同時更新的訂閱數量',
+      'hint.06c3f4e6': '更嚴格的 Tun 路由表；可能影響相容性',
+      'hint.0723ab28': '按間隔拉取最新節點列表',
+      'hint.0a6baedd': '忽略 HTTPS 憑證錯誤；僅除錯時開啟',
+      'hint.1a68215a': '其它裝置可透過本機 IP 使用代理',
+      'hint.25c7106c': '更嚴格匹配；可能影響相容性',
+      'hint.3394a233': '最大傳輸單元；一般保持 1500',
+      'hint.4382ce79': '按規則集攔截廣告網域',
+      'hint.44584962': '多久檢查一次訂閱與規則',
+      'hint.4a7d95d3': '寫入系統 HTTP/HTTPS/SOCKS 代理設定',
+      'hint.56a62864': '核心啟動時改寫系統 DNS 以配合分流',
+      'hint.67558c6e': '由核心管理 Tun 預設路由',
+      'hint.6ec41acc': '去掉節點名前的地區/方案前綴',
+      'hint.7caf7245': '單連線承載多路請求；預設僅對探測支援 mux 的節點開啟（unknown/no 不注入）',
+      'hint.872c3afc': '自動重新整理 GeoIP / 網域規則',
+      'hint.91337c1a': '每行一條，如 domain:example.com 或 geoip:cn',
+      'hint.940fbe3c': '目前頂欄分組的訂閱 URL；貼上後點套用',
+      'hint.97fee25f': '越詳細越占空間；排錯可暫時開 debug',
+      'hint.a1daa533': '重設 Tun 相關設定並輸出診斷資訊（示意）',
+      'hint.autoConnect': '未實作：不會在啟動時自動連線上次節點',
+      'hint.b0a3a450': 'gvisor 使用者態堆疊更穩；system 效能更好',
+      'hint.b565e862': '規則按列表分流；全域全走代理；直連不代理',
+      'hint.bbe2ce8a': '在 Tun 上同時處理 IPv6 流量',
+      'hint.bbfc8d89': '虛擬網卡 IPv6 位址段',
+      'hint.cdc63401': '國內網站與 IP 直連，不走代理',
+      'hint.clashApi': '供外部工具查詢連線與切換節點',
+      'hint.controller': 'Clash API 監聽位址與埠',
+      'hint.controllerSecret': 'API 存取金鑰；留空則不驗證',
+      'hint.coreType': '底層代理引擎；一般保持 sing-box',
+      'hint.csp': '限制頁面腳本來源，提升安全性',
+      'hint.d1a97ead': '這些主機不走系統代理，逗號分隔',
+      'hint.dataPath': '設定、日誌與快取所在目錄',
+      'hint.defaultDomainStrategy': '所有規則都未命中時的網域處理方式',
+      'hint.defaultOutbound': '未匹配規則時走代理 / 直連 / 阻斷',
+      'hint.directDns': '國內/直連流量使用的 DNS',
+      'hint.dnsHijack': '攔截系統 DNS 請求並由本機解析',
+      'hint.domainStrategy': '網域先解析再匹配規則：AsIs 用網域；IPIfNonMatch 未命中再解析 IP',
+      'hint.e2ac38c9': '內網流量不進 Tun，避免迴路',
+      'hint.e5702751': '內網位址直連，避免代理迴路',
+      'hint.ead4b529': '虛擬網卡 IPv4 位址段；勿與現有網段衝突',
+      'hint.extraCore': '使用自訂核心二進位時填寫',
+      'hint.f600ea4a': '本機代理監聽位址；預設僅本機',
+      'hint.fakeIp': '回傳虛擬 IP 加速解析；少數應用可能異常',
+      'hint.font': '切換後立即預覽介面字體',
+      'hint.forceSniff': '即使已有網域也再嗅探一次',
+      'hint.hideTray': '僅保留主視窗入口，不在選單列顯示',
+      'hint.icons': '切換後立即預覽側欄與工具列圖示配色',
+      'hint.lang': '切換後立即重新整理介面文案',
+      'hint.remoteDns': '代理流量使用的 DNS（可填 DoH）',
+      'hint.routeProfile': '完整規則：全域代理優先；大陸直連：國內網域/IP 走直連',
+      'hint.ruleMirror': '拉取 GeoIP/網域規則時的 CDN 源；存取 GitHub 慢可換 jsDelivr',
+      'hint.ruleTable': '輕量示意：網域匹配 → 出站；完整規則 DSL 在 Qt 實作',
+      'hint.ruleTimeout': '路由判定最長等待；0 為不限制',
+      'hint.showDns': '關閉後隱藏首頁「系統 DNS」開關',
+      'hint.sniff': '從流量中識別真實網域與協定，改善分流',
+      'hint.sniffOverride': '用嗅探到的網域改寫連線目標',
+      'hint.sniffTimeout': '等待協定特徵的最長時間',
+      'hint.theme': '切換後立即預覽外觀',
+      'hint.updateChannel': '測試版功能更新更快，可能不穩定',
+      'settings.cancel': '取消',
+      'settings.dirty': '有未儲存的變更',
+      'settings.discard': '放棄',
+      'settings.ok': '確定',
+      'confirm.discard': '不儲存',
+      'confirm.save': '儲存',
+      'confirm.stay': '繼續編輯',
       'confirm.unsavedMsg': '介面預覽已生效。確定後寫入設定；不儲存將恢復為上次確認的設定。',
-      'confirm.discard': '不儲存', 'confirm.stay': '繼續編輯', 'confirm.save': '儲存',
-      'log.saved': '設定已儲存', 'log.discard': '已放棄未儲存變更', 'log.lang': '介面語言：{lang}', 'log.font': '介面字體：{font}', 'log.theme': '介面主題：{theme}', 'log.icons': '圖示樣式：{icons}',
-      'log.tunReset': '已恢復預設 Tun 位址', 'log.tunTrouble': 'Tun 排除故障：重設路由並輸出診斷（示意）',
-      'lang.简体中文': '簡體中文', 'lang.English': 'English', 'lang.Русский': '俄語', 'lang.繁體中文': '繁體中文',
+      'confirm.unsavedTitle': '未確認的設定',
+      'log.discard': '已放棄未儲存變更',
+      'log.font': '介面字體：{font}',
+      'log.icons': '圖示樣式：{icons}',
+      'log.lang': '介面語言：{lang}',
+      'log.saved': '設定已儲存',
+      'log.theme': '介面主題：{theme}',
+      'log.tunReset': '已恢復預設 Tun 位址',
+      'log.tunTrouble': 'Tun 排除故障：重設路由並輸出診斷（示意）',
+      'lang.English': 'English',
+      'lang.Русский': '俄語',
+      'lang.简体中文': '簡體中文',
+      'lang.繁體中文': '繁體中文',
+      'opt.channel.beta': '測試版',
+      'opt.channel.stable': '穩定版',
+      'opt.font.system': '系統預設',
+      'opt.mode.direct': '直連',
+      'opt.mode.global': '全域',
+      'opt.mode.rule': '規則',
+      'opt.route.cn': '大陸直連',
+      'opt.route.full': '完整規則',
+      'opt.theme.dark': '深色',
+      'opt.theme.light': '淺色',
+      'opt.theme.system': '系統',
+      'btn.browse': '瀏覽',
+      'btn.check': '檢查',
+      'ph.optional': '可選',
+      'th.enable': '啟用',
+      'th.match': '匹配',
+      'th.outbound': '出站',
     },
   };
   let locale = 'zh-CN';
   let settingsDirty = false;
   let settingsSnapshot = '';
   let pendingLeave = null; // callback after confirm
+
+
+  const OPT_I18N = {
+    '系统默认': 'opt.font.system',
+    'System': 'opt.theme.system',
+    '浅色': 'opt.theme.light',
+    '深色': 'opt.theme.dark',
+    '稳定版': 'opt.channel.stable',
+    '测试版': 'opt.channel.beta',
+    '完整规则': 'opt.route.full',
+    '大陆直连': 'opt.route.cn',
+    '规则': 'opt.mode.rule',
+    '全局': 'opt.mode.global',
+    '直连': 'opt.mode.direct',
+  };
+  function optLabel(canonical) {
+    const k = OPT_I18N[canonical];
+    return k ? t(k) : canonical;
+  }
+  function refreshSelectLabels() {
+    document.querySelectorAll('button.select').forEach(btn => {
+      const val = btn.dataset.value || '';
+      const el = btn.querySelector('.sel-val');
+      if (el && val) el.textContent = optLabel(val);
+    });
+  }
 
   function t(key, vars) {
     const pack = I18N[locale] || I18N['zh-CN'];
@@ -6481,6 +7097,7 @@
       head.textContent = panelTitles[key] || t('panel.basic');
     }
     // language option display stays native names; optional localized in log
+    if (typeof refreshSelectLabels === 'function') refreshSelectLabels();
     if (logIt) log('SYS', 'info', t('log.lang', { lang: langLabel }));
   }
   const FONT_MAP = {
@@ -6594,7 +7211,7 @@
       if (k in map) {
         b.dataset.value = map[k];
         const val = b.querySelector('.sel-val');
-        if (val) val.textContent = map[k];
+        if (val) val.textContent = (typeof optLabel === 'function') ? optLabel(map[k]) : map[k];
         if (b.id === 'langSelect') applyLocale(map[k]);
         if (b.id === 'fontSelect') applyFont(map[k]);
         if (b.id === 'themeSelect') applyTheme(map[k]);
@@ -6607,7 +7224,6 @@
         const on = map[k] === 'true';
         b.classList.toggle('on', on);
         b.setAttribute('aria-pressed', String(on));
-        if (b.id === 'warpSwitch') setChipOn('warpToggle', 'warpChip', on, 'warpSwitch');
       }
     });
     document.querySelectorAll('#view-settings .field[contenteditable="true"]').forEach((f, i) => {
@@ -6726,12 +7342,12 @@
         item.className = 'select-opt' + (o === cur ? ' active' : '');
         item.setAttribute('role', 'option');
         item.setAttribute('aria-selected', String(o === cur));
-        item.textContent = o;
+        item.textContent = (typeof optLabel === 'function') ? optLabel(o) : o;
         item.addEventListener('click', (e) => {
           e.stopPropagation();
           btn.dataset.value = o;
           const val = btn.querySelector('.sel-val');
-          if (val) val.textContent = o;
+          if (val) val.textContent = (typeof optLabel === 'function') ? optLabel(o) : o;
           closeSelectPops();
           if (btn.id === 'langSelect') {
             applyLocale(o, { logIt: true });
@@ -6741,8 +7357,6 @@
             applyTheme(o, { logIt: true });
           } else if (btn.id === 'iconSelect') {
             applyIconStyle(o, { logIt: true });
-          } else if (btn.id === 'warpModeSelect') {
-            if (typeof applyWarpMode === 'function') applyWarpMode(o);
           } else if (btn.id === 'editType') {
             if (typeof syncEditFieldsByType === 'function') syncEditFieldsByType(o);
           }
@@ -7107,7 +7721,7 @@
       },
       'proxy-pac': () => log('SYS', 'info', '系统代理：PAC 模式'),
       'tun-on': () => {
-        if (typeof setTun === 'function') setTun(true);
+        if (typeof applyTun === 'function') applyTun(true);
         else {
           document.getElementById('tunToggle').checked = true;
           document.getElementById('tunChip').classList.add('on');
@@ -7149,13 +7763,6 @@
   // Esc: close menus / dialogs (minimal a11y)
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    const mutex = document.getElementById('mutexMask');
-    if (mutex && mutex.classList.contains('open')) {
-      closeMutexDialog();
-      log('SYS', 'info', '已取消模式切换');
-      e.preventDefault();
-      return;
-    }
     const conf = document.getElementById('confirmMask');
     if (conf && conf.classList.contains('open')) {
       closeConfirm();
@@ -7216,35 +7823,7 @@
       }
       if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
     }
-    const w = await nexusInvoke('warp_status');
-    if (w.ok) {
-      const d = w.data || {};
-      const okCli = !!d.installed;
-      const mode = String(d.ui_mode || 'udp').toUpperCase();
-      // Open = WARP off by default (never mirror residual daemon → chip on)
-      if (typeof setChipOn === 'function') {
-        setChipOn('warpToggle', 'warpChip', false, 'warpSwitch');
-      }
-      if (okCli && d.connected) {
-        log('SYS', 'info', `WARP CLI · 启动时断开残留连接 · Mode ${mode}`);
-        nexusInvoke('warp_set', { enabled: false }).then(r => {
-          if (r.ok) log('SYS', 'ok', String(r.data || 'warp-cli disconnect'));
-          else if (!r.offline) log('SYS', 'warn', r.error || 'WARP 断开失败');
-        });
-      } else {
-        log('SYS', okCli ? 'ok' : 'warn',
-          okCli
-            ? `WARP CLI · 未连接 · Mode ${mode}`
-            : '未找到 warp-cli（请构建时捆绑或安装 Cloudflare WARP）');
-      }
-      const ms = document.getElementById('warpModeSelect');
-      if (ms && ['UDP','HTTPS','TLS'].includes(mode)) {
-        ms.dataset.value = mode;
-        const v = ms.querySelector('.sel-val');
-        if (v) v.textContent = mode;
-      }
-    }
-  }
+}
   const _applyTun = applyTun;
   applyTun = function(on, opts) {
     _applyTun(on, opts);
@@ -7289,24 +7868,6 @@
           if (cr.data?.proxy_note) log('SYS', 'info', cr.data.proxy_note);
         }
       }
-    });
-  };
-  const _applyWarp = applyWarp;
-  applyWarp = function(on, opts) {
-    _applyWarp(on, opts);
-    nexusInvoke('warp_set', { enabled: !!on }).then(r => {
-      if (r.ok) log('SYS', 'ok', String(r.data));
-      else if (!r.offline) {
-        log('SYS', 'warn', r.error || 'WARP 切换失败');
-        setChipOn('warpToggle', 'warpChip', !on, 'warpSwitch');
-      }
-    });
-  };
-  window.applyWarpMode = function(label) {
-    const mode = String(label || 'UDP').toUpperCase();
-    nexusInvoke('warp_set_mode', { mode }).then(r => {
-      if (r.ok) log('SYS', 'ok', `WARP Mode → ${mode}`);
-      else if (!r.offline) log('SYS', 'warn', r.error || 'WARP Mode 设置失败');
     });
   };
   document.getElementById('sysToggle')?.addEventListener('change', (e) => {

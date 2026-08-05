@@ -15,18 +15,13 @@ macOS VPN / proxy client (MVP skeleton). UI: Apple-minimal HTML. Engine: Go core
 
 **Do not edit** `upstream source tree`. This tree is a copy + product worktree.
 
-## WARP
-
-Official Cloudflare **`warp-cli`** is staged under `third_party/cloudflare-warp/` and embedded into `Nexus.app/Contents/MacOS/warp-cli` at build time. Nexus calls connect/disconnect via that binary (not a vendored Throne `warp-client`, not a hard dependency on the full GUI.app path).
-
-Tunnel still needs the system Cloudflare WARP daemon when present. Optional GUI: `/Applications/Cloudflare WARP.app` via `warp_open`.
 
 ## Layout
 
 - `app/` — Tauri 2 (`ui/` = HTML + icons)
 - `app/src-tauri/src/core/` — framed IPC client + session spawn
 - `app/src-tauri/src/data/` — JSON store + pure generate
-- `app/src-tauri/src/sys.rs` / `warp.rs` — system proxy / bundled warp-cli
+- `app/src-tauri/src/sys.rs` — system proxy
 - `core/server/` — Go core source
 - `bin/NexusCore` · `bin/Nexus.app` — build outputs
 - `docs/nexus-throne-port-plan.md` — FINAL port plan
@@ -57,6 +52,6 @@ cd .. && npm run tauri dev
 
 ## Status (2026-08-04)
 
-- Phase A–E skeleton: IPC smoke PASS; store/generate; sys/WARP stubs; UI bridge
+- Phase A–E skeleton: IPC smoke PASS; store/generate; sys stubs; UI bridge
 - `connect` runs generate → CheckConfig only; **Start() deferred** until import path trusted
 - No push to remote unless asked

@@ -256,23 +256,6 @@ if [[ -d "$MACOS_DIR" ]]; then
   cp -f "$CORE_OUT" "$MACOS_DIR/NexusCore"
   chmod +x "$MACOS_DIR/NexusCore"
   ok "embedded $MACOS_DIR/NexusCore"
-
-  # Bundle official Cloudflare warp-cli (not full WARP.app)
-  WARP_STAGE="$ROOT/third_party/cloudflare-warp/warp-cli"
-  WARP_SYS="/Applications/Cloudflare WARP.app/Contents/Resources/warp-cli"
-  if [[ ! -f "$WARP_STAGE" && -f "$WARP_SYS" ]]; then
-    mkdir -p "$(dirname "$WARP_STAGE")"
-    cp -f "$WARP_SYS" "$WARP_STAGE"
-    chmod +x "$WARP_STAGE"
-    log "staged warp-cli from system WARP.app → $WARP_STAGE"
-  fi
-  if [[ -f "$WARP_STAGE" ]]; then
-    cp -f "$WARP_STAGE" "$MACOS_DIR/warp-cli"
-    chmod +x "$MACOS_DIR/warp-cli"
-    ok "embedded $MACOS_DIR/warp-cli"
-  else
-    log "warp-cli not staged (third_party/cloudflare-warp or system WARP.app missing)"
-  fi
 fi
 
 # Convenience copy under repo bin/
