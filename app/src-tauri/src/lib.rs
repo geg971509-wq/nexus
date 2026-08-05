@@ -620,8 +620,14 @@ async fn net_resolve_hosts(
     .map_err(|e| format!("resolve join: {e}"))
 }
 
-fn shutdown_core_best_effort() {
-    // Quit with Tun/proxy up must not leave orphan NexusCore (power desync on relaunch).
+/// Single quit/teardown path: stop Core + clear OS system proxy when store says on.
+/// Used by app_quit, tray quit, and ExitRequested (Cmd+Q). Idempotent.
+fn teardown_session() {
+    // Clear OS proxy before killing Core so browsers don't hang on dead :2080.
+    let clear_proxy = data::store::Store::load().system_proxy;
+    if clear_proxy {
+        let _ = sys::set_system_proxy(false, 2080);
+    }
     let _ = (|| -> Result<(), String> {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         if let Some(mut s) = g.take() {
@@ -635,7 +641,7 @@ fn shutdown_core_best_effort() {
 
 #[tauri::command]
 fn app_quit(app: tauri::AppHandle) {
-    shutdown_core_best_effort();
+    teardown_session();
     app.exit(0);
 }
 
@@ -701,7 +707,7 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main_window(app),
                     "quit" => {
-                        shutdown_core_best_effort();
+                        teardown_session();
                         app.exit(0);
                     }
                     _ => {}
@@ -724,15 +730,21 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            // dock icon click while hidden → show again
-            if let tauri::RunEvent::Reopen {
-                has_visible_windows,
-                ..
-            } = event
-            {
-                if !has_visible_windows {
-                    show_main_window(app);
+            match event {
+                // dock icon click while hidden → show again
+                tauri::RunEvent::Reopen {
+                    has_visible_windows,
+                    ..
+                } => {
+                    if !has_visible_windows {
+                        show_main_window(app);
+                    }
                 }
+                // Cmd+Q / dock Quit / any exit — same teardown as tray quit
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                    teardown_session();
+                }
+                _ => {}
             }
         });
 }

@@ -218,6 +218,14 @@ if ! (cd "$APP_DIR" && npx --no-install tauri --version >/dev/null 2>&1); then
   fi
 fi
 
+# --- 2.5) UI source of truth: index.html → nexus-vpn-ui.html (never hand-edit the copy) ---
+UI_SRC="$APP_DIR/ui/index.html"
+UI_PAIR="$APP_DIR/ui/nexus-vpn-ui.html"
+[[ -f "$UI_SRC" ]] || die "missing UI source: $UI_SRC"
+cp "$UI_SRC" "$UI_PAIR"
+cmp -s "$UI_SRC" "$UI_PAIR" || die "UI pair out of sync after cp (index vs nexus-vpn-ui)"
+ok "UI synced · index.html → nexus-vpn-ui.html"
+
 # --- 3) tauri build ---
 log "tauri build…"
 BUILD_ARGS=(build)

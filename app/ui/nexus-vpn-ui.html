@@ -2059,7 +2059,7 @@
                   <span id="statusText" data-i18n="status.disconnected">未连接</span>
                 </div>
                 <div class="hero-sub" id="statusSub">
-                  选择节点后点左侧连接 · 当前 <strong>CF官方优选12</strong>
+                  选择节点后点左侧连接 · 当前 <strong>—</strong>
                 </div>
               </div>
             </div>
@@ -2134,8 +2134,8 @@
           <div class="log" id="logPanel" aria-live="polite" hidden>
             <div class="log-line" data-lvl="info"><span class="log-time">08:21:44</span><span class="log-tag info">TEST</span><span class="log-msg">URL test for batch done.</span></div>
             <div class="log-line" data-lvl="ok"><span class="log-time">08:21:44</span><span class="log-tag ok">OK</span><span class="log-msg">URL 测试完成 · 11 个节点</span></div>
-            <div class="log-line" data-lvl="info"><span class="log-time">08:21:52</span><span class="log-tag info">CORE</span><span class="log-msg">启动配置档 <span class="node">[VLESS] CF官方优选12</span></span></div>
-            <div class="log-line" data-lvl="warn"><span class="log-time">08:21:53</span><span class="log-tag warn">CORE</span><span class="log-msg">停止配置档 <span class="node">[VLESS] CF官方优选12</span></span></div>
+            <div class="log-line" data-lvl="info"><span class="log-time">08:21:52</span><span class="log-tag info">CORE</span><span class="log-msg">启动配置档 <span class="node">[VLESS] 示例节点</span></span></div>
+            <div class="log-line" data-lvl="warn"><span class="log-time">08:21:53</span><span class="log-tag warn">CORE</span><span class="log-msg">停止配置档 <span class="node">[VLESS] 示例节点</span></span></div>
           </div>
           <div class="conn-panel" id="connPanel" hidden>
             <table class="conn-table" aria-label="活跃连接">
@@ -2498,6 +2498,8 @@
                       <div class="set-ctrl wide"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="" data-readonly="false">localhost,127.0.0.1,*.local</div></div>
                     </div>
                   </div>
+                  <!-- unwired Tun settings (stack/MTU/CIDR/…) — home Tun chip is the real control; do not re-show until store/generate wired -->
+                  <div class="set-unwired-tun" hidden aria-hidden="true">
                   <div class="set-section" data-i18n="sec.6f9bbe3d">Tun</div>
                   <div class="set-row">
                     <div class="set-label" data-i18n="label.c29847ee">开启虚拟网卡</div>
@@ -2573,6 +2575,7 @@
                       <span class="set-hint" data-i18n="hint.a1daa533">重置 Tun 相关设置并输出诊断信息（示意）</span>
                       <div class="set-ctrl inline"><button type="button" class="btn-mini" id="tunTroubleshoot">排除故障</button></div>
                     </div>
+                  </div>
                   </div>
                 </div>
               </div>
@@ -2881,7 +2884,7 @@
     tableCard.setAttribute('aria-label', '节点列表');
   }
   let connected = false;
-  let selectedName = 'CF官方优选12';
+  let selectedName = '—';
   let selectedLat = '—';
   // Hero "经 xxx" follows the tunnel actually started — not the list selection.
   let connectedName = '';
@@ -4871,8 +4874,8 @@
 
   // ——— group management ———
   let GROUPS = [
-    { id: 'default', name: 'Default', count: 11, url: '', autoUpdate: true },
-    // ponytail: no fake sub host — empty URL skips update (Throne should_skip); demo nodes stay fixed until user sets a real link
+    { id: 'default', name: 'Default', count: 0, url: '', autoUpdate: true },
+    // empty URL skips update (Throne should_skip); nodes only from real import/sub
     { id: 'backup', name: '备用', count: 0, url: '', autoUpdate: false },
   ];
   let groupEditId = null;
@@ -5001,22 +5004,43 @@
     }
     return o;
   }
-  function stripDemoBackupNodes() {
-    // old seed filled 备用 with 5 fake nodes; default is empty
-    const DEMO = new Set(['备用-东京A', '备用-新加坡B', '备用-香港C', '备用-美西D', '备用-法兰克福E']);
+  function stripDemoSeedNodes() {
+    // old seeds: 备用 5 fake + Default CF官方优选*; product default is empty groups
+    const BACKUP_DEMO = new Set(['备用-东京A', '备用-新加坡B', '备用-香港C', '备用-美西D', '备用-法兰克福E']);
     const bag = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES : null;
-    if (!bag || !bag.backup || !Array.isArray(bag.backup.nodes)) return false;
-    const before = bag.backup.nodes.length;
-    bag.backup.nodes = bag.backup.nodes.filter(n => n && !DEMO.has(n.name));
-    if (bag.backup.nodes.length === before) return false;
-    const g = (GROUPS || []).find(x => x.id === 'backup');
-    if (g) g.count = bag.backup.nodes.length;
-    return true;
+    if (!bag) return false;
+    let changed = false;
+    if (bag.backup && Array.isArray(bag.backup.nodes)) {
+      const n0 = bag.backup.nodes.length;
+      bag.backup.nodes = bag.backup.nodes.filter(n => n && !BACKUP_DEMO.has(n.name));
+      if (bag.backup.nodes.length !== n0) {
+        const g = (GROUPS || []).find(x => x.id === 'backup');
+        if (g) g.count = bag.backup.nodes.length;
+        changed = true;
+      }
+    }
+    // only default group + CF官方优选* prefix (do not scan other groups)
+    if (bag.default && Array.isArray(bag.default.nodes)) {
+      const n0 = bag.default.nodes.length;
+      bag.default.nodes = bag.default.nodes.filter(n => {
+        if (!n || !n.name) return true;
+        if (!String(n.name).startsWith('CF官方优选')) return true;
+        // keep if user attached real connect payload
+        if (n.link || n.outbound) return true;
+        return false;
+      });
+      if (bag.default.nodes.length !== n0) {
+        const g = (GROUPS || []).find(x => x.id === 'default');
+        if (g) g.count = bag.default.nodes.length;
+        changed = true;
+      }
+    }
+    return changed;
   }
   function hydrateCatalogOnBoot() {
     const data = loadCatalog();
     if (data && applyCatalog(data)) {
-      const stripped = stripDemoBackupNodes();
+      const stripped = stripDemoSeedNodes();
       // persist repairs so next Start sees fixed outbound without re-import
       try { if (typeof saveCatalog === 'function') saveCatalog(true); } catch (_) {}
       if (typeof syncSubSegFromGroups === 'function') syncSubSegFromGroups();
@@ -5030,10 +5054,10 @@
       }
       if (typeof syncSubSettingsFromActiveGroup === 'function') syncSubSettingsFromActiveGroup();
       const n = GROUPS.reduce((s, g) => s + (g.count | 0), 0);
-      try { log('SYS', 'info', `已恢复订阅 · ${GROUPS.length} 组 · ${n} 节点` + (stripped ? ' · 已清空演示备用' : '')); } catch (_) {}
+      try { log('SYS', 'info', `已恢复订阅 · ${GROUPS.length} 组 · ${n} 节点` + (stripped ? ' · 已清空演示节点' : '')); } catch (_) {}
       return true;
     }
-    // no snapshot: default seed (备用 empty)
+    // no snapshot: empty Default + 备用
     if (typeof renderNodes === 'function') renderNodes(GROUPS[0]?.id || 'default');
     return false;
   }
@@ -7365,19 +7389,7 @@
     default: {
       label: 'Default',
       foot: '',
-      nodes: [
-        { name: 'CF官方优选12', type: 'VLESS', addr: '188.164.248.100:443', lat: null, flow: null },
-        { name: 'CF官方优选10', type: 'VLESS', addr: '104.17.191.229:443', lat: null, flow: null },
-        { name: 'CF官方优选7', type: 'VLESS', addr: '104.17.60.27:443', lat: null, flow: null },
-        { name: 'CF官方优选11', type: 'VLESS', addr: '104.16.248.230:443', lat: null, flow: null },
-        { name: 'CF官方优选14', type: 'VLESS', addr: '104.17.127.183:443', lat: null, flow: null },
-        { name: 'CF官方优选5', type: 'VLESS', addr: '104.19.32.109:443', lat: null, flow: null },
-        { name: 'CF官方优选13', type: 'VLESS', addr: '198.41.208.95:443', lat: null, flow: null },
-        { name: 'CF官方优选6', type: 'VLESS', addr: '198.41.208.132:443', lat: null, flow: null },
-        { name: 'CF官方优选9', type: 'VLESS', addr: '104.17.181.174:443', lat: null, flow: null },
-        { name: 'CF官方优选4', type: 'VLESS', addr: '104.16.241.14:443', lat: null, flow: null },
-        { name: 'CF官方优选8', type: 'VLESS', addr: '104.17.27.113:443', lat: null, flow: null },
-      ]
+      nodes: []
     },
     backup: {
       label: '备用',
@@ -7425,8 +7437,13 @@
       const L = prof.nodes[0]?.lat;
       selectedLat = (L != null && L >= 0 && isFinite(L)) ? (L + ' ms') : '—';
     }
-    sortKey = null; sortDir = 1;
-    document.querySelectorAll('thead th.sortable').forEach(th => th.removeAttribute('aria-sort'));
+    // keep session sort across group switch (do not reset sortKey)
+    if (sortKey) {
+      sortNodeTable(sortKey, sortDir);
+      setSortHeader(sortKey, sortDir);
+    } else {
+      document.querySelectorAll('thead th.sortable').forEach(th => th.removeAttribute('aria-sort'));
+    }
     if (searchInput) searchInput.value = '';
     // rebind selection anchor to live row (Shift-range after re-render)
     selectAnchorRow = nodeTable.querySelector('tr.selected')

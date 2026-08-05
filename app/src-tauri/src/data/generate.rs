@@ -168,7 +168,8 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         tun_obj.insert("strict_route".into(), json!(false));
         // Throne SettingsRepo macOS default: gvisor (Windows may use system).
         tun_obj.insert("stack".into(), json!("gvisor"));
-        tun_obj.insert("mtu".into(), json!(9000));
+        // Throne SettingsRepo macOS default vpn_mtu = 1500 (not jumbo 9000).
+        tun_obj.insert("mtu".into(), json!(1500));
         // Do NOT set route_address to Tun CIDR (sing-tun allowlist replaces full auto_route).
         // Carve Tun out of private excludes so Tun+1 DNS stays on-iface while LAN bypasses.
         tun_obj.insert(
@@ -439,6 +440,7 @@ mod tests {
             .expect("tun inbound");
         assert_eq!(tun["address"][0], "172.19.0.1/24");
         assert_eq!(tun["stack"], "gvisor");
+        assert_eq!(tun["mtu"], 1500);
         let excl = tun["route_exclude_address"]
             .as_array()
             .expect("route_exclude_address");
