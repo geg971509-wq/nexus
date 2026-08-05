@@ -80,16 +80,32 @@ fn build_dns_section(outbound: &Value, tun: bool) -> Value {
             .insert("detour".into(), json!("proxy"));
     }
 
-    let mut rules = Vec::new();
-    if let Some(server) = outbound.get("server").and_then(|s| s.as_str()) {
-        // Hostname (has a letter) must not resolve via proxy detour — chicken/egg.
-        if !server.is_empty() && server.chars().any(|c| c.is_ascii_alphabetic()) {
-            rules.push(json!({
-                "domain": [server],
-                "action": "route",
-                "server": "dns-direct"
-            }));
+    // Hostnames that must bootstrap off-proxy (server + TLS SNI / reality).
+    let mut bootstrap = Vec::new();
+    for key in ["server", "server_name"] {
+        if let Some(h) = outbound.get(key).and_then(|s| s.as_str()) {
+            if !h.is_empty() && h.chars().any(|c| c.is_ascii_alphabetic()) {
+                bootstrap.push(h.to_string());
+            }
         }
+    }
+    if let Some(tls) = outbound.get("tls") {
+        if let Some(h) = tls.get("server_name").and_then(|s| s.as_str()) {
+            if !h.is_empty() && h.chars().any(|c| c.is_ascii_alphabetic()) {
+                bootstrap.push(h.to_string());
+            }
+        }
+    }
+    bootstrap.sort();
+    bootstrap.dedup();
+
+    let mut rules = Vec::new();
+    if !bootstrap.is_empty() {
+        rules.push(json!({
+            "domain": bootstrap,
+            "action": "route",
+            "server": "dns-direct"
+        }));
     }
 
     json!({
@@ -116,6 +132,18 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         input.mux_concurrency,
     );
     let dns = build_dns_section(&outbound, input.tun);
+
+    // sing-box 1.12+: dial fields need domain_resolver. Without it, proxy server
+    // hostname resolves via dns-remote→detour proxy → "DNS query loopback".
+    // Throne: route.default_domain_resolver = dns-direct (and pin on outbound).
+    if outbound.get("domain_resolver").is_none() {
+        if let Some(obj) = outbound.as_object_mut() {
+            let server = obj.get("server").and_then(|s| s.as_str()).unwrap_or("");
+            if !server.is_empty() && server.chars().any(|c| c.is_ascii_alphabetic()) {
+                obj.insert("domain_resolver".into(), json!("dns-direct"));
+            }
+        }
+    }
     let outbounds = vec![outbound, json!({"type":"direct","tag":"direct"})];
 
     // Throne: mixed 127.0.0.1:inbound_socks_port (default 2080)
@@ -149,6 +177,8 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
 
     // Throne RouteProfile defaults: sniff → hijack DNS → private/LAN direct → final proxy.
     // auto_detect_interface: true (Throne when vpn; also correct for mixed+sysproxy).
+    // default_domain_resolver: Throne always sets dns-direct so egress dial never
+    // uses dns-remote (would detour proxy while resolving proxy itself).
     let route = json!({
         "rules": [
             {"action": "sniff"},
@@ -156,7 +186,10 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
             {"ip_is_private": true, "outbound": "direct"}
         ],
         "final": "proxy",
-        "auto_detect_interface": true
+        "auto_detect_interface": true,
+        "default_domain_resolver": {
+            "server": "dns-direct"
+        }
     });
 
     // Throne: experimental.clash_api required for TrafficManager / QueryConnections
@@ -394,5 +427,35 @@ mod tests {
             }),
             "proxy server hostname must bootstrap via dns-direct; got {rules:?}"
         );
+        assert_eq!(
+            v["route"]["default_domain_resolver"]["server"],
+            "dns-direct",
+            "missing Throne default_domain_resolver → DNS loopback on proxy dial"
+        );
+        assert_eq!(
+            v["outbounds"][0]["domain_resolver"],
+            "dns-direct",
+            "proxy outbound must pin domain_resolver for hostname server"
+        );
+    }
+
+    #[test]
+    fn dns_tls_sni_also_bootstraps() {
+        let p = sample_profile(json!({
+            "type":"http","tag":"proxy",
+            "server":"edge.example.net","server_port":443,
+            "tls":{"enabled":true,"server_name":"sni.example.net"}
+        }));
+        let v = gen(&p, 2080, false);
+        let rules = v["dns"]["rules"].as_array().expect("dns.rules");
+        let domains = rules
+            .iter()
+            .find(|r| r.get("server") == Some(&json!("dns-direct")))
+            .and_then(|r| r.get("domain"))
+            .and_then(|d| d.as_array())
+            .cloned()
+            .unwrap_or_default();
+        assert!(domains.iter().any(|x| x == "edge.example.net"));
+        assert!(domains.iter().any(|x| x == "sni.example.net"));
     }
 }
