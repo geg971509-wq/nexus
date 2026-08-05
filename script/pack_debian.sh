@@ -26,7 +26,7 @@ cat >/usr/share/applications/Throne.desktop<<-END
 Name=Throne
 Comment=Qt based cross-platform GUI proxy configuration manager (backend: sing-box)
 Exec=sh -c "PATH=/opt/Throne:\$PATH /opt/Throne/Throne -appdata"
-Icon=/opt/Throne/Throne.png
+Icon=/opt/Throne/Nexus.png
 Terminal=false
 Type=Application
 Categories=Network;Application;

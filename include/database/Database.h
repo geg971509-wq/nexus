@@ -20,6 +20,8 @@ namespace Configs {
         int gid;
         int latency;
         long long latency_at = 0;
+        int mux_capability = 0;
+        long long mux_capability_at = 0;
         std::string dl_speed;
         std::string ul_speed;
         std::string test_country;

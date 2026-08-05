@@ -178,7 +178,7 @@ namespace Configs {
         if (!effPlugin.isEmpty()) object["plugin"] = effPlugin;
         if (!effPluginOpts.isEmpty()) object["plugin_opts"] = effPluginOpts;
         if (uot) object["udp_over_tcp"] = uot;
-        if (auto muxObj = multiplex->Build().object; !muxObj.isEmpty()) object["multiplex"] = muxObj;
+        if (auto muxObj = multiplex->Build(build_mux_capability).object; !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return {object, ""};
     }
 

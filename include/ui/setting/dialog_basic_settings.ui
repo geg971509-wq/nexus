@@ -987,7 +987,10 @@ QTabBar::tab:hover:!selected {
                <item>
                 <widget class="QCheckBox" name="mux_default_on">
                  <property name="text">
-                  <string>Default On</string>
+                  <string>Default On (only after probe says yes)</string>
+                 </property>
+                 <property name="toolTip">
+                  <string>When on, mux is applied only to profiles whose capability is Yes (URL-test A/B). Unknown/No stay off — fixes nodes that break with smux.</string>
                  </property>
                 </widget>
                </item>

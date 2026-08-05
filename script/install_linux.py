@@ -269,7 +269,7 @@ def main(scr, y):
 Name=Throne
 Comment=Qt based cross-platform GUI proxy configuration manager (backend: sing-box)
 Exec={APPDIR}/Throne -appdata
-Icon={APPDIR}/Throne.png
+Icon={APPDIR}/Nexus.png
 Terminal=false
 Type=Application
 Categories=Network;Application;
@@ -287,7 +287,7 @@ Categories=Network;Application;
                 if f.is_file():
                     rel = f.relative_to(usr_src)
                     install(f, APPDIR / "usr" / rel, 0o644)
-            install(tmpdir / "Throne/Throne.png", APPDIR / "Throne.png", 0o644)
+            install(tmpdir / "Throne/Nexus.png", APPDIR / "Nexus.png", 0o644)
 
             y = message(scr, y, f"Installing .desktop to {DESKTOPDIR}")
             install(tmpdir / "Throne.desktop", DESKTOPDIR / "Throne.desktop", 0o644)

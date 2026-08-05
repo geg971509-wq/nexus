@@ -13,8 +13,14 @@ commands.allow = [
   "set_system_dns_cmd",
   "set_tun_cmd",
   "connect_selected",
+  "disconnect_selected",
   "warp_status",
   "warp_set",
   "warp_set_mode",
-  "warp_open"
+  "warp_open",
+  "sub_fetch",
+  "net_tcp_probe",
+  "net_tcp_probe_stop",
+  "net_resolve_host",
+  "net_resolve_hosts"
 ]

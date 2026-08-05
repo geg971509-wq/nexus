@@ -276,7 +276,7 @@ set(PROJECT_SOURCES
         src/ui/setting/RawRouteItem.cpp
         include/ui/setting/RawRouteItem.h
 
-        res/Throne.qrc
+        res/icons.qrc
         ${QV2RAY_RC}
         res/darkstyle.qrc
         res/theme/feiyangqingyun/qss.qrc
@@ -433,13 +433,14 @@ set_property(TARGET Throne PROPERTY AUTORCC ON)
 
 # Target Source macOS
 
-set(MACOSX_ICON ${CMAKE_SOURCE_DIR}/res/Throne.icns)
+# Nexus: Throne brand icons removed; Qt shell orphaned. Product icons: app/src-tauri/icons/
+set(MACOSX_ICON "")
 if (APPLE)
     target_sources(Throne PRIVATE ${MACOSX_ICON})
 endif ()
 
 set_target_properties(Throne PROPERTIES
-        MACOSX_BUNDLE_ICON_FILE "Throne.icns"
+        MACOSX_BUNDLE_ICON_FILE ""
         RESOURCE ${MACOSX_ICON}
         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/res/MacOSXBundleInfo.plist
         MACOSX_BUNDLE_GUI_IDENTIFIER moe.Throne.macosx

@@ -655,7 +655,7 @@ Select which parts to restore:</source>
 
 <message>
         <source>To choose custom icons, you need to choose png images with an equal width and height (eg 512*512). Their names should be of
-(Dns.png, Off.png, Proxy.png, Proxy-Dns.png, Throne.png, Tun.png) So that each will be used in the appropriate state of the app.
+(Dns.png, Off.png, Proxy.png, Proxy-Dns.png, Nexus.png, Tun.png) So that each will be used in the appropriate state of the app.
 You can provide a subset of the said images and only the corresponding states will be using them.
 It is suggested that each image&apos;s size be less than 100KB.</source>
         <translation type="unfinished"></translation>

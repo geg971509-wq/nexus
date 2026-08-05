@@ -128,8 +128,18 @@ namespace Configs {
     }
     BuildResult Multiplex::Build() const
     {
+        return Build(MuxCapability::Unknown);
+    }
+
+    BuildResult Multiplex::Build(MuxCapability cap) const
+    {
         auto obj = ExportToJson();
-        if (unspecified && Configs::dataManager->settingsRepo->mux_default_on) obj["enabled"] = true;
+        // Default-on only after probe proved this node supports mux (cap==Yes).
+        // Unknown/No: leave off so plain-WS nodes (e.g. iGG shark) stay reachable.
+        if (unspecified && Configs::dataManager->settingsRepo->mux_default_on
+            && cap == MuxCapability::Yes) {
+            obj["enabled"] = true;
+        }
         if (!obj["enabled"].toBool()) return {{}, ""};
         if (protocol.isEmpty()) obj["protocol"] = Configs::dataManager->settingsRepo->mux_protocol;
         if (max_streams == 0 && max_connections == 0 && min_streams == 0) obj["max_streams"] = Configs::dataManager->settingsRepo->mux_concurrency;

@@ -108,7 +108,7 @@ namespace Configs {
         object["packet_encoding"] = packet_encoding;
         if (auto tlsObj = tls->Build().object; !tlsObj.isEmpty()) object["tls"] = tlsObj;
         if (auto transportObj = transport->Build().object; !transportObj.isEmpty()) object["transport"] = transportObj;
-        if (auto muxObj = multiplex->Build().object; !muxObj.isEmpty()) object["multiplex"] = muxObj;
+        if (auto muxObj = multiplex->Build(build_mux_capability).object; !muxObj.isEmpty()) object["multiplex"] = muxObj;
         return {object, ""};
     }
 

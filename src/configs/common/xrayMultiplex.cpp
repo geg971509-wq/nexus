@@ -56,8 +56,15 @@ namespace Configs {
     }
 
     BuildResult xrayMultiplex::Build() const {
+        return Build(MuxCapability::Unknown);
+    }
+
+    BuildResult xrayMultiplex::Build(MuxCapability cap) const {
         auto obj = ExportToJson();
-        if (useDefault && Configs::dataManager->settingsRepo->xray_mux_default_on) obj["enabled"] = true;
+        if (useDefault && Configs::dataManager->settingsRepo->xray_mux_default_on
+            && cap == MuxCapability::Yes) {
+            obj["enabled"] = true;
+        }
         if (!obj["enabled"].toBool()) return {{}, ""};
         if (Configs::dataManager->settingsRepo->xray_mux_concurrency > 0 && concurrency <= 0) obj["concurrency"] = concurrency;
         if (xudpConcurrency > 0) obj["xudpConcurrency"] = xudpConcurrency;

@@ -10,6 +10,15 @@ pub struct Profile {
     pub group_id: String,
     /// Raw outbound object for sing-box (import-first)
     pub outbound: serde_json::Value,
+    /// Mux A/B probe: "unknown" | "yes" | "no". Default-on injects only when "yes".
+    #[serde(default = "default_mux_unknown")]
+    pub mux_capability: String,
+    #[serde(default)]
+    pub mux_capability_at: i64,
+}
+
+fn default_mux_unknown() -> String {
+    "unknown".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,14 +29,36 @@ pub struct Group {
     pub auto_update: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Store {
     pub groups: Vec<Group>,
     pub profiles: Vec<Profile>,
     pub selected_profile_id: Option<String>,
+    /// Throne spmode_system_proxy — product default ON (user: 默认打开系统代理).
+    #[serde(default = "default_true")]
     pub system_proxy: bool,
+    /// Throne spmode_vpn — default off (needs privilege).
+    #[serde(default)]
     pub tun: bool,
+    #[serde(default)]
     pub system_dns: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for Store {
+    fn default() -> Self {
+        Self {
+            groups: Vec::new(),
+            profiles: Vec::new(),
+            selected_profile_id: None,
+            system_proxy: true,
+            tun: false,
+            system_dns: false,
+        }
+    }
 }
 
 impl Store {
@@ -74,6 +105,8 @@ impl Store {
                 name: "Direct".into(),
                 group_id: "default".into(),
                 outbound: serde_json::json!({"type":"direct","tag":"proxy"}),
+                mux_capability: "unknown".into(),
+                mux_capability_at: 0,
             });
             self.selected_profile_id = Some("direct-1".into());
         }
@@ -83,8 +116,7 @@ impl Store {
 fn dirs_next_path() -> PathBuf {
     // ~/Library/Application Support/Nexus on macOS
     if let Some(home) = std::env::var_os("HOME") {
-        return PathBuf::from(home)
-            .join("Library/Application Support/Nexus");
+        return PathBuf::from(home).join("Library/Application Support/Nexus");
     }
     std::env::temp_dir().join("Nexus")
 }

@@ -43,6 +43,12 @@ namespace Configs {
         if (!profilesColumnExists("latency_at"))
             db.exec("ALTER TABLE profiles ADD COLUMN latency_at INTEGER NOT NULL DEFAULT 0");
 
+        // Mux A/B probe result: 0=unknown 1=yes 2=no. Default-on injects only when 1.
+        if (!profilesColumnExists("mux_capability"))
+            db.exec("ALTER TABLE profiles ADD COLUMN mux_capability INTEGER NOT NULL DEFAULT 0");
+        if (!profilesColumnExists("mux_capability_at"))
+            db.exec("ALTER TABLE profiles ADD COLUMN mux_capability_at INTEGER NOT NULL DEFAULT 0");
+
         db.exec("CREATE INDEX IF NOT EXISTS idx_profiles_name ON profiles(name)");
     }
 
@@ -65,6 +71,8 @@ namespace Configs {
         json["gid"] = profile->gid;
         json["latency"] = profile->latency;
         json["latency_at"] = static_cast<qint64>(profile->latency_at);
+        json["mux_capability"] = profile->mux_capability;
+        json["mux_capability_at"] = static_cast<qint64>(profile->mux_capability_at);
         json["dl_speed"] = profile->dl_speed;
         json["ul_speed"] = profile->ul_speed;
         json["test_country"] = profile->test_country;
@@ -91,6 +99,8 @@ namespace Configs {
         profile->gid = json["gid"].toInt();
         profile->latency = json["latency"].toInt();
         profile->latency_at = json["latency_at"].toVariant().toLongLong();
+        profile->mux_capability = json["mux_capability"].toInt();
+        profile->mux_capability_at = json["mux_capability_at"].toVariant().toLongLong();
         profile->dl_speed = json["dl_speed"].toString();
         profile->ul_speed = json["ul_speed"].toString();
         profile->test_country = json["test_country"].toString();
@@ -137,7 +147,8 @@ namespace Configs {
         if (exists) {
             db.exec(R"(
                 UPDATE profiles
-                SET type = ?, name = ?, gid = ?, latency = ?, latency_at = ?, dl_speed = ?, ul_speed = ?,
+                SET type = ?, name = ?, gid = ?, latency = ?, latency_at = ?,
+                    mux_capability = ?, mux_capability_at = ?, dl_speed = ?, ul_speed = ?,
                     test_country = ?, ip_out = ?, outbound_json = ?,
                     traffic_dl = ?, traffic_up = ?, updated_at = strftime('%s', 'now')
                 WHERE id = ?
@@ -147,6 +158,8 @@ namespace Configs {
                 profile->gid,
                 profile->latency,
                 static_cast<long long>(profile->latency_at),
+                profile->mux_capability,
+                static_cast<long long>(profile->mux_capability_at),
                 profile->dl_speed.toStdString(),
                 profile->ul_speed.toStdString(),
                 profile->test_country.toStdString(),
@@ -159,9 +172,9 @@ namespace Configs {
         } else {
             db.exec(R"(
                 INSERT INTO profiles
-                (id, type, name, gid, latency, latency_at, dl_speed, ul_speed, test_country,
-                ip_out, outbound_json, traffic_dl, traffic_up)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, type, name, gid, latency, latency_at, mux_capability, mux_capability_at,
+                dl_speed, ul_speed, test_country, ip_out, outbound_json, traffic_dl, traffic_up)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             )",
                 id,
                 profile->type.toStdString(),
@@ -169,6 +182,8 @@ namespace Configs {
                 profile->gid,
                 profile->latency,
                 static_cast<long long>(profile->latency_at),
+                profile->mux_capability,
+                static_cast<long long>(profile->mux_capability_at),
                 profile->dl_speed.toStdString(),
                 profile->ul_speed.toStdString(),
                 profile->test_country.toStdString(),
@@ -193,6 +208,8 @@ namespace Configs {
         row.gid = gid;
         row.latency = profile->latency;
         row.latency_at = static_cast<long long>(profile->latency_at);
+        row.mux_capability = profile->mux_capability;
+        row.mux_capability_at = static_cast<long long>(profile->mux_capability_at);
         row.dl_speed = profile->dl_speed.toStdString();
         row.ul_speed = profile->ul_speed.toStdString();
         row.test_country = profile->test_country.toStdString();
@@ -211,27 +228,29 @@ namespace Configs {
         json["gid"] = stmt.getColumn(3).getInt();
         json["latency"] = stmt.getColumn(4).getInt();
         json["latency_at"] = static_cast<qint64>(stmt.getColumn(5).getInt64());
-        json["dl_speed"] = QString::fromStdString(stmt.getColumn(6).getText());
-        json["ul_speed"] = QString::fromStdString(stmt.getColumn(7).getText());
-        json["test_country"] = QString::fromStdString(stmt.getColumn(8).getText());
-        json["ip_out"] = QString::fromStdString(stmt.getColumn(9).getText());
+        json["mux_capability"] = stmt.getColumn(6).getInt();
+        json["mux_capability_at"] = static_cast<qint64>(stmt.getColumn(7).getInt64());
+        json["dl_speed"] = QString::fromStdString(stmt.getColumn(8).getText());
+        json["ul_speed"] = QString::fromStdString(stmt.getColumn(9).getText());
+        json["test_country"] = QString::fromStdString(stmt.getColumn(10).getText());
+        json["ip_out"] = QString::fromStdString(stmt.getColumn(11).getText());
 
-        QString outboundJsonStr = QString::fromStdString(stmt.getColumn(10).getText());
+        QString outboundJsonStr = QString::fromStdString(stmt.getColumn(12).getText());
         QJsonDocument outboundDoc = QJsonDocument::fromJson(outboundJsonStr.toUtf8());
         if (!outboundDoc.isNull() && outboundDoc.isObject()) {
             json["outbound"] = outboundDoc.object();
         }
 
-        json["traffic_dl"] = static_cast<qint64>(stmt.getColumn(11).getInt64());
-        json["traffic_up"] = static_cast<qint64>(stmt.getColumn(12).getInt64());
-        
+        json["traffic_dl"] = static_cast<qint64>(stmt.getColumn(13).getInt64());
+        json["traffic_up"] = static_cast<qint64>(stmt.getColumn(14).getInt64());
+
         return profileFromJson(json);
     }
 
     std::shared_ptr<Profile> ProfilesRepo::loadFromDatabase(int id) const {
         auto query = db.query(R"(
-            SELECT id, type, name, gid, latency, latency_at, dl_speed, ul_speed, test_country,
-                   ip_out, outbound_json, traffic_dl, traffic_up
+            SELECT id, type, name, gid, latency, latency_at, mux_capability, mux_capability_at,
+                   dl_speed, ul_speed, test_country, ip_out, outbound_json, traffic_dl, traffic_up
             FROM profiles WHERE id = ?
         )", id);
         if (!query.tryStep()) {
@@ -380,8 +399,9 @@ namespace Configs {
             if (i > 0) idList += ",";
             idList += QString::number(chunkIds[i]);
         }
-        std::string sql = "SELECT id, type, name, gid, latency, latency_at, dl_speed, ul_speed, test_country, "
-                         "ip_out, outbound_json, traffic_dl, traffic_up FROM profiles WHERE id IN (" +
+        std::string sql = "SELECT id, type, name, gid, latency, latency_at, mux_capability, mux_capability_at, "
+                         "dl_speed, ul_speed, test_country, ip_out, outbound_json, traffic_dl, traffic_up "
+                         "FROM profiles WHERE id IN (" +
                          idList.toStdString() + ") ORDER BY id";
         auto query = db.query(sql);
         if (!query) return result;

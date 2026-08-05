@@ -102,7 +102,7 @@ namespace Configs {
         if (!flow.isEmpty() && flow != "none") settings["flow"] = flow;
         object["settings"] = settings;
         if (auto streamObj = streamSetting->Build().object; !streamObj.isEmpty()) object["streamSettings"] = streamObj;
-        if (auto muxObj = multiplex->Build().object; !muxObj.isEmpty()) object["mux"] = muxObj;
+        if (auto muxObj = multiplex->Build(build_mux_capability).object; !muxObj.isEmpty()) object["mux"] = muxObj;
         return {object, ""};
     }
 }

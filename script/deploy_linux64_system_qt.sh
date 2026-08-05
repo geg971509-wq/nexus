@@ -7,8 +7,8 @@ mkdir -p $DEST
 #### copy binary ####
 cp $GITHUB_WORKSPACE/build/Throne $DEST
 
-#### copy Throne.png ####
-cp $GITHUB_WORKSPACE/res/public/Throne.png $DEST
+#### copy Nexus icon ####
+cp $GITHUB_WORKSPACE/app/ui/assets/nexus-icon-256.png $DEST/Nexus.png
 
 #### copy Core ####
 cd download-artifact

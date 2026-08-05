@@ -1000,6 +1000,10 @@ namespace Configs {
             if (includeProxy && idx == 0) tag = "proxy";
             if (markIngress && idx == 0) ctx->singIngressTags << tag;
             const auto& ent = ents[idx];
+            if (ent->outbound) {
+                ent->outbound->build_mux_capability =
+                    static_cast<MuxCapability>(ent->mux_capability);
+            }
             auto [object, error] = ent->outbound->Build();
             if (!error.isEmpty())
             {
@@ -1027,6 +1031,10 @@ namespace Configs {
             if (includeProxy && idx == 0) tag = "proxy";
             if (idx == 0) ctx->xrayIngressTags << tag;
             const auto& ent = ents[idx];
+            if (ent->outbound) {
+                ent->outbound->build_mux_capability =
+                    static_cast<MuxCapability>(ent->mux_capability);
+            }
             auto [object, error] = ent->outbound->BuildXray();
             if (!error.isEmpty())
             {
@@ -1812,6 +1820,10 @@ namespace Configs {
         // above), so IsXray() cleanly selects the Xray-validation path.
         if (!fullConf && ent->outbound->IsXray())
         {
+            if (ent->outbound) {
+                ent->outbound->build_mux_capability =
+                    static_cast<MuxCapability>(ent->mux_capability);
+            }
             auto [out, err] = ent->outbound->BuildXray();
             if (!err.isEmpty())
             {
@@ -1835,6 +1847,10 @@ namespace Configs {
         }
         if (!fullConf)
         {
+            if (ent->outbound) {
+                ent->outbound->build_mux_capability =
+                    static_cast<MuxCapability>(ent->mux_capability);
+            }
             auto out = ent->outbound->Build();
             auto outArr = QJsonArray{out.object};
             auto key = ent->outbound->IsEndpoint() ? "endpoints" : "outbounds";
@@ -1997,6 +2013,48 @@ namespace Configs {
             auto tag = "proxy-" + Int2String(suffix) + "-0";
             res->outboundTags << tag;
             res->tag2entID.insert(tag, item->id);
+
+            // Dual-tag mux probe: when HasMux + capability unknown, clone the
+            // primary test tag outbound with multiplex forced on. Latency UI
+            // still uses the base tag; mux tag only updates mux_capability.
+            if (item->outbound && item->outbound->HasMux() && item->mux_capability == 0
+                && !item->outbound->IsXray() && item->type != "chain") {
+                QJsonObject baseObj;
+                bool fromEndpoints = false;
+                for (int i = ctx->outbounds.size() - 1; i >= 0; --i) {
+                    auto o = ctx->outbounds[i].toObject();
+                    if (o.value("tag").toString() == tag) {
+                        baseObj = o;
+                        break;
+                    }
+                }
+                if (baseObj.isEmpty()) {
+                    for (int i = ctx->endpoints.size() - 1; i >= 0; --i) {
+                        auto o = ctx->endpoints[i].toObject();
+                        if (o.value("tag").toString() == tag) {
+                            baseObj = o;
+                            fromEndpoints = true;
+                            break;
+                        }
+                    }
+                }
+                if (!baseObj.isEmpty()) {
+                    auto muxObj = baseObj;
+                    const auto muxTag = tag + "-mux";
+                    muxObj["tag"] = muxTag;
+                    QJsonObject multiplex{
+                        {"enabled", true},
+                        {"protocol", Configs::dataManager->settingsRepo->mux_protocol},
+                        {"max_streams", Configs::dataManager->settingsRepo->mux_concurrency},
+                    };
+                    if (Configs::dataManager->settingsRepo->mux_padding) multiplex["padding"] = true;
+                    muxObj["multiplex"] = multiplex;
+                    if (fromEndpoints) ctx->endpoints.append(muxObj);
+                    else ctx->outbounds.append(muxObj);
+                    res->outboundTags << muxTag;
+                    res->tag2entID.insert(muxTag, item->id);
+                }
+            }
             suffix++;
         }
         buildXrayConfig(ctx);

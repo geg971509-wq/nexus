@@ -150,7 +150,7 @@ DialogBasicSettings::DialogBasicSettings(QWidget *parent)
             this,
             tr("Custom Icon Manual"),
             tr("To choose custom icons, you need to choose png images with an equal width and height (eg 512*512). Their names should be of\n"
-               "(Dns.png, Off.png, Proxy.png, Proxy-Dns.png, Throne.png, Tun.png) So that each will be used in the appropriate state of the app.\n"
+               "(Dns.png, Off.png, Proxy.png, Proxy-Dns.png, Nexus.png, Tun.png) So that each will be used in the appropriate state of the app.\n"
                "You can provide a subset of the said images and only the corresponding states will be using them.\n"
                "It is suggested that each image's size be less than 100KB."),
             QMessageBox::Open | QMessageBox::Cancel);

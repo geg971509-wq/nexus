@@ -1,11 +1,103 @@
 //! Pure generate: profile/settings → sing-box JSON (MVP minimal).
 use super::store::{Profile, Store};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
+use std::path::PathBuf;
 
 pub struct GenerateInput<'a> {
     pub profile: &'a Profile,
     pub system_proxy_port: u16,
     pub tun: bool,
+    /// Product setting: inject mux when profile has no multiplex key and capability is yes.
+    pub mux_default_on: bool,
+    pub mux_protocol: &'a str,
+    pub mux_concurrency: i64,
+}
+
+/// Decision table: unspecified outbound + mux_default_on → enable only if capability == "yes".
+/// Explicit multiplex object on outbound is never stripped.
+pub fn apply_mux_gate(
+    outbound: &mut Value,
+    capability: &str,
+    mux_default_on: bool,
+    protocol: &str,
+    concurrency: i64,
+) {
+    let Some(obj) = outbound.as_object_mut() else {
+        return;
+    };
+    if obj.contains_key("multiplex") {
+        return; // subscription / explicit
+    }
+    if !mux_default_on || capability != "yes" {
+        return;
+    }
+    let mut mux = Map::new();
+    mux.insert("enabled".into(), json!(true));
+    if !protocol.is_empty() {
+        mux.insert("protocol".into(), json!(protocol));
+    }
+    if concurrency > 0 {
+        mux.insert("max_streams".into(), json!(concurrency));
+    }
+    obj.insert("multiplex".into(), Value::Object(mux));
+}
+
+/// Throne-aligned DNS (MVP): DoH to IP so system DNS (often TUN-hijacked) is not required.
+/// - dns-remote detours via proxy only when outbound is not `direct` (sing-box rejects detour→direct).
+/// - Proxy server hostname (if any) resolves via dns-direct so chain bootstrap cannot deadlock.
+/// - Tun on Darwin: avoid type=local for bootstrap (Throne uses underlying/udp).
+fn build_dns_section(outbound: &Value, tun: bool) -> Value {
+    let is_direct = outbound.get("type").and_then(|t| t.as_str()) == Some("direct");
+
+    // Bootstrap resolver: local is fine without Tun; under Tun/macOS use UDP IP (no system getaddrinfo).
+    let dns_local = if tun {
+        json!({"type": "udp", "tag": "dns-local", "server": "8.8.8.8"})
+    } else {
+        json!({"type": "local", "tag": "dns-local"})
+    };
+
+    // No-detour DoH — works when default path is a foreign TUN (e.g. Throne already up).
+    let dns_direct = json!({
+        "type": "https",
+        "tag": "dns-direct",
+        "server": "8.8.8.8",
+        "path": "/dns-query",
+        "domain_resolver": "dns-local"
+    });
+
+    let mut dns_remote = json!({
+        "type": "https",
+        "tag": "dns-remote",
+        "server": "8.8.8.8",
+        "path": "/dns-query",
+        "domain_resolver": "dns-local"
+    });
+    if !is_direct {
+        // Throne: remote DNS rides the proxy so plain UDP DNS is not required on the WAN.
+        dns_remote
+            .as_object_mut()
+            .unwrap()
+            .insert("detour".into(), json!("proxy"));
+    }
+
+    let mut rules = Vec::new();
+    if let Some(server) = outbound.get("server").and_then(|s| s.as_str()) {
+        // Hostname (has a letter) must not resolve via proxy detour — chicken/egg.
+        if !server.is_empty() && server.chars().any(|c| c.is_ascii_alphabetic()) {
+            rules.push(json!({
+                "domain": [server],
+                "action": "route",
+                "server": "dns-direct"
+            }));
+        }
+    }
+
+    json!({
+        "servers": [dns_remote, dns_direct, dns_local],
+        "rules": rules,
+        "final": if is_direct { "dns-direct" } else { "dns-remote" },
+        "independent_cache": true
+    })
 }
 
 /// Pure function — no UI/socket.
@@ -16,8 +108,17 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
             obj.insert("tag".into(), json!("proxy"));
         }
     }
+    apply_mux_gate(
+        &mut outbound,
+        &input.profile.mux_capability,
+        input.mux_default_on,
+        input.mux_protocol,
+        input.mux_concurrency,
+    );
+    let dns = build_dns_section(&outbound, input.tun);
     let outbounds = vec![outbound, json!({"type":"direct","tag":"direct"})];
 
+    // Throne: mixed 127.0.0.1:inbound_socks_port (default 2080)
     let mut inbounds = vec![json!({
         "type": "mixed",
         "tag": "mixed-in",
@@ -26,24 +127,97 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
     })];
 
     if input.tun {
-        inbounds.push(json!({
-            "type": "tun",
-            "tag": "tun-in",
-            "inet4_address": "172.19.0.1/30",
-            "auto_route": true,
-            "strict_route": true,
-            "stack": "system"
-        }));
+        // Throne generate.cpp genTunName(): macOS empty → sing-box CalculateInterfaceName → utunN.
+        // Non-empty non-utun name → "bad tun name" on darwin (sing-tun tun_darwin.go).
+        // address array (sing-box ≥1.10); inet4_address removed in 1.12.
+        // strict_route default false on non-Windows (Throne SettingsRepo).
+        let mut tun_obj = serde_json::Map::new();
+        tun_obj.insert("type".into(), json!("tun"));
+        tun_obj.insert("tag".into(), json!("tun-in"));
+        tun_obj.insert("address".into(), json!(["172.19.0.1/30"]));
+        tun_obj.insert("auto_route".into(), json!(true));
+        tun_obj.insert("strict_route".into(), json!(false));
+        tun_obj.insert("stack".into(), json!("system"));
+        tun_obj.insert("mtu".into(), json!(9000));
+        // macOS: omit interface_name (auto utunN). Elsewhere: named device ok.
+        #[cfg(not(target_os = "macos"))]
+        {
+            tun_obj.insert("interface_name".into(), json!("nexus-tun"));
+        }
+        inbounds.push(Value::Object(tun_obj));
     }
 
+    // Throne RouteProfile defaults: sniff → hijack DNS → private/LAN direct → final proxy.
+    // auto_detect_interface: true (Throne when vpn; also correct for mixed+sysproxy).
+    let route = json!({
+        "rules": [
+            {"action": "sniff"},
+            {"protocol": "dns", "action": "hijack-dns"},
+            {"ip_is_private": true, "outbound": "direct"}
+        ],
+        "final": "proxy",
+        "auto_detect_interface": true
+    });
+
+    // Throne: experimental.clash_api required for TrafficManager / QueryConnections
+    // (even without external_controller — empty object still creates clash server).
+    // cache_file.path MUST be absolute: GUI Core cwd is `/`, relative → /cache.db
+    // (read-only FS) → Start fails → power button looks dead.
+    let cache_path = cache_file_path();
     json!({
         "log": {"level": "info"},
+        "dns": dns,
         "inbounds": inbounds,
         "outbounds": outbounds,
-        "route": {
-            "final": "proxy",
-            "auto_detect_interface": true
+        "route": route,
+        "experimental": {
+            "clash_api": { "default_mode": "" },
+            "cache_file": {
+                "enabled": true,
+                "path": cache_path,
+                "store_fakeip": true,
+                "store_rdrc": true
+            }
         }
+    })
+}
+
+fn cache_file_path() -> String {
+    if let Some(home) = std::env::var_os("HOME") {
+        let dir = PathBuf::from(home).join("Library/Application Support/Nexus");
+        let _ = std::fs::create_dir_all(&dir);
+        return dir.join("cache.db").to_string_lossy().into_owned();
+    }
+    std::env::temp_dir()
+        .join("nexus-cache.db")
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// Build config from an explicit outbound (UI-selected share link / JSON).
+pub fn generate_with_outbound(outbound: Value, port: u16, tun: bool) -> Value {
+    // ensure tag
+    let mut outbound = outbound;
+    if outbound.get("tag").is_none() {
+        if let Some(obj) = outbound.as_object_mut() {
+            obj.insert("tag".into(), json!("proxy"));
+        }
+    }
+    // if type is direct-only, route.final stays proxy tag pointing at direct-like outbound
+    generate_config(&GenerateInput {
+        profile: &Profile {
+            id: "ui".into(),
+            name: "ui".into(),
+            group_id: "ui".into(),
+            outbound,
+            mux_capability: "unknown".into(),
+            mux_capability_at: 0,
+        },
+        system_proxy_port: port,
+        tun,
+        mux_default_on: false,
+        mux_protocol: "h2mux",
+        mux_concurrency: 8,
     })
 }
 
@@ -61,6 +235,10 @@ pub fn generate_for_store(store: &Store, port: u16) -> Result<Value, String> {
         profile,
         system_proxy_port: port,
         tun: store.tun,
+        // Product has no mux_default_on setting yet — keep false (safe).
+        mux_default_on: false,
+        mux_protocol: "h2mux",
+        mux_concurrency: 8,
     }))
 }
 
@@ -69,20 +247,152 @@ mod tests {
     use super::*;
     use crate::data::store::Profile;
 
-    #[test]
-    fn generate_has_mixed_and_proxy() {
-        let p = Profile {
+    fn sample_profile(outbound: Value) -> Profile {
+        Profile {
             id: "1".into(),
             name: "t".into(),
             group_id: "g".into(),
-            outbound: json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}),
-        };
-        let v = generate_config(&GenerateInput {
-            profile: &p,
-            system_proxy_port: 2080,
-            tun: false,
-        });
+            outbound,
+            mux_capability: "unknown".into(),
+            mux_capability_at: 0,
+        }
+    }
+
+    fn gen(p: &Profile, port: u16, tun: bool) -> Value {
+        generate_config(&GenerateInput {
+            profile: p,
+            system_proxy_port: port,
+            tun,
+            mux_default_on: false,
+            mux_protocol: "smux",
+            mux_concurrency: 8,
+        })
+    }
+
+    #[test]
+    fn generate_has_mixed_and_proxy() {
+        let p = sample_profile(json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}));
+        let v = gen(&p, 2080, false);
         assert_eq!(v["inbounds"][0]["listen_port"], 2080);
         assert_eq!(v["outbounds"][0]["type"], "socks");
+    }
+
+    #[test]
+    fn tun_mac_omits_named_interface() {
+        let p = sample_profile(json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}));
+        let v = gen(&p, 2080, true);
+        let tun = v["inbounds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["type"] == "tun")
+            .expect("tun inbound");
+        assert_eq!(tun["address"][0], "172.19.0.1/30");
+        #[cfg(target_os = "macos")]
+        {
+            assert!(
+                tun.get("interface_name").is_none(),
+                "macOS must omit interface_name so sing-box picks utunN; got {tun}"
+            );
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            assert_eq!(tun["interface_name"], "nexus-tun");
+        }
+    }
+    #[test]
+    fn route_defaults_proxy_final() {
+        let p = sample_profile(json!({"type":"socks","tag":"proxy","server":"1.1.1.1","server_port":1080}));
+        let v = gen(&p, 2080, false);
+        assert_eq!(v["route"]["final"], "proxy");
+        assert_eq!(v["route"]["auto_detect_interface"], true);
+        let rules = v["route"]["rules"].as_array().expect("rules");
+        assert!(rules.iter().any(|r| r.get("action") == Some(&json!("sniff"))));
+        assert!(rules.iter().any(|r| r.get("ip_is_private") == Some(&json!(true))
+            && r.get("outbound") == Some(&json!("direct"))));
+        assert_eq!(v["inbounds"][0]["type"], "mixed");
+        assert_eq!(v["inbounds"].as_array().unwrap().len(), 1); // no tun
+        assert!(v["experimental"]["clash_api"].is_object(), "clash_api required for QueryConnections");
+        let path = v["experimental"]["cache_file"]["path"]
+            .as_str()
+            .expect("cache_file.path required (Core cwd is /)");
+        assert!(
+            path.starts_with('/') || path.contains(':'),
+            "cache_file.path must be absolute, got {path}"
+        );
+    }
+
+    #[test]
+    fn mux_gate_unknown_no_inject() {
+        let mut o = json!({"type":"vmess","uuid":"x"});
+        apply_mux_gate(&mut o, "unknown", true, "smux", 8);
+        assert!(o.get("multiplex").is_none());
+    }
+
+    #[test]
+    fn mux_gate_yes_injects() {
+        let mut o = json!({"type":"vmess","uuid":"x"});
+        apply_mux_gate(&mut o, "yes", true, "smux", 8);
+        assert_eq!(o["multiplex"]["enabled"], true);
+        assert_eq!(o["multiplex"]["protocol"], "smux");
+        assert_eq!(o["multiplex"]["max_streams"], 8);
+    }
+
+    #[test]
+    fn mux_gate_explicit_preserved() {
+        let mut o = json!({"type":"vmess","multiplex":{"enabled":false}});
+        apply_mux_gate(&mut o, "yes", true, "smux", 8);
+        assert_eq!(o["multiplex"]["enabled"], false);
+    }
+
+    #[test]
+    fn dns_present_and_hijack_route() {
+        let p = sample_profile(json!({"type":"socks","tag":"proxy","server":"1.1.1.1","server_port":1080}));
+        let v = gen(&p, 2080, false);
+        assert!(v.get("dns").is_some(), "dns section required");
+        let servers = v["dns"]["servers"].as_array().expect("dns.servers");
+        assert!(servers.iter().any(|s| s["tag"] == "dns-remote"));
+        assert!(servers.iter().any(|s| s["tag"] == "dns-local"));
+        // non-direct → remote detours proxy
+        let remote = servers.iter().find(|s| s["tag"] == "dns-remote").unwrap();
+        assert_eq!(remote["detour"], "proxy");
+        assert_eq!(v["dns"]["final"], "dns-remote");
+        let rules = v["route"]["rules"].as_array().unwrap();
+        assert!(rules.iter().any(|r| r.get("action") == Some(&json!("hijack-dns"))
+            || (r.get("protocol") == Some(&json!("dns")) && r.get("action") == Some(&json!("hijack-dns")))));
+    }
+
+    #[test]
+    fn dns_direct_outbound_no_detour() {
+        let p = sample_profile(json!({"type":"direct","tag":"proxy"}));
+        let v = gen(&p, 2080, false);
+        let remote = v["dns"]["servers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["tag"] == "dns-remote")
+            .unwrap();
+        assert!(remote.get("detour").is_none(), "detour→direct rejected by sing-box");
+        assert_eq!(v["dns"]["final"], "dns-direct");
+    }
+
+    #[test]
+    fn dns_proxy_hostname_uses_direct_resolver() {
+        let p = sample_profile(json!({
+            "type":"vmess","tag":"proxy",
+            "server":"us6.example.com","server_port":443,"uuid":"x"
+        }));
+        let v = gen(&p, 2080, false);
+        let rules = v["dns"]["rules"].as_array().expect("dns.rules");
+        assert!(
+            rules.iter().any(|r| {
+                r.get("server") == Some(&json!("dns-direct"))
+                    && r.get("domain")
+                        .and_then(|d| d.as_array())
+                        .map(|a| a.iter().any(|x| x == "us6.example.com"))
+                        .unwrap_or(false)
+            }),
+            "proxy server hostname must bootstrap via dns-direct; got {rules:?}"
+        );
     }
 }

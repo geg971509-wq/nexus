@@ -5,6 +5,13 @@ namespace Configs
 {
     inline QStringList muxProtocols = {"smux", "yamux", "h2mux"};
 
+    // Per-profile mux probe result. Default/unknown must not enable mux via mux_default_on.
+    enum class MuxCapability : int {
+        Unknown = 0,
+        Yes = 1,
+        No = 2,
+    };
+
     class TcpBrutal : public baseConfig
     {
     public:
@@ -54,6 +61,9 @@ namespace Configs
         bool ParseFromClash(const clash::Proxies& object) override;
         QString ExportToLink() const override;
         QJsonObject ExportToJson() const override;
+        // Override: capability Unknown (safe default-on gate).
         BuildResult Build() const override;
+        // cap: only used when unspecified && mux_default_on — enable only if Yes.
+        BuildResult Build(MuxCapability cap) const;
     };
 }

@@ -115,6 +115,9 @@ namespace Configs
 
         virtual bool HasMux() const { return false; }
 
+        // Set by generate/test immediately before Build(); not persisted on outbound JSON.
+        MuxCapability build_mux_capability = MuxCapability::Unknown;
+
         virtual bool HasTransport() const { return false; }
 
         virtual bool HasTLS() const { return false; }

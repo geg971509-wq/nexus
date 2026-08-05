@@ -42,46 +42,67 @@ impl LibcoreClient {
     }
 
     pub fn call(&mut self, method: &str, payload: &[u8]) -> Result<Vec<u8>, IpcError> {
-        let req_id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        let method_bytes = method.as_bytes();
-        if method_bytes.len() > u16::MAX as usize {
-            return Err(IpcError::Protocol("method name too long".into()));
-        }
+        self.call_timeout(method, payload, Duration::from_secs(15))
+    }
 
-        let mut frame = Vec::with_capacity(4 + 2 + method_bytes.len() + 4 + payload.len());
-        frame.extend_from_slice(&req_id.to_le_bytes());
-        frame.extend_from_slice(&(method_bytes.len() as u16).to_le_bytes());
-        frame.extend_from_slice(method_bytes);
-        frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-        frame.extend_from_slice(payload);
-        self.stream.write_all(&frame)?;
+    /// Same framed IPC as Throne Qt Client::Call; optional per-call read timeout.
+    pub fn call_timeout(
+        &mut self,
+        method: &str,
+        payload: &[u8],
+        timeout: Duration,
+    ) -> Result<Vec<u8>, IpcError> {
+        let prev_r = self.stream.read_timeout().ok().flatten();
+        let prev_w = self.stream.write_timeout().ok().flatten();
+        let _ = self.stream.set_read_timeout(Some(timeout));
+        let _ = self.stream.set_write_timeout(Some(timeout));
 
-        // Response: [u32 id][u8 status][u32 len][data]
-        let mut hdr = [0u8; 9];
-        self.stream.read_exact(&mut hdr)?;
-        let rid = u32::from_le_bytes(hdr[0..4].try_into().unwrap());
-        let status = hdr[4];
-        let dlen = u32::from_le_bytes(hdr[5..9].try_into().unwrap()) as usize;
-        // ponytail: 16 MiB ceiling; raise if core legitimately returns larger blobs
-        const MAX_IPC_PAYLOAD: usize = 16 * 1024 * 1024;
-        if dlen > MAX_IPC_PAYLOAD {
-            return Err(IpcError::Protocol(format!(
-                "payload too large: {dlen} > {MAX_IPC_PAYLOAD}"
-            )));
-        }
-        if rid != req_id {
-            return Err(IpcError::Protocol(format!(
-                "req id mismatch: sent {req_id} got {rid}"
-            )));
-        }
-        let mut data = vec![0u8; dlen];
-        if dlen > 0 {
-            self.stream.read_exact(&mut data)?;
-        }
-        if status != 0 {
-            return Err(IpcError::Status(String::from_utf8_lossy(&data).into_owned()));
-        }
-        Ok(data)
+        let result = (|| {
+            let req_id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+            let method_bytes = method.as_bytes();
+            if method_bytes.len() > u16::MAX as usize {
+                return Err(IpcError::Protocol("method name too long".into()));
+            }
+
+            let mut frame = Vec::with_capacity(4 + 2 + method_bytes.len() + 4 + payload.len());
+            frame.extend_from_slice(&req_id.to_le_bytes());
+            frame.extend_from_slice(&(method_bytes.len() as u16).to_le_bytes());
+            frame.extend_from_slice(method_bytes);
+            frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+            frame.extend_from_slice(payload);
+            self.stream.write_all(&frame)?;
+
+            // Response: [u32 id][u8 status][u32 len][data]
+            let mut hdr = [0u8; 9];
+            self.stream.read_exact(&mut hdr)?;
+            let rid = u32::from_le_bytes(hdr[0..4].try_into().unwrap());
+            let status = hdr[4];
+            let dlen = u32::from_le_bytes(hdr[5..9].try_into().unwrap()) as usize;
+            // ponytail: 16 MiB ceiling; raise if core legitimately returns larger blobs
+            const MAX_IPC_PAYLOAD: usize = 16 * 1024 * 1024;
+            if dlen > MAX_IPC_PAYLOAD {
+                return Err(IpcError::Protocol(format!(
+                    "payload too large: {dlen} > {MAX_IPC_PAYLOAD}"
+                )));
+            }
+            if rid != req_id {
+                return Err(IpcError::Protocol(format!(
+                    "req id mismatch: sent {req_id} got {rid}"
+                )));
+            }
+            let mut data = vec![0u8; dlen];
+            if dlen > 0 {
+                self.stream.read_exact(&mut data)?;
+            }
+            if status != 0 {
+                return Err(IpcError::Status(String::from_utf8_lossy(&data).into_owned()));
+            }
+            Ok(data)
+        })();
+
+        let _ = self.stream.set_read_timeout(prev_r);
+        let _ = self.stream.set_write_timeout(prev_w);
+        result
     }
 
     pub fn shutdown(&self) {

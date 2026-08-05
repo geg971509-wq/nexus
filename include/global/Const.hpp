@@ -27,7 +27,7 @@ namespace Configs {
     }
 
     namespace Information {
-        inline QStringList iconNames = {"Dns.png", "Off.png", "Proxy.png", "Proxy-Dns.png", "Throne.png", "Tun.png"};
+        inline QStringList iconNames = {"Dns.png", "Off.png", "Proxy.png", "Proxy-Dns.png", "Nexus.png", "Tun.png"};
     }
 
     namespace TestConfig

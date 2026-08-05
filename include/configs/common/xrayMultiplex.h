@@ -1,5 +1,6 @@
 #pragma once
 #include "include/configs/baseConfig.h"
+#include "include/configs/common/multiplex.h"
 
 namespace Configs {
     class xrayMultiplex : public baseConfig {
@@ -31,5 +32,7 @@ namespace Configs {
         QString ExportToLink() const override;
         QJsonObject ExportToJson() const override;
         BuildResult Build() const override;
+        // Same gate as Multiplex: default-on only when probe said Yes.
+        BuildResult Build(MuxCapability cap) const;
     };
 }

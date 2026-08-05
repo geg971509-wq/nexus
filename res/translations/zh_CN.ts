@@ -678,11 +678,11 @@ Select which parts to restore:</source>
 
 <message>
         <source>To choose custom icons, you need to choose png images with an equal width and height (eg 512*512). Their names should be of
-(Dns.png, Off.png, Proxy.png, Proxy-Dns.png, Throne.png, Tun.png) So that each will be used in the appropriate state of the app.
+(Dns.png, Off.png, Proxy.png, Proxy-Dns.png, Nexus.png, Tun.png) So that each will be used in the appropriate state of the app.
 You can provide a subset of the said images and only the corresponding states will be using them.
 It is suggested that each image&apos;s size be less than 100KB.</source>
         <translation>要选择自定义图标，请选择宽高相等的 png 图片（例如 512*512）。图片名称必须为
-(Dns.png, Off.png, Proxy.png, Proxy-Dns.png, Throne.png, Tun.png)，以便在应用的相应状态下使用。
+(Dns.png, Off.png, Proxy.png, Proxy-Dns.png, Nexus.png, Tun.png)，以便在应用的相应状态下使用。
 您可以只提供上述部分图片，只有对应状态会使用这些图片。
 建议每张图片小于 100KB。</translation>
     </message>

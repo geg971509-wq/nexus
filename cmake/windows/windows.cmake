@@ -2,14 +2,14 @@ set(PLATFORM_SOURCES 3rdparty/WinCommander.cpp src/sys/windows/guihelper.cpp src
 set(PLATFORM_LIBRARIES wininet wsock32 ws2_32 user32 rasapi32 iphlpapi ntdll wbemuuid psapi)
 
 include(cmake/windows/generate_product_version.cmake)
+# Nexus: Throne brand icons removed. Qt Windows shell is orphaned; product is Tauri.
 generate_product_version(
         QV2RAY_RC
-        ICON "${CMAKE_SOURCE_DIR}/res/Throne.ico"
-        NAME "Throne"
-        BUNDLE "Throne"
-        COMPANY_NAME "Throne"
-        COMPANY_COPYRIGHT "Throne"
-        FILE_DESCRIPTION "Throne"
+        NAME "Nexus"
+        BUNDLE "Nexus"
+        COMPANY_NAME "Nexus"
+        COMPANY_COPYRIGHT "Nexus"
+        FILE_DESCRIPTION "Nexus"
 )
 add_definitions(-DUNICODE -D_UNICODE -DNOMINMAX)
 set(GUI_TYPE WIN32)

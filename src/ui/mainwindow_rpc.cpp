@@ -204,9 +204,13 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, co
             QList<int> profileIDs;
             for (const auto& res : resp.results)
             {
+                const QString tag = QString::fromStdString(res.outbound_tag.value());
+                // Dual-tag mux probe: *-mux only feeds capability at final aggregate.
+                if (tag.endsWith(QStringLiteral("-mux"))) continue;
+
                 int entid = -1;
                 if (!tag2entID.empty()) {
-                    entid = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
+                    entid = tag2entID.count(tag) == 0 ? -1 : tag2entID[tag];
                 }
                 if (entid == -1) {
                     continue;
@@ -274,24 +278,39 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, co
         return;
     }
 
+    // Per-ent: base (nomux) and optional mux probe outcomes for capability write.
+    // 0=missing, 1=ok, -1=fail. Latency always from base only.
+    QMap<int, int> baseOk; // entID -> 1/-1
+    QMap<int, int> muxOk;
+
     for (const auto &res: result.results) {
+        const QString tag = QString::fromStdString(res.outbound_tag.value());
+        const bool isMuxProbe = tag.endsWith(QStringLiteral("-mux"));
+        int thisEnt = entID;
         if (!tag2entID.empty()) {
-            entID = tag2entID.count(QString::fromStdString(res.outbound_tag.value())) == 0 ? -1 : tag2entID[QString::fromStdString(res.outbound_tag.value())];
+            thisEnt = tag2entID.count(tag) == 0 ? -1 : tag2entID[tag];
         }
-        if (entID == -1) {
+        if (thisEnt == -1) {
             MW_show_log(tr("Something is very wrong, the subject ent cannot be found!"));
             continue;
         }
 
-        auto ent = Configs::dataManager->profilesRepo->GetProfile(entID);
+        auto ent = Configs::dataManager->profilesRepo->GetProfile(thisEnt);
         if (ent == nullptr) {
             MW_show_log(tr("Profile manager data is corrupted, try again."));
             continue;
         }
 
-        // Capture result, defer write to UI thread to avoid race
+        const bool ok = res.error.value().empty();
+        const int outcome = ok ? 1 : -1;
+        if (isMuxProbe) {
+            muxOk[thisEnt] = outcome;
+            continue; // never write latency from mux probe
+        }
+        baseOk[thisEnt] = outcome;
+
         int latency_value;
-        if (res.error.value().empty()) {
+        if (ok) {
             latency_value = res.latency_ms.value();
         } else {
             if (QString::fromStdString(res.error.value()).contains("test aborted") ||
@@ -304,11 +323,32 @@ void MainWindow::runURLTest(const QString& config, const QString& xrayConfig, co
         }
 
         runOnUiThread([=, this] {
-            auto profile = Configs::dataManager->profilesRepo->GetProfile(entID);
+            auto profile = Configs::dataManager->profilesRepo->GetProfile(thisEnt);
             if (profile) {
                 profile->SetLatency(latency_value);
                 Configs::dataManager->profilesRepo->Save(profile);
             }
+        }, true);
+    }
+
+    // Decision: ok|ok→yes, ok|fail→no, else keep unknown. Never touch explicit mux On/Off.
+    for (auto it = baseOk.begin(); it != baseOk.end(); ++it) {
+        const int id = it.key();
+        if (!muxOk.contains(id)) continue;
+        const int b = it.value();
+        const int m = muxOk[id];
+        int cap = 0;
+        if (b == 1 && m == 1) cap = 1;
+        else if (b == 1 && m == -1) cap = 2;
+        else continue;
+        runOnUiThread([=, this] {
+            auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
+            if (!profile || profile->mux_capability != 0) return;
+            profile->SetMuxCapability(cap);
+            Configs::dataManager->profilesRepo->Save(profile);
+            MW_show_log(tr("[%1] mux capability: %2")
+                            .arg(profile->outbound ? profile->outbound->DisplayTypeAndName() : QString::number(id),
+                                 cap == 1 ? QStringLiteral("yes") : QStringLiteral("no")));
         }, true);
     }
 }

@@ -22,6 +22,7 @@ namespace Configs
         latency_at = 0;
         dl_speed.clear();
         ul_speed.clear();
+        // Keep mux_capability; only sub replace / SetMuxCapability(0) resets it.
     }
 
     void Profile::SetLatency(int ms) {
@@ -29,6 +30,12 @@ namespace Configs
         // 0 means "never measured", so an explicit reset must clear the stamp
         // rather than record the moment we forgot the result.
         latency_at = ms == 0 ? 0 : QDateTime::currentSecsSinceEpoch();
+    }
+
+    void Profile::SetMuxCapability(int cap) {
+        if (cap < 0 || cap > 2) cap = 0;
+        mux_capability = cap;
+        mux_capability_at = cap == 0 ? 0 : QDateTime::currentSecsSinceEpoch();
     }
 
     QString Profile::DisplayTestResult() const {

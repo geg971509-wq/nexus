@@ -14,7 +14,7 @@ SetCompressorDictSize 64
 !include WinVer.nsh
 !include x64.nsh
 
-!define MUI_ICON "res\Throne.ico"
+!define MUI_ICON "app\src-tauri\icons\icon.ico"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Welcome to Throne Installer"
 !define MUI_WELCOMEPAGE_TEXT "This wizard will guide you through the installation of Throne."
@@ -58,7 +58,7 @@ Page custom InstallModePageCreate InstallModePageLeave
 !insertmacro MUI_LANGUAGE "English"
 
 UninstallText "This will uninstall Throne. Do you wish to continue?"
-UninstallIcon "res\ThroneDel.ico"
+UninstallIcon "app\src-tauri\icons\icon.ico"
 
 ; =====================================
 ; INIT & SEAMLESS RESTART LOGIC

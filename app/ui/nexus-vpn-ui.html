@@ -80,6 +80,9 @@
     --row-hover: rgba(0, 0, 0, 0.018);
     --row-selected: rgba(0, 122, 255, 0.1);
     --row-selected-hover: rgba(0, 122, 255, 0.14);
+    --row-connected: rgba(52, 199, 89, 0.12);
+    --row-connected-hover: rgba(52, 199, 89, 0.18);
+    --row-connected-selected: rgba(52, 199, 89, 0.16);
     --side-hover: rgba(0, 0, 0, 0.035);
     --side-active: rgba(0, 122, 255, 0.1);
     --foot-bg: rgba(250, 250, 252, 0.92);
@@ -150,6 +153,9 @@
     --row-hover: rgba(255, 255, 255, 0.04);
     --row-selected: rgba(10, 132, 255, 0.22);
     --row-selected-hover: rgba(10, 132, 255, 0.28);
+    --row-connected: rgba(48, 209, 88, 0.16);
+    --row-connected-hover: rgba(48, 209, 88, 0.24);
+    --row-connected-selected: rgba(48, 209, 88, 0.22);
     --side-hover: rgba(255, 255, 255, 0.05);
     --side-active: rgba(10, 132, 255, 0.18);
     --foot-bg: rgba(28, 28, 30, 0.96);
@@ -301,7 +307,8 @@
   .t-r { background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.08); }
   .t-y { background: #febc2e; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.08); }
   .t-g { background: #28c840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.08); }
-  .app-mark {
+  /* app-mark removed (user: 标题栏图标去掉) */
+  .app-mark { display: none !important;
     width: 22px;
     height: 22px;
     border-radius: 6px;
@@ -920,6 +927,12 @@
   tbody tr:hover { background: var(--row-hover); }
   tbody tr.selected { background: var(--row-selected); }
   tbody tr.selected:hover { background: var(--row-selected-hover); }
+  /* live tunnel node — green wash, distinct from blue multi-select */
+  #nodeTable tr.connected { background: var(--row-connected); }
+  #nodeTable tr.connected:hover { background: var(--row-connected-hover); }
+  #nodeTable tr.connected.selected { background: var(--row-connected-selected); }
+  #nodeTable tr.connected.selected:hover { background: var(--row-connected-hover); }
+  #nodeTable tr.connected td.name { color: var(--green); font-weight: 600; }
 
   .idx { width: 40px; color: var(--quaternary); font-variant-numeric: tabular-nums; font-size: 12px; }
   .type { width: 84px; }
@@ -1176,7 +1189,8 @@
     min-width: 0;
     min-height: 0;
     overflow: auto;
-    padding: 20px 28px 18px;
+    /* bottom breathing room so last set-card does not kiss the footer */
+    padding: 20px 28px 32px;
   }
   .set-panel { display: none; max-width: 680px; margin: 0 auto; }
   .set-panel.active { display: block; }
@@ -1516,19 +1530,42 @@
   }
   .confirm-card.warn h3 { color: var(--orange); }
   .confirm-card.wide { width: min(440px, calc(100vw - 40px)); }
+  .confirm-card.edit-node-card { width: min(560px, calc(100vw - 40px)); max-height: min(86vh, 720px); overflow: auto; }
   .form-grid { display: grid; gap: 10px; margin: 0 0 14px; }
   .form-grid label {
     display: grid; gap: 4px;
     font-size: 12px; font-weight: 500; color: var(--secondary);
+    min-width: 0;
   }
+  .form-grid label.edit-check {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 500; color: var(--secondary);
+  }
+  .form-grid label.edit-check input { width: 14px; height: 14px; accent-color: var(--blue); }
   .form-grid .field {
     min-height: 30px; padding: 6px 10px;
     border-radius: 8px; border: 0.5px solid var(--control-border);
     background: var(--control-bg); color: var(--label); font-size: 13px;
+    width: 100%; min-width: 0; box-sizing: border-box;
   }
   .form-grid .field:focus { outline: none; border-color: var(--focus-border); box-shadow: var(--focus-ring); }
-  .form-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-width: 0; }
+  .form-row2 > label { min-width: 0; }
+  .form-grid [data-edit-for][hidden],
+  .form-grid [data-edit-for][hidden] * { display: none !important; }
   .group-list { display: grid; gap: 8px; margin: 4px 0 14px; max-height: min(360px, 52vh); overflow: auto; padding: 1px; }
+    .groups-status {
+      margin: 6px 2px 0;
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--muted, #8e8e93);
+      min-height: 1.2em;
+    }
+    .groups-status[data-kind="ok"] { color: #30d158; }
+    .groups-status[data-kind="warn"] { color: #ff9f0a; }
+    .groups-status[data-kind="info"] { color: var(--muted, #8e8e93); }
+    .groups-status[hidden] { display: none; }
+
   .group-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 72px auto;
@@ -1705,10 +1742,14 @@
   .settings-foot {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
-    padding: 12px 22px;
+    align-items: center;
+    gap: 10px;
+    /* separate action bar from scroll content (user: 上下分开 + 拉开距离) */
+    margin-top: 0;
+    padding: 16px 22px 18px;
     border-top: 0.5px solid var(--separator);
     background: var(--foot-bg);
+    flex-shrink: 0;
   }
   .btn-ghost, .btn-primary {
     height: 30px;
@@ -1792,7 +1833,16 @@
     opacity: 0.4;
     pointer-events: none;
   }
-  #nodeTable tr { cursor: context-menu; }
+  /* row multi-select (Shift/⌘) must win over native text selection */
+  #nodeTable,
+  #nodeTable tr,
+  #nodeTable td,
+  #nodeTable th {
+    cursor: context-menu;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+  }
 
   .menu.tray-menu {
     left: 0;
@@ -1909,20 +1959,6 @@
         <div class="traffic-lights" aria-hidden="true">
           <i class="t-r"></i><i class="t-y"></i><i class="t-g"></i>
         </div>
-        <span class="app-mark" title="Nexus" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none">
-            <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4.1 12.2c.7-2.4 2.9-3.9 5.8-4 2.6-.1 5 .7 6.5 2.3.9.9 1.35 1.9 1.25 3 0 1.35-.9 2.55-2.5 3.25-1.75.75-4 .9-6.05.55-1.9-.35-3.25-1.45-3.7-2.95-.2-.7-.1-1.4.2-2.15z"/>
-              <path d="M4.25 12.55c-.95-.4-1.7-.5-2.2-.25-.4.2-.55.55-.35.95.2.4.55.6 1.1.55.65-.05 1.35-.25 1.95-.55"/>
-              <circle cx="6.15" cy="11.15" r="1.05"/>
-              <path d="M8 10.2c.45.85.4 1.9-.15 2.75"/>
-              <path d="M8.55 12.55c1.55-.45 3.3-.4 4.85.3"/>
-              <path d="M10.2 8.05c.45-1.15 1.25-1.9 2.2-1.95-.55.8-.95 1.45-1.25 2"/>
-              <path d="M18.1 12.7c.9-1.4 1.75-2.15 2.55-2.35-.75 1.15-1 1.95-1.05 2.5 0 .55.35 1.4 1.1 2.45-.8-.3-1.7-1.05-2.6-2.6z"/>
-            </g>
-            <circle cx="6.35" cy="11.35" r=".42" fill="currentColor"/>
-          </svg>
-        </span>
         <div class="app-name">Nexus</div>
       </div>
       <div class="titlebar-right">
@@ -2047,8 +2083,8 @@
                   <span class="switch" aria-hidden="true"></span>
                   Tun
                 </label>
-                <label class="toggle" id="sysChip" title="设置系统 HTTP/HTTPS/SOCKS 代理">
-                  <input type="checkbox" id="sysToggle" />
+                <label class="toggle on" id="sysChip" title="设置系统 HTTP/HTTPS/SOCKS 代理">
+                  <input type="checkbox" id="sysToggle" checked />
                   <span class="switch" aria-hidden="true"></span>
                   系统代理
                 </label>
@@ -2091,94 +2127,7 @@
                 </tr>
               </thead>
               <tbody id="nodeTable">
-                <tr class="selected" data-name="CF官方优选12" data-lat="162 ms">
-                  <td class="idx">1</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">188.164.248.100:443</td>
-                  <td class="name">CF官方优选12</td>
-                  <td class="lat good">162 ms</td>
-                  <td class="flow"><span class="up">250 B↑</span> · <span class="down">981 B↓</span></td>
-                </tr>
-                <tr data-name="CF官方优选10" data-lat="168 ms">
-                  <td class="idx">2</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">104.17.191.229:443</td>
-                  <td class="name">CF官方优选10</td>
-                  <td class="lat good">168 ms</td>
-                  <td class="flow muted">—</td>
-                </tr>
-                <tr data-name="CF官方优选7" data-lat="170 ms">
-                  <td class="idx">3</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">104.17.60.27:443</td>
-                  <td class="name">CF官方优选7</td>
-                  <td class="lat good">170 ms</td>
-                  <td class="flow"><span class="up">125 B↑</span> · <span class="down">491 B↓</span></td>
-                </tr>
-                <tr data-name="CF官方优选11" data-lat="171 ms">
-                  <td class="idx">4</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">104.16.248.230:443</td>
-                  <td class="name">CF官方优选11</td>
-                  <td class="lat good">171 ms</td>
-                  <td class="flow muted">—</td>
-                </tr>
-                <tr data-name="CF官方优选14" data-lat="171 ms">
-                  <td class="idx">5</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">104.17.127.183:443</td>
-                  <td class="name">CF官方优选14</td>
-                  <td class="lat good">171 ms</td>
-                  <td class="flow muted">—</td>
-                </tr>
-                <tr data-name="CF官方优选5" data-lat="176 ms">
-                  <td class="idx">6</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">104.19.32.109:443</td>
-                  <td class="name">CF官方优选5</td>
-                  <td class="lat mid">176 ms</td>
-                  <td class="flow muted">—</td>
-                </tr>
-                <tr data-name="CF官方优选13" data-lat="181 ms">
-                  <td class="idx">7</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">198.41.208.95:443</td>
-                  <td class="name">CF官方优选13</td>
-                  <td class="lat mid">181 ms</td>
-                  <td class="flow muted">—</td>
-                </tr>
-                <tr data-name="CF官方优选6" data-lat="184 ms">
-                  <td class="idx">8</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">198.41.208.132:443</td>
-                  <td class="name">CF官方优选6</td>
-                  <td class="lat mid">184 ms</td>
-                  <td class="flow muted">—</td>
-                </tr>
-                <tr data-name="CF官方优选9" data-lat="188 ms">
-                  <td class="idx">9</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">104.17.181.174:443</td>
-                  <td class="name">CF官方优选9</td>
-                  <td class="lat mid">188 ms</td>
-                  <td class="flow muted">—</td>
-                </tr>
-                <tr data-name="CF官方优选4" data-lat="195 ms">
-                  <td class="idx">10</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">104.16.241.14:443</td>
-                  <td class="name">CF官方优选4</td>
-                  <td class="lat mid">195 ms</td>
-                  <td class="flow muted">—</td>
-                </tr>
-                <tr data-name="CF官方优选8" data-lat="277 ms">
-                  <td class="idx">11</td>
-                  <td><span class="pill">VLESS</span></td>
-                  <td class="addr">104.17.27.113:443</td>
-                  <td class="name">CF官方优选8</td>
-                  <td class="lat bad">277 ms</td>
-                  <td class="flow muted">—</td>
-                </tr>
+                <!-- filled by renderNodes; no hardcoded lat/flow -->
               </tbody>
             </table>
           </div>
@@ -2559,7 +2508,7 @@
                   <div class="set-row">
                     <div class="set-label">多路复用</div>
                     <div class="set-right">
-                      <span class="set-hint">单连接承载多路请求；一般保持 h2mux</span>
+                      <span class="set-hint">单连接承载多路请求；默认仅对探测支持 mux 的节点开启（unknown/no 不注入）</span>
                       <div class="set-ctrl"><button type="button" class="select" data-options="h2mux|smux|yamux" data-value="h2mux"><span class="sel-val">h2mux</span><span class="sel-chev" aria-hidden="true">▾</span></button></div>
                     </div>
                   </div>
@@ -2841,18 +2790,44 @@
   </div>
 
   <div class="confirm-mask" id="editMask" role="dialog" aria-modal="true" aria-labelledby="editTitle" hidden>
-    <div class="confirm-card wide">
+    <div class="confirm-card wide edit-node-card">
       <h3 id="editTitle">编辑节点</h3>
-      <div class="form-grid">
-        <label>名称<input class="field" id="editName" type="text" /></label>
+      <div class="form-grid" id="editForm">
+        <label>名称<input class="field" id="editName" type="text" autocomplete="off" /></label>
         <div class="form-row2">
           <label>类型
-            <button type="button" class="select" id="editType" data-options="VLESS|Trojan|SS|VMess|Hysteria2" data-value="VLESS" style="width:100%"><span class="sel-val">VLESS</span><span class="sel-chev">▾</span></button>
+            <button type="button" class="select" id="editType" data-options="VLESS|Trojan|SS|VMess|HTTP|HTTPS|SOCKS|AnyTLS|TUIC|Hysteria2" data-value="VLESS" style="width:100%"><span class="sel-val">VLESS</span><span class="sel-chev">▾</span></button>
           </label>
-          <label>端口<input class="field" id="editPort" type="text" inputmode="numeric" /></label>
+          <label>端口<input class="field" id="editPort" type="text" inputmode="numeric" autocomplete="off" /></label>
         </div>
-        <label>地址<input class="field" id="editAddr" type="text" /></label>
-        <label>备注<input class="field" id="editNote" type="text" placeholder="可选" /></label>
+        <label>服务器地址<input class="field" id="editAddr" type="text" autocomplete="off" /></label>
+        <div class="form-row2" data-edit-for="vless vmess tuic">
+          <label>UUID<input class="field" id="editUuid" type="text" autocomplete="off" spellcheck="false" /></label>
+          <label data-edit-for="vless">Flow<input class="field" id="editFlow" type="text" placeholder="可选 xtls-rprx-vision" autocomplete="off" /></label>
+          <label data-edit-for="vmess">加密<input class="field" id="editSecurity" type="text" placeholder="auto" autocomplete="off" /></label>
+          <label data-edit-for="vmess">AlterID<input class="field" id="editAlterId" type="text" inputmode="numeric" placeholder="0" autocomplete="off" /></label>
+          <label data-edit-for="tuic">拥塞控制<input class="field" id="editCongest" type="text" placeholder="bbr / cubic" autocomplete="off" /></label>
+        </div>
+        <div class="form-row2" data-edit-for="trojan ss http https socks anytls tuic">
+          <label data-edit-for="http https socks">用户名<input class="field" id="editUser" type="text" autocomplete="off" /></label>
+          <label data-edit-for="trojan ss http https socks anytls tuic">密码<input class="field" id="editPass" type="text" autocomplete="off" spellcheck="false" /></label>
+          <label data-edit-for="ss">加密方法<input class="field" id="editMethod" type="text" placeholder="aes-128-gcm" autocomplete="off" /></label>
+          <label data-edit-for="tuic">ALPN<input class="field" id="editAlpn" type="text" placeholder="h3" autocomplete="off" /></label>
+        </div>
+        <label data-edit-for="vless vmess trojan https anytls tuic">SNI / server_name<input class="field" id="editSni" type="text" placeholder="可选" autocomplete="off" spellcheck="false" /></label>
+        <div class="form-row2" data-edit-for="vless vmess trojan">
+          <label>传输 network<input class="field" id="editNetwork" type="text" placeholder="tcp / ws / grpc" autocomplete="off" /></label>
+          <label data-edit-for="vless vmess trojan">Host 头<input class="field" id="editHost" type="text" placeholder="可选" autocomplete="off" /></label>
+        </div>
+        <label data-edit-for="vless vmess trojan http https">路径 path<input class="field" id="editPath" type="text" placeholder="可选" autocomplete="off" /></label>
+        <label data-edit-for="vless vmess trojan https anytls" class="edit-check">
+          <input type="checkbox" id="editTls" /> 启用 TLS / WSS
+        </label>
+        <label data-edit-for="vless vmess trojan https anytls tuic" class="edit-check">
+          <input type="checkbox" id="editInsecure" /> 跳过证书校验 (insecure)
+        </label>
+        <p class="groups-sub" id="editOutboundHint" hidden style="margin:4px 0 0;font-size:12px;opacity:.75"></p>
+        <label>备注<input class="field" id="editNote" type="text" placeholder="可选" autocomplete="off" /></label>
       </div>
       <div class="confirm-actions">
         <button type="button" class="btn-ghost" id="editCancel">取消</button>
@@ -2866,6 +2841,7 @@
       <h3 id="groupsTitle">管理分组</h3>
       <p class="groups-sub">新建、重命名或删除订阅分组；顶栏 Tab 会同步更新。</p>
       <div class="group-list" id="groupList" role="list"></div>
+      <p class="groups-status" id="groupUpdateStatus" hidden></p>
       <div class="confirm-actions" style="justify-content:space-between">
         <button type="button" class="btn-ghost" id="groupAdd">新建分组</button>
         <div style="display:flex;gap:8px;align-items:center">
@@ -2943,8 +2919,9 @@
   <div class="tray-float" id="trayFloat" role="menu" aria-label="托盘菜单示意">
     <div class="tray-title">托盘菜单（示意）</div>
     <button class="menu-item" data-tray="show" role="menuitem"><span class="grow">显示窗口</span></button>
-    <button class="menu-item" data-tray="toggle" role="menuitem"><span class="grow">连接 / 断开</span></button>
-    <button class="menu-item" data-tray="sysproxy" role="menuitem"><span class="grow">系统代理</span></button>
+    <button class="menu-item" data-tray="toggle" role="menuitem"><span class="check"></span><span class="grow">连接</span></button>
+    <button class="menu-item" data-tray="sysproxy" role="menuitem"><span class="check"></span><span class="grow">系统代理</span></button>
+    <button class="menu-item" data-tray="tun" role="menuitem"><span class="check"></span><span class="grow">虚拟网卡</span></button>
     <div class="menu-sep"></div>
     <button class="menu-item" data-tray="quit" role="menuitem"><span class="grow">退出</span></button>
   </div>
@@ -2969,14 +2946,29 @@
   }
   let connected = false;
   let selectedName = 'CF官方优选12';
-  let selectedLat = '162 ms';
+  let selectedLat = '—';
+  // Hero "经 xxx" follows the tunnel actually started — not the list selection.
+  let connectedName = '';
+  let connectedLat = '—';
   let sortKey = null;
   let sortDir = 1; // 1 asc, -1 desc
 
+  // Throne AutoSelector: missing/timeout latency always parks at the end in BOTH directions.
+  // Returns { known, ms } — only known positive (or 0) ms participate in numeric order.
+  function parseLatKey(row) {
+    const raw = (row.dataset.lat || row.querySelector('.lat')?.textContent || '').trim();
+    if (!raw || raw === '—' || raw === '…') return { known: false, ms: 0 };
+    if (/timeout|fail|error|不可用|aborted/i.test(raw)) return { known: false, ms: 0 };
+    const m = String(raw).match(/(-?\d+(?:\.\d+)?)/);
+    if (!m) return { known: false, ms: 0 };
+    const v = parseFloat(m[1]);
+    if (!Number.isFinite(v) || v < 0) return { known: false, ms: 0 };
+    return { known: true, ms: v };
+  }
   function parseLatMs(row) {
-    const raw = row.dataset.lat || row.querySelector('.lat')?.textContent || '';
-    const m = String(raw).match(/(\d+(?:\.\d+)?)/);
-    return m ? parseFloat(m[1]) : Number.POSITIVE_INFINITY;
+    // legacy numeric helper for filters; untested/timeout → +Infinity (not first)
+    const k = parseLatKey(row);
+    return k.known ? k.ms : Number.POSITIVE_INFINITY;
   }
   function parseFlowBytes(row) {
     const t = row.querySelector('.flow')?.textContent || '';
@@ -3016,22 +3008,34 @@
   function sortNodeTable(key, dir) {
     const rows = [...nodeTable.querySelectorAll('tr')];
     rows.sort((a, b) => {
-      const va = sortValue(a, key);
-      const vb = sortValue(b, key);
       let cmp = 0;
-      if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
-      else cmp = String(va).localeCompare(String(vb), 'zh-CN', { numeric: true, sensitivity: 'base' });
+      if (key === 'lat') {
+        // known ms asc/desc; unknown (—/…/timeout) always last (Throne)
+        const ka = parseLatKey(a);
+        const kb = parseLatKey(b);
+        if (ka.known !== kb.known) cmp = ka.known ? -1 : 1;
+        else if (ka.known) cmp = (ka.ms - kb.ms) * dir;
+        else cmp = 0;
+      } else {
+        const va = sortValue(a, key);
+        const vb = sortValue(b, key);
+        if (typeof va === 'number' && typeof vb === 'number') cmp = (va - vb) * dir;
+        else cmp = String(va).localeCompare(String(vb), 'zh-CN', { numeric: true, sensitivity: 'base' }) * dir;
+      }
       if (cmp === 0) {
         const na = a.dataset.name || '';
         const nb = b.dataset.name || '';
         cmp = na.localeCompare(nb, 'zh-CN');
       }
-      return cmp * dir;
+      return cmp;
     });
     const frag = document.createDocumentFragment();
     rows.forEach(r => frag.appendChild(r));
     nodeTable.appendChild(frag);
     renumberRows();
+  }
+  function resortIfLatencyActive() {
+    if (sortKey === 'lat') sortNodeTable('lat', sortDir);
   }
   function setSortHeader(key, dir) {
     document.querySelectorAll('thead th.sortable').forEach(th => {
@@ -3048,7 +3052,11 @@
     const doSort = () => {
       const key = th.dataset.sort;
       if (sortKey === key) sortDir = -sortDir;
-      else { sortKey = key; sortDir = 1; }
+      else {
+        sortKey = key;
+        // latency: first click = fastest first (asc); flow: largest first (desc)
+        sortDir = (key === 'flow') ? -1 : 1;
+      }
       sortNodeTable(sortKey, sortDir);
       setSortHeader(sortKey, sortDir);
     };
@@ -3073,26 +3081,65 @@
     logPanel.scrollTop = logPanel.scrollHeight;
   }
 
-  function setConnected(on) {
+  function setConnected(on, opts) {
     connected = on;
     const pb = document.getElementById('powerBtn') || powerBtn;
     pb.classList.toggle('on', on);
     pb.setAttribute('aria-pressed', String(on));
     statusDot.classList.toggle('on', on);
-    if (typeof t === 'function') {
-      statusText.textContent = on ? t('status.connected') : t('status.disconnected');
-      statusSub.innerHTML = on
-        ? t('status.subOn', { name: selectedName, lat: selectedLat })
-        : t('status.subOff', { name: selectedName });
-      sbStatus.textContent = on ? t('sb.running') : t('sb.stopped');
+    // Throne: traffic from Core stream — never invent 12.4 KB
+    if (!on) {
+      if (sbProxy) sbProxy.textContent = '—';
+      const sbDirect = document.getElementById('sbDirect');
+      if (sbDirect) sbDirect.textContent = '—';
+      statsStarted = null;
+      connectedName = '';
+      connectedLat = '—';
     } else {
-      statusText.textContent = on ? '已连接' : '未连接';
-      statusSub.innerHTML = on
-        ? `经 <strong>${selectedName}</strong> · 延迟 ${selectedLat}`
-        : `选择节点后点左侧连接 · 当前 <strong>${selectedName}</strong>`;
-      sbStatus.textContent = on ? '运行中' : '未在运行';
+      if (statsStarted == null) statsStarted = Date.now();
+      // pin hero to the node that actually started (unless caller only refreshes chrome)
+      if (!opts || opts.pin !== false) {
+        connectedName = selectedName;
+        connectedLat = (selectedLat && selectedLat !== '—' && selectedLat !== '…') ? selectedLat : '—';
+      }
     }
-    sbProxy.textContent = on ? '12.4 KB' : '—';
+    refreshHeroStatus();
+    refreshConnectedRow();
+    if (on) {
+      if (typeof startConnPoll === 'function') startConnPoll();
+    } else if (typeof stopConnPoll === 'function') {
+      stopConnPoll();
+    }
+    if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
+  }
+  /** Mark the live tunnel row (green); independent of multi-select blue. */
+  function refreshConnectedRow() {
+    if (!nodeTable) return;
+    const live = (connected && connectedName) ? connectedName : '';
+    nodeTable.querySelectorAll('tr.connected').forEach(r => r.classList.remove('connected'));
+    if (!live) return;
+    const row = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === live);
+    if (row) row.classList.add('connected');
+  }
+  /** Connected line = tunnel node; disconnected line = list selection. */
+  function refreshHeroStatus() {
+    const via = connectedName || selectedName;
+    const latShow = connected
+      ? ((connectedLat && connectedLat !== '—' && connectedLat !== '…') ? connectedLat : '—')
+      : ((selectedLat && selectedLat !== '—' && selectedLat !== '…') ? selectedLat : '—');
+    if (typeof t === 'function') {
+      statusText.textContent = connected ? t('status.connected') : t('status.disconnected');
+      statusSub.innerHTML = connected
+        ? t('status.subOn', { name: via, lat: latShow })
+        : t('status.subOff', { name: selectedName });
+      sbStatus.textContent = connected ? t('sb.running') : t('sb.stopped');
+    } else {
+      statusText.textContent = connected ? '已连接' : '未连接';
+      statusSub.innerHTML = connected
+        ? `经 <strong>${via}</strong> · 延迟 ${latShow}`
+        : `选择节点后点左侧连接 · 当前 <strong>${selectedName}</strong>`;
+      sbStatus.textContent = connected ? '运行中' : '未在运行';
+    }
   }
 
   async function nexusInvoke(cmd, args) {
@@ -3106,64 +3153,158 @@
     }
   }
 
+  let powerBusy = false;
   powerBtn.addEventListener('click', async () => {
-    if (!connected) {
-      log('CORE', 'info', `校验配置档 <span class="node">[VLESS] ${selectedName}</span>`);
-      const r = await nexusInvoke('connect_selected');
-      if (!r || r.offline) {
-        // browser preview only
-        setConnected(true);
-        log('OK', 'ok', `预览模式 · 未启动 Core · ${selectedName}`);
-        return;
+    if (powerBusy) {
+      log('CORE', 'info', '连接操作进行中…');
+      return;
+    }
+    powerBusy = true;
+    powerBtn.disabled = true;
+    try {
+      if (!connected) {
+        // real sub nodes: outbound (Clash/JSON) or share URI; demo catalog has neither
+        const payload = (typeof nodeConnectPayload === 'function')
+          ? nodeConnectPayload(selectedName)
+          : null;
+        log('CORE', 'info', `Start 配置档 <span class="node">${selectedName}</span>`);
+        if (!payload) {
+          const n = typeof findNodeByName === 'function' ? findNodeByName(selectedName) : null;
+          if (n && n.link && !isShareUri(n.link)) {
+            log('CORE', 'warn', '节点分享链接无效（伪 vmess/非 UUID）— 请「更新」订阅或导入含 uuid 的真实链接；系统代理仅在 Start 成功后写入');
+          } else if (n && n.addr && n.addr !== '—') {
+            log('CORE', 'warn', '选定节点无连接配置（订阅解析未保存凭证）— 请点「更新」重新拉取订阅');
+          } else {
+            log('CORE', 'warn', '选定节点无真实分享链接（演示节点无法成隧道）— 请导入订阅或粘贴 vless/trojan/ss/vmess 链接');
+          }
+          return;
+        }
+        // Throne: Start uses current spmode_vpn / spmode_system_proxy (chips), not stale disk alone
+        const r = await nexusInvoke('connect_selected', Object.assign({
+          profile_id: 1,
+          tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
+          system_proxy: !!document.getElementById('sysToggle')?.checked,
+        }, payload));
+        if (!r || r.offline) {
+          setConnected(true); // pins connectedName = selectedName
+          log('OK', 'ok', `预览模式 · 未启动 Core · ${connectedName || selectedName}`);
+          return;
+        }
+        if (!r.ok) { log('CORE', 'warn', `Start 失败: ${r.error}`); return; }
+        if (r.data?.start_error) {
+          log('CORE', 'warn', `Start: ${r.data.start_error}`);
+          return;
+        }
+        if (!r.data?.started) {
+          log('CORE', 'warn', 'Start 未成功');
+          return;
+        }
+        setConnected(true); // pins connectedName = selectedName at Start success
+        const port = r.data?.listen_port || 2080;
+        log('OK', 'ok', `隧道已启动 · mixed 127.0.0.1:${port} · ${connectedName || selectedName}`);
+        if (r.data?.proxy_note) log('SYS', 'info', r.data.proxy_note);
+        if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
+      } else {
+        log('CORE', 'warn', `Stop 配置档 <span class="node">${connectedName || selectedName}</span>`);
+        // Throne: Stop RPC keeps Core process; fall back to core_stop kill only if needed
+        let r = await nexusInvoke('disconnect_selected');
+        if (r && !r.ok && String(r.error || '').includes('core not started')) {
+          r = await nexusInvoke('core_stop');
+        } else if (r && !r.ok) {
+          // try hard stop
+          await nexusInvoke('core_stop');
+        }
+        setConnected(false);
+        log('OK', 'ok', '已断开（Stop）');
+        if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
       }
-      if (!r.ok) { log('CORE', 'warn', `连接失败: ${r.error}`); return; }
-      if (r.data?.check_error) {
-        log('CORE', 'warn', `CheckConfig: ${r.data.check_error}`);
-        return;
-      }
-      // Start() still deferred — do not claim full tunnel
-      setConnected(true);
-      log('OK', 'ok', `配置校验通过（未 Start）· ${selectedName}`);
-      if (r.data?.note) log('SYS', 'info', r.data.note);
-    } else {
-      log('CORE', 'warn', `停止配置档 <span class="node">[VLESS] ${selectedName}</span>`);
-      const r = await nexusInvoke('core_stop');
-      setConnected(false);
-      log('OK', 'ok', '已断开');
+    } finally {
+      powerBusy = false;
+      powerBtn.disabled = false;
     }
   });
   // nexusInvoke defined later; hoist stub
   
 
-  function selectNodeRow(row, { multi } = {}) {
+  // Throne-style selection: click = single; ⌘/Ctrl = toggle; Shift = range from anchor
+  let selectAnchorRow = null;
+  /** Live tr for range select — rebind by name after renderNodes/sort. */
+  function resolveSelectAnchor(rows) {
+    if (selectAnchorRow && rows.includes(selectAnchorRow)) return selectAnchorRow;
+    const name = selectAnchorRow?.dataset?.name || selectedName;
+    if (name) {
+      const byName = rows.find(r => r.dataset.name === name);
+      if (byName) {
+        selectAnchorRow = byName;
+        return byName;
+      }
+    }
+    const sel = rows.find(r => r.classList.contains('selected'));
+    if (sel) {
+      selectAnchorRow = sel;
+      return sel;
+    }
+    return null;
+  }
+  function selectNodeRow(row, { multi, range } = {}) {
     if (!row) return;
-    if (!multi) {
-      nodeTable.querySelectorAll('tr').forEach(r => r.classList.remove('selected'));
-      row.classList.add('selected');
-    } else {
+    const rows = visibleNodeRows();
+    if (range) {
+      const anchor = resolveSelectAnchor(rows) || row;
+      const a = rows.indexOf(anchor);
+      const b = rows.indexOf(row);
+      if (a >= 0 && b >= 0) {
+        const lo = Math.min(a, b), hi = Math.max(a, b);
+        if (!multi) rows.forEach(r => r.classList.remove('selected'));
+        for (let i = lo; i <= hi; i++) rows[i].classList.add('selected');
+        // keep original anchor (Finder-style); seed if none
+        if (!selectAnchorRow || !rows.includes(selectAnchorRow)) selectAnchorRow = anchor;
+      } else {
+        if (!multi) rows.forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        selectAnchorRow = row;
+      }
+    } else if (multi) {
       row.classList.toggle('selected');
+      selectAnchorRow = row;
+    } else {
+      rows.forEach(r => r.classList.remove('selected'));
+      row.classList.add('selected');
+      selectAnchorRow = row;
     }
     const sel = row.classList.contains('selected') ? row : nodeTable.querySelector('tr.selected');
     if (sel) {
       selectedName = sel.dataset.name;
       selectedLat = sel.dataset.lat || sel.querySelector('.lat')?.textContent || '—';
-      if (connected) {
-        statusSub.innerHTML = `经 <strong>${selectedName}</strong> · 延迟 ${selectedLat}`;
-      } else {
+      // Connected hero stays on tunnel node until Start/Stop; only selection changes here.
+      if (typeof refreshHeroStatus === 'function') refreshHeroStatus();
+      else if (!connected) {
         statusSub.innerHTML = `选择节点后点左侧连接 · 当前 <strong>${selectedName}</strong>`;
       }
     }
   }
 
+  // Kill native text selection in the node list (Shift otherwise selects glyphs, not rows)
+  function clearDomTextSelection() {
+    try { window.getSelection()?.removeAllRanges(); } catch (_) { /* ignore */ }
+  }
+  nodeTable.addEventListener('selectstart', (e) => { e.preventDefault(); }, true);
+  nodeTable.addEventListener('dragstart', (e) => { e.preventDefault(); }, true);
+  nodeTable.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('tr')) return;
+    e.preventDefault(); // always — stops caret + Shift text-range
+    clearDomTextSelection();
+  }, true);
   nodeTable.addEventListener('click', (e) => {
     const row = e.target.closest('tr');
-    if (!row) return;
-    selectNodeRow(row, { multi: e.metaKey || e.ctrlKey });
+    if (!row || !nodeTable.contains(row)) return;
+    if (e.shiftKey || e.metaKey || e.ctrlKey) clearDomTextSelection();
+    const multi = e.metaKey || e.ctrlKey;
+    const range = e.shiftKey;
+    selectNodeRow(row, { multi, range });
     nodeListFocus = true;
     tableCard?.focus({ preventScroll: true });
-    if (!(e.metaKey || e.ctrlKey) && connected) {
-      log('CORE', 'info', `切换节点 <span class="node">[VLESS] ${selectedName}</span>`);
-    }
+    // click alone does not hot-switch Core — no "切换节点" log (Start/ctx start does)
   });
 
   const ctxMenu = document.getElementById('ctxMenu');
@@ -3215,6 +3356,7 @@
     if (first) {
       selectedName = first.dataset.name || selectedName;
       selectedLat = first.dataset.lat || first.querySelector('.lat')?.textContent || selectedLat;
+      selectAnchorRow = first;
     }
     log('SYS', 'info', `已全选 ${rows.length} 个节点`);
     return rows.length;
@@ -3286,17 +3428,19 @@
         'add-clip': () => { importFromClipboard(); },
         'add-file': () => { importFromFile(); },
         'scan-qr': () => { importScanQr(); },
-        start: () => {
+        start: async () => {
           if (one) {
             selectedName = one;
             const row = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === one);
             if (row) selectedLat = row.dataset.lat || '—';
           }
-          if (!connected) powerBtn.click();
-          else {
-            log('CORE', 'info', `启动配置档 <span class="node">[VLESS] ${selectedName}</span>`);
-            setConnected(true);
+          if (connected) {
+            // Throne: restart selected — Stop then Start
+            setConnected(false);
+            const dr = await nexusInvoke('disconnect_selected');
+            if (dr && !dr.ok) await nexusInvoke('core_stop');
           }
+          powerBtn.click();
         },
         stop: () => {
           if (connected) powerBtn.click();
@@ -3316,46 +3460,32 @@
           rows.forEach(r => r.remove());
           nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
           renumberRows();
+          if (typeof saveCatalog === 'function') saveCatalog(true);
           log('SYS', 'warn', `已删除 ${rows.length} 个节点`);
         },
         'select-all': () => { selectAllNodes(); },
         'refresh-sub': () => { updateSubscription(null); },
-        'url-test': () => {
-          log('TEST', 'info', `URL 测试选定项 · ${n} 个节点…`);
-          setTimeout(() => {
-            selectedRows().forEach(r => {
-              const lat = r.querySelector('.lat');
-              if (lat) {
-                const ms = 80 + Math.floor(Math.random() * 200);
-                lat.textContent = ms + ' ms';
-                lat.className = 'lat ' + (ms < 120 ? 'good' : ms < 200 ? 'mid' : 'bad');
-                r.dataset.lat = ms + ' ms';
-              }
-            });
-            log('OK', 'ok', `URL 测试完成 · ${n} 个节点`);
-          }, 350);
-        },
-        'resolve-ip': () => {
-          log('TEST', 'info', `解析出口 IP · ${one || '未选定'}`);
-          setTimeout(() => log('OK', 'ok', `出口 IP · ${one || '—'} → 104.16.${Math.floor(Math.random()*200)}.${Math.floor(Math.random()*200)}（示意）`), 300);
-        },
-        'clear-test': () => {
-          nodeTable.querySelectorAll('tr .lat').forEach(el => {
-            el.textContent = '—';
-            el.className = 'lat muted';
-          });
-          nodeTable.querySelectorAll('tr').forEach(r => { r.dataset.lat = '—'; });
-          log('SYS', 'info', '已清理测试结果');
-        },
+        'url-test': () => { runUrlTest('selected'); },
+        'resolve-ip': () => { resolveSelectedIps(); },
+        'clear-test': () => { clearTestResults(); },
         'reset-traffic': () => {
-          nodeTable.querySelectorAll('tr .flow').forEach(el => {
-            el.textContent = '—';
-            el.classList.add('muted');
+          // Throne on_menu_reset_traffic: selected profiles only
+          const rows = selectedRows();
+          const targets = rows.length ? rows : [...nodeTable.querySelectorAll('tr')];
+          const names = new Set(targets.map(r => r.dataset.name));
+          targets.forEach(r => {
+            const el = r.querySelector('.flow');
+            if (el) { el.textContent = '—'; el.classList.add('muted'); el.classList.remove('flow'); el.classList.add('flow', 'muted'); }
           });
-          sbProxy.textContent = connected ? '0 B' : '—';
-          const sbDirect = document.getElementById('sbDirect');
-          if (sbDirect) sbDirect.textContent = '—';
-          log('SYS', 'info', '已重置流量统计');
+          const gid = currentGid();
+          const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+          if (prof?.nodes) prof.nodes.forEach(n => { if (names.has(n.name)) n.flow = null; });
+          if (!rows.length) {
+            sbProxy.textContent = connected ? '0 B' : '—';
+            const sbDirect = document.getElementById('sbDirect');
+            if (sbDirect) sbDirect.textContent = '—';
+          }
+          log('SYS', 'info', '已重置流量 · ' + targets.length + ' 个节点');
         },
         edit: () => openEditDialog(one),
         clone: () => {
@@ -3388,6 +3518,7 @@
           row.after(clone);
           nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
           renumberRows();
+          if (typeof saveCatalog === 'function') saveCatalog(true);
           log('SYS', 'ok', '已克隆：' + name);
         },
         'copy-link': () => {
@@ -3396,46 +3527,54 @@
         },
         'show-qr': () => openQrDialog(one),
         dedupe: () => {
+          // Throne on_menu_delete_repeat: Uniq by profile identity (addr|type)
           const seen = new Set();
-          let n = 0;
+          const drop = [];
           [...nodeTable.querySelectorAll('tr')].forEach(r => {
             const key = (r.querySelector('.addr')?.textContent || '') + '|' + (r.querySelector('.pill')?.textContent || '');
-            if (seen.has(key)) { r.remove(); n++; }
+            if (seen.has(key)) drop.push(r);
             else seen.add(key);
           });
+          if (!drop.length) { log('SYS', 'info', '无重复节点'); return; }
+          const names = new Set(drop.map(r => r.dataset.name));
+          const gid = currentGid();
+          const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+          if (prof?.nodes) {
+            const keep = new Set();
+            const next = [];
+            for (const n of prof.nodes) {
+              const k = (n.addr || '') + '|' + (n.type || '');
+              if (keep.has(k)) continue;
+              keep.add(k);
+              next.push(n);
+            }
+            prof.nodes = next;
+            const g = GROUPS.find(x => x.id === gid);
+            if (g) g.count = next.length;
+          }
+          drop.forEach(r => r.remove());
           nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
           renumberRows();
-          log('SYS', 'ok', '已去除重复节点 · ' + n + ' 个');
+          if (typeof saveCatalog === 'function') saveCatalog(true);
+          log('SYS', 'ok', '已去除重复节点 · ' + drop.length + ' 个');
         },
         'rm-unavailable': () => {
-          let n = 0;
-          [...nodeTable.querySelectorAll('tr')].forEach(r => {
-            const lat = r.querySelector('.lat');
-            if (lat && (lat.classList.contains('bad') || /timeout|fail|不可用/i.test(lat.textContent))) {
-              r.remove(); n++;
-            }
-          });
-          // mock: also remove highest latency if none bad
-          if (n === 0) {
-            const rows = [...nodeTable.querySelectorAll('tr')];
-            rows.sort((a,b) => parseLatMs(b) - parseLatMs(a));
-            rows.slice(0, Math.min(2, rows.length)).forEach(r => { r.remove(); n++; });
-          }
-          nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
-          renumberRows();
-          log('SYS', 'warn', '已移除不可用 · ' + n + ' 个（示意）');
+          // Throne clearUnavailableProfiles: latency == -1 (test failed)
+          removeNodesByPred(r => {
+            const t = (r.dataset.lat || r.querySelector('.lat')?.textContent || '').trim();
+            const ms = parseLatMs(r);
+            return t === 'timeout' || /fail|error|timeout|不可用/i.test(t) || ms === -1 || (r.querySelector('.lat')?.classList.contains('bad') && ms < 0);
+          }, '已移除不可用');
         },
         'rm-failed': () => {
-          let n = 0;
-          [...nodeTable.querySelectorAll('tr')].forEach(r => {
-            const t = r.dataset.lat || r.querySelector('.lat')?.textContent || '';
-            if (!t || t.includes('—') || /fail|error|timeout/i.test(t)) {
-              r.remove(); n++;
-            }
-          });
-          nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
-          renumberRows();
-          log('SYS', 'warn', '已移除失败/无延迟 · ' + n + ' 个');
+          // Throne remove invalid / no latency: empty or failed test result
+          removeNodesByPred(r => {
+            const t = (r.dataset.lat || r.querySelector('.lat')?.textContent || '').trim();
+            if (!t || t === '—' || t === '…') return true;
+            if (/fail|error|timeout/i.test(t)) return true;
+            const ms = parseLatMs(r);
+            return ms < 0;
+          }, '已移除失败/无延迟');
         },
       };
       (map[act] || (() => log('SYS', 'info', act)))();
@@ -3493,6 +3632,7 @@
       if (!silentPeer) log('SYS', 'warn', '已关闭 WARP（与 Tun 互斥）');
     }
     log('SYS', 'info', on ? '已开启 Tun 模式' : '已关闭 Tun 模式');
+    if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
   }
   function applyWarp(on, { silentPeer } = {}) {
     setChipOn('warpToggle', 'warpChip', on, 'warpSwitch');
@@ -3562,8 +3702,8 @@
   document.getElementById('tunToggle')?.addEventListener('change', (e) => {
     const on = e.target.checked;
     if (!on) {
-      document.getElementById('tunChip')?.classList.toggle('on', false);
-      log('SYS', 'info', '已关闭 Tun 模式');
+      // Throne set_spmode_vpn(false): persist + regenerate path; must hit set_tun_cmd
+      applyTun(false);
       return;
     }
     // checkbox already on — if conflict needs confirm, revert first
@@ -3627,25 +3767,285 @@
   });
 
   // test menu (slim) — open/close wired after bindMenu; handlers here
-  function runUrlTest(scope) {
+
+  function removeNodesByPred(pred, logLabel) {
+    const rows = [...nodeTable.querySelectorAll('tr')].filter(pred);
+    if (!rows.length) { log('SYS', 'info', (logLabel || '移除') + ' · 0 个'); return 0; }
+    const names = new Set(rows.map(r => r.dataset.name).filter(Boolean));
+    const gid = typeof currentGid === 'function' ? currentGid() : 'default';
+    const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+    if (prof && Array.isArray(prof.nodes)) {
+      prof.nodes = prof.nodes.filter(n => !names.has(n.name));
+      const g = GROUPS.find(x => x.id === gid);
+      if (g) g.count = prof.nodes.length;
+    }
+    rows.forEach(r => r.remove());
+    nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
+    renumberRows();
+    if (typeof saveCatalog === 'function') saveCatalog(true);
+    log('SYS', 'warn', (logLabel || '已移除') + ' · ' + rows.length + ' 个');
+    return rows.length;
+  }
+
+  // Throne: runURLTest → Core Test RPC + QueryURLTest poller paints latency as results arrive.
+  // Until Start()+Test RPC: real TCP connect RTT; progressive via `net-probe-result` events.
+  let urlTesting = false;
+  let urlTestAbort = false;
+  let urlTestUnlisten = null;
+  function tauriInvoke(cmd, args) {
+    const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
+    if (typeof inv !== 'function') return Promise.reject(new Error('not in Tauri'));
+    return inv(cmd, args || {});
+  }
+  async function tauriListen(event, handler) {
+    const listen = window.__TAURI__?.event?.listen
+      || window.__TAURI_INTERNALS__?.plugins?.event?.listen
+      || null;
+    if (typeof listen === 'function') {
+      return listen(event, (e) => handler(e?.payload !== undefined ? e.payload : e));
+    }
+    // Tauri 2 withInternals fallback: window.__TAURI__.event
+    try {
+      const mod = window.__TAURI__?.event;
+      if (mod && typeof mod.listen === 'function') {
+        return mod.listen(event, (e) => handler(e?.payload !== undefined ? e.payload : e));
+      }
+    } catch (_) {}
+    return null;
+  }
+  function parseRowTarget(row) {
+    const addr = (row.querySelector('.addr')?.textContent || row.dataset.addr || '').trim();
+    if (!addr || addr === '—') return null;
+    // host:port or [v6]:port
+    let host = '', port = 443;
+    if (addr.startsWith('[')) {
+      const m = addr.match(/^\[([^\]]+)\]:(\d+)$/);
+      if (!m) return null;
+      host = m[1]; port = parseInt(m[2], 10) || 443;
+    } else {
+      const i = addr.lastIndexOf(':');
+      if (i <= 0) { host = addr; port = 443; }
+      else { host = addr.slice(0, i); port = parseInt(addr.slice(i + 1), 10) || 443; }
+    }
+    if (!host) return null;
+    return { id: row.dataset.name || addr, host, port, row };
+  }
+  function applyLatencyToRow(row, ms, err) {
+    const lat = row.querySelector('.lat');
+    const name = row.dataset.name;
+    const gid = typeof currentGid === 'function' ? currentGid() : 'default';
+    const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+    const node = prof?.nodes?.find(n => n.name === name);
+    if (err || ms == null || ms < 0) {
+      if (lat) { lat.textContent = 'timeout'; lat.className = 'lat bad'; }
+      row.dataset.lat = 'timeout';
+      if (node) node.lat = -1;
+    } else {
+      if (lat) {
+        lat.textContent = ms + ' ms';
+        lat.className = 'lat ' + (ms < 120 ? 'good' : ms < 220 ? 'mid' : 'bad');
+      }
+      row.dataset.lat = ms + ' ms';
+      if (node) node.lat = ms;
+    }
+    // keep latency order live while progressive probes finish
+    if (typeof resortIfLatencyActive === 'function') resortIfLatencyActive();
+  }
+  async function runUrlTest(scope) {
+    if (urlTesting) {
+      log('TEST', 'warn', '测速进行中…（可点停止）');
+      return;
+    }
     const rows = scope === 'group'
       ? [...nodeTable.querySelectorAll('tr')].filter(r => r.style.display !== 'none')
       : selectedRows();
-    const n = rows.length || 0;
-    if (!n) { log('TEST', 'warn', '无可测试节点'); return; }
-    log('TEST', 'info', (scope === 'group' ? 'URL 测试当前组 · ' : 'URL 测试选定项 · ') + n + ' 个节点…');
-    setTimeout(() => {
-      rows.forEach(r => {
-        const lat = r.querySelector('.lat');
-        if (lat) {
-          const ms = 80 + Math.floor(Math.random() * 200);
-          lat.textContent = ms + ' ms';
-          lat.className = 'lat ' + (ms < 120 ? 'good' : ms < 200 ? 'mid' : 'bad');
-          r.dataset.lat = ms + ' ms';
+    const targets = [];
+    for (const r of rows) {
+      const t = parseRowTarget(r);
+      if (t) targets.push(t);
+    }
+    if (!targets.length) { log('TEST', 'warn', '无可测试节点（缺 host:port）'); return; }
+    urlTesting = true;
+    urlTestAbort = false;
+    const label = scope === 'group' ? 'URL 测试当前组' : 'URL 测试选定项';
+    log('TEST', 'info', `${label} · ${targets.length} 个节点 · TCP 连通性（逐条刷新）…`);
+    // mark pending + index by id for progressive paint
+    const byId = new Map();
+    for (const t of targets) {
+      byId.set(t.id, t);
+      const lat = t.row.querySelector('.lat');
+      if (lat) { lat.textContent = '…'; lat.className = 'lat muted'; }
+      t.row.dataset.lat = '…';
+    }
+    let ok = 0, fail = 0;
+    const seen = new Set();
+    const onResult = (r) => {
+      if (!r || r.id == null) return;
+      if (seen.has(r.id)) return;
+      seen.add(r.id);
+      const t = byId.get(r.id);
+      if (!t) return;
+      if (!r.ok || r.ms == null || r.ms < 0) {
+        applyLatencyToRow(t.row, -1, true);
+        fail++;
+        if (r.error && r.error !== 'test aborted') log('TEST', 'warn', `[${t.id}] ${r.error}`);
+      } else {
+        applyLatencyToRow(t.row, r.ms, false);
+        ok++;
+      }
+    };
+    try {
+      // Throne-style progressive: listen before invoke so early results paint immediately
+      if (urlTestUnlisten) { try { urlTestUnlisten(); } catch (_) {} urlTestUnlisten = null; }
+      const un = await tauriListen('net-probe-result', onResult);
+      if (typeof un === 'function') urlTestUnlisten = un;
+      const payload = targets.map(t => ({ id: t.id, host: t.host, port: t.port }));
+      let res;
+      try {
+        res = await tauriInvoke('net_tcp_probe', {
+          targets: payload,
+          timeoutMs: 3000,
+          concurrency: 8,
+        });
+      } catch (e) {
+        log('TEST', 'warn', 'net_tcp_probe 不可用：' + (e && e.message || e));
+        for (const t of targets) {
+          if (!seen.has(t.id)) { applyLatencyToRow(t.row, -1, true); fail++; }
         }
-      });
-      log('OK', 'ok', 'URL 测试完成 · ' + n + ' 个节点');
-    }, 350);
+        return;
+      }
+      // fill any gaps if event stream missed (e.g. no listen API)
+      const results = res?.results || [];
+      for (const r of results) onResult(r);
+      for (const t of targets) {
+        if (!seen.has(t.id)) { applyLatencyToRow(t.row, -1, true); fail++; }
+      }
+      const aborted = !!(res?.aborted || urlTestAbort);
+      log('OK', 'ok', `${label}完成 · 通 ${ok} · 失败 ${fail}` + (aborted ? '（已停止）' : ''));
+      log('SYS', 'info', '说明：当前为 TCP 连通 RTT（直连服务器），非代理路径 URL 测试；Core Test RPC 待 Start() 后接入');
+    } finally {
+      if (urlTestUnlisten) { try { urlTestUnlisten(); } catch (_) {} urlTestUnlisten = null; }
+      urlTesting = false;
+    }
+  }
+  let resolveIpRunning = false;
+  function applyResolvedIpToRow(row, t, primary, allIps) {
+    if (!row || !t) return false;
+    const addrEl = row.querySelector('.addr');
+    // already IP / IPv6 — keep, still show log
+    const hostIsIp = /^\d+\.\d+\.\d+\.\d+$/.test(t.host) || (t.host.includes(':') && !t.host.includes('.'));
+    if (hostIsIp) {
+      if (addrEl) addrEl.title = (allIps || [primary]).join(', ');
+      return false;
+    }
+    const newAddr = primary + ':' + t.port;
+    if (addrEl) {
+      addrEl.textContent = newAddr;
+      addrEl.title = (allIps || [primary]).join(', ');
+      // brief flash so progressive update is visible
+      addrEl.style.transition = 'color .15s';
+      addrEl.style.color = 'var(--accent, #0a84ff)';
+      setTimeout(() => { addrEl.style.color = ''; }, 400);
+    }
+    const gid = typeof currentGid === 'function' ? currentGid() : 'default';
+    const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+    const node = prof?.nodes?.find(x => x.name === t.id);
+    if (node) node.addr = newAddr;
+    return true;
+  }
+  async function resolveSelectedIps() {
+    // Same progressive model as URL test: ONE Rust batch + net-resolve-result events.
+    // Per-row net_resolve_host IPC + per-row log freezes the webview on "select all".
+    if (resolveIpRunning) { log('TEST', 'warn', '出口 IP 解析进行中…'); return; }
+    const rows = selectedRows();
+    if (!rows.length) { log('SYS', 'warn', '未选定节点'); return; }
+    const byId = new Map();
+    const targets = [];
+    for (const row of rows) {
+      const t = parseRowTarget(row);
+      if (!t) continue;
+      const addrEl = row.querySelector('.addr');
+      if (addrEl) addrEl.style.opacity = '0.55';
+      byId.set(t.id, { row, t });
+      targets.push({ id: t.id, host: t.host });
+    }
+    if (!targets.length) { log('SYS', 'warn', '选定行无有效地址'); return; }
+    resolveIpRunning = true;
+    log('TEST', 'info', `解析出口 IP · ${targets.length} 个…`);
+    let replaced = 0, fail = 0, done = 0;
+    const seen = new Set();
+    // throttle log spam: only summary + first few failures
+    let failLogged = 0;
+    let unlisten = null;
+    const onResult = (payload) => {
+      const r = payload?.payload ?? payload;
+      if (!r || !r.id) return;
+      if (seen.has(r.id)) return;
+      seen.add(r.id);
+      const item = byId.get(r.id);
+      if (!item) return;
+      const { row, t } = item;
+      try {
+        if (r.ok && r.ips && r.ips.length) {
+          if (applyResolvedIpToRow(row, t, r.ips[0], r.ips)) replaced++;
+        } else {
+          fail++;
+          if (failLogged < 3) {
+            failLogged++;
+            log('SYS', 'warn', `解析失败 · ${t.id || t.host}：${r.error || '无地址'}`);
+          }
+        }
+      } finally {
+        const addrEl = row.querySelector('.addr');
+        if (addrEl) addrEl.style.opacity = '';
+        done++;
+      }
+    };
+    try {
+      if (typeof tauriListen === 'function') {
+        unlisten = await tauriListen('net-resolve-result', onResult);
+      }
+      let res = null;
+      try {
+        res = await tauriInvoke('net_resolve_hosts', {
+          targets,
+          concurrency: Math.min(16, Math.max(4, targets.length)),
+        });
+      } catch (e) {
+        // fallback: old single-host path only if batch cmd missing
+        log('TEST', 'warn', '批量解析不可用，回退逐条…');
+        for (const { id, host } of targets) {
+          try {
+            const one = await tauriInvoke('net_resolve_host', { host });
+            onResult({ id, host, ok: !!(one?.ips?.length), ips: one?.ips || [], error: null });
+          } catch (err) {
+            onResult({ id, host, ok: false, ips: [], error: String(err && err.message || err) });
+          }
+        }
+        res = { results: [] };
+      }
+      // fill gaps if events missed
+      const results = res?.results || [];
+      for (const r of results) onResult(r);
+      for (const [id, item] of byId) {
+        if (!seen.has(id)) {
+          const addrEl = item.row.querySelector('.addr');
+          if (addrEl) addrEl.style.opacity = '';
+          fail++;
+          done++;
+        }
+      }
+      log('SYS', 'ok', `出口 IP 完成 · 替换 ${replaced} · 失败 ${fail} · 共 ${done}`);
+    } finally {
+      if (unlisten) { try { unlisten(); } catch (_) {} }
+      resolveIpRunning = false;
+    }
+  }
+  function stopUrlTest() {
+    if (!urlTesting) { log('TEST', 'info', '当前无测速任务'); return; }
+    urlTestAbort = true;
+    tauriInvoke('net_tcp_probe_stop').catch(() => {});
+    log('TEST', 'warn', '正在停止测速…');
   }
   document.querySelectorAll('#testMenu [data-test]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -3653,32 +4053,354 @@
       const act = btn.dataset.test;
       if (act === 'url-selected') runUrlTest('selected');
       else if (act === 'url-group') runUrlTest('group');
-      else if (act === 'stop') log('TEST', 'warn', '已停止测试（示意）');
+      else if (act === 'stop') stopUrlTest();
       else if (act === 'clear') {
-        nodeTable.querySelectorAll('tr .lat').forEach(el => { el.textContent = '—'; el.className = 'lat muted'; });
-        nodeTable.querySelectorAll('tr').forEach(r => { r.dataset.lat = '—'; });
-        log('SYS', 'info', '已清理测试结果');
+        clearTestResults();
       }
     });
   });
+  function clearTestResults() {
+    // Throne on_menu_clear_test_result: ClearTestResults for current group
+    nodeTable.querySelectorAll('tr .lat').forEach(el => { el.textContent = '—'; el.className = 'lat muted'; });
+    nodeTable.querySelectorAll('tr').forEach(r => { r.dataset.lat = '—'; });
+    const gid = typeof currentGid === 'function' ? currentGid() : 'default';
+    const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+    if (prof?.nodes) prof.nodes.forEach(n => { n.lat = null; });
+    log('SYS', 'info', '已清理测试结果');
+  }
   // Throne: on_menu_update_subscription → AsyncUpdate(group->url, group->id)
   let subUpdating = false;
   function ensureProfile(gid, label, foot) {
-    if (typeof SUB_PROFILES === 'undefined') return null;
-    if (!SUB_PROFILES[gid]) {
-      SUB_PROFILES[gid] = { label: label || gid, foot: foot || (gid + '.local'), nodes: [] };
+    let bag;
+    try { bag = SUB_PROFILES; } catch (_) { return null; }
+    if (!bag) return null;
+    if (!bag[gid]) {
+      bag[gid] = { label: label || gid, foot: foot || (gid + '.local'), nodes: [] };
     }
-    return SUB_PROFILES[gid];
+    return bag[gid];
   }
+
+  /** iGG/Quantumult-style transport: obfs → network, obfsParam → Host header. */
+  function mapObfsNetwork(obfs) {
+    const o = String(obfs || '').toLowerCase();
+    if (!o || o === 'none' || o === 'plain' || o === 'tcp' || o === 'raw') return '';
+    if (o === 'websocket' || o === 'ws') return 'ws';
+    if (o === 'grpc') return 'grpc';
+    if (o === 'http' || o === 'h2' || o === 'httpupgrade') return o === 'h2' ? 'http' : o;
+    if (o === 'quic') return 'quic';
+    return o;
+  }
+  /** sing-box full config outbounds: skip groups / non-proxy. */
+  const SINGBOX_SKIP_TYPES = new Set([
+    'selector', 'urltest', 'direct', 'block', 'dns', 'pass', 'compatible', 'relay', 'loadbalance',
+  ]);
+  function isSingBoxProxyOutbound(o) {
+    if (!o || typeof o !== 'object') return false;
+    const t = String(o.type || '').toLowerCase();
+    if (!t || SINGBOX_SKIP_TYPES.has(t)) return false;
+    if (!o.server && t !== 'wireguard') return false;
+    return [
+      'vmess', 'vless', 'trojan', 'http', 'socks', 'shadowsocks',
+      'hysteria', 'hysteria2', 'tuic', 'anytls', 'wireguard', 'ssh',
+    ].includes(t);
+  }
+  /** Prefer feed outbound as-is (iGG platform/singbox). Strip junk, keep transport/tls truth. */
+  function sanitizeSingBoxOutbound(o) {
+    let ob;
+    try { ob = JSON.parse(JSON.stringify(o)); } catch (_) { return null; }
+    if (!ob || typeof ob !== 'object') return null;
+    ob.tag = 'proxy';
+    // iGG http path is often {} — not a valid path string
+    if (ob.path != null && typeof ob.path !== 'string') delete ob.path;
+    if (ob.headers && typeof ob.headers === 'object' && !Object.keys(ob.headers).length) delete ob.headers;
+    // tls.enabled:false → omit (plain WS VMess); keep true with server_name
+    if (ob.tls && typeof ob.tls === 'object') {
+      if (ob.tls.enabled === false || ob.tls.enabled === 'false' || ob.tls.enabled === 0) {
+        delete ob.tls;
+      } else {
+        ob.tls.enabled = true;
+      }
+    }
+    // network "tcp" + transport.ws is normal; network alone is not transport
+    if (ob.network === 'tcp' || ob.network === 'raw') delete ob.network;
+    return ob;
+  }
+  /** Clash/JSON/iGG field bag → sing-box outbound (Throne Build subset). No invented secrets. */
+  function buildOutboundFromFields(f) {
+    const typeRaw = String(f.type || '').toLowerCase();
+    const server = String(f.server || '').trim();
+    const port = Number(f.port || 443) || 443;
+    if (!server) return null;
+    const mapType = (tt) => {
+      if (tt === 'ss' || tt === 'shadowsocks') return 'shadowsocks';
+      if (tt === 'socks' || tt === 'socks5' || tt === 'ssocks5') return 'socks';
+      // Throne http.cpp Build: type always "http"; HTTPS = scheme/tls.enabled
+      if (tt === 'http' || tt === 'https') return 'http';
+      if (tt === 'vmess') return 'vmess';
+      if (tt === 'vless') return 'vless';
+      if (tt === 'trojan') return 'trojan';
+      if (tt === 'anytls') return 'anytls';
+      // Throne tuic.cpp Build: type tuic; DisplayType TUIC
+      if (tt === 'tuic' || tt === 'tuic5') return 'tuic';
+      return tt || '';
+    };
+    const ty = mapType(typeRaw);
+    if (!ty) return null;
+    const ob = { type: ty, tag: 'proxy', server, server_port: port };
+    const user = f.username || f.user || '';
+    const pass = f.password || f.passwd || '';
+    const uuid = f.uuid || f.id || '';
+    if (ty === 'http' || ty === 'socks') {
+      if (user) ob.username = user;
+      if (pass) ob.password = pass;
+      // Throne: path on http outbound; https scheme / type HTTPS / tls flag → tls.enabled
+      if (ty === 'http') {
+        // iGG may send path:{} — only real strings
+        if (typeof f.path === 'string' && f.path) ob.path = f.path;
+        const wantTls = f.tls === true || typeRaw === 'https' || !!f.sni;
+        if (wantTls) {
+          ob.tls = { enabled: true };
+          if (f.sni) ob.tls.server_name = f.sni;
+          if (f.skip) ob.tls.insecure = true;
+        }
+      }
+    } else if (ty === 'shadowsocks') {
+      if (!pass) return null;
+      ob.method = f.cipher || f.method || 'aes-128-gcm';
+      ob.password = pass;
+    } else if (ty === 'vmess') {
+      if (!uuid) return null;
+      ob.uuid = uuid;
+      // cipher only (auto/aes-128-gcm/chacha20-poly1305) — NOT TLS
+      const sec = f.cipher || f.security || f.method || 'auto';
+      if (sec && sec !== 'auto' && sec !== 'none' && sec !== 'tls') ob.security = sec;
+      const aid = Number(f.alterId ?? f.alter_id ?? f.aid ?? 0) || 0;
+      if (aid > 0) ob.alter_id = aid;
+      // iGG plain WS: no TLS. Only when tls flag true (or explicit sni + tls not false).
+      const tlsOn = f.tls === true || f.tls === 'tls' || f.tls === 'true';
+      if (tlsOn) {
+        ob.tls = { enabled: true };
+        if (f.sni) ob.tls.server_name = f.sni;
+        if (f.skip) ob.tls.insecure = true;
+      }
+      const net = String(f.network || f.net || 'tcp').toLowerCase();
+      if (net && net !== 'tcp' && net !== 'raw' && net !== 'none') {
+        const tr = { type: (net === 'websocket' || net === 'ws') ? 'ws' : net };
+        if (f.path) tr.path = f.path;
+        if (f.host) tr.headers = { Host: f.host };
+        ob.transport = tr;
+      }
+    } else if (ty === 'vless') {
+      if (!uuid) return null;
+      ob.uuid = uuid;
+      if (f.flow) ob.flow = f.flow;
+      // explicit false (edit checkbox off) must not inject TLS; missing/true → on (common VLESS)
+      if (f.tls !== false) {
+        ob.tls = { enabled: true };
+        if (f.sni) ob.tls.server_name = f.sni;
+        if (f.skip) ob.tls.insecure = true;
+      }
+      const net = String(f.network || f.net || 'tcp').toLowerCase();
+      if (net && net !== 'tcp' && net !== 'raw' && net !== 'none') {
+        const tr = { type: (net === 'websocket' || net === 'ws') ? 'ws' : net };
+        if (f.path) tr.path = f.path;
+        if (f.host) tr.headers = { Host: f.host };
+        ob.transport = tr;
+      }
+    } else if (ty === 'trojan') {
+      if (!pass) return null;
+      ob.password = pass;
+      ob.tls = { enabled: true };
+      if (f.sni) ob.tls.server_name = f.sni;
+      if (f.skip) ob.tls.insecure = true;
+    } else if (ty === 'anytls') {
+      // Throne anyTLS::Build — password + tls always on
+      if (!pass) return null;
+      ob.password = pass;
+      ob.tls = { enabled: true };
+      if (f.sni) ob.tls.server_name = f.sni;
+      if (f.skip) ob.tls.insecure = true;
+    } else if (ty === 'tuic') {
+      // Throne tuic::Build — uuid + password + congestion_control; tls always on
+      if (!uuid) return null;
+      ob.uuid = uuid;
+      if (pass) ob.password = pass;
+      // iGG: proto "bbr" → congestion_control; Clash: congestion_controller
+      const cc = String(f.congestion_control || f.congestion || f.proto || '').trim();
+      if (cc && cc !== 'none') ob.congestion_control = cc.toLowerCase();
+      if (f.udp_relay_mode) ob.udp_relay_mode = String(f.udp_relay_mode);
+      ob.tls = { enabled: true };
+      if (f.sni) ob.tls.server_name = f.sni;
+      if (f.skip) ob.tls.insecure = true;
+      // iGG alpn "h3" or "h3,h2" → tls.alpn array
+      const alpnRaw = f.alpn || '';
+      if (alpnRaw) {
+        const list = String(alpnRaw).split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+        if (list.length) ob.tls.alpn = list;
+      }
+    } else {
+      return null;
+    }
+    return ob;
+  }
+  function nodeFromProxyObject(o, i) {
+    if (!o || typeof o !== 'object') return null;
+    // skip sing-box groups / non-dial outbounds
+    const typeProbe = String(o.type || o.protocol || '').toLowerCase();
+    if (SINGBOX_SKIP_TYPES.has(typeProbe)) return null;
+    // iGG / Quantumult-style: host+title+user; Clash: server+name+username
+    const server = o.server || o.address || o.host || o.hostname || o.add || '';
+    const port = o.server_port || o.port || 443;
+    const name = o.name || o.title || o.tag || o.ps || ('节点' + (i + 1));
+    const typeRaw = o.type || o.protocol || 'VLESS';
+    const type = normalizeNodeType(typeRaw);
+    if (!server) return null;
+    // iGG platform/singbox: object is already a dial outbound — keep transport/tls/security as-is
+    if (isSingBoxProxyOutbound(o) && (o.server_port != null || o.uuid || o.password || o.username || o.transport)) {
+      const outbound = sanitizeSingBoxOutbound(o);
+      if (outbound) {
+        const node = {
+          name,
+          type: normalizeNodeType(outbound.type || typeRaw),
+          addr: String(outbound.server || server) + ':' + String(outbound.server_port || port),
+          lat: null,
+          flow: null,
+          outbound,
+        };
+        // HTTPS pill when http + tls
+        if (outbound.type === 'http' && outbound.tls && outbound.tls.enabled) node.type = 'HTTPS';
+        return node;
+      }
+    }
+    const isHttps = String(typeRaw).toUpperCase() === 'HTTPS' || type === 'HTTPS';
+    const isAnytls = type === 'AnyTLS';
+    const isTuic = type === 'TUIC';
+    // transport object (sing-box) OR Clash ws-opts OR iGG obfsParam
+    const tr = (o.transport && typeof o.transport === 'object') ? o.transport : null;
+    const hdrHost = (tr && tr.headers && (tr.headers.Host || tr.headers.host))
+      || (typeof o['ws-opts'] === 'object' && o['ws-opts'] && o['ws-opts'].headers && o['ws-opts'].headers.Host)
+      || (o.headers && (o.headers.Host || o.headers.host))
+      || o.obfsParam || o['obfs-param'] || o.obfs_param
+      || (tr && tr.host)
+      || '';
+    // Prefer transport.type (ws) over network:"tcp" (iGG singbox sets both)
+    const netFromObfs = mapObfsNetwork(o.obfs)
+      || mapObfsNetwork(tr && tr.type)
+      || mapObfsNetwork(o.network || o.net || '');
+    // iGG alpn string | Clash alpn array | tls.alpn
+    let alpn = '';
+    if (Array.isArray(o.alpn)) alpn = o.alpn.join(',');
+    else if (typeof o.alpn === 'string') alpn = o.alpn;
+    else if (o.tls && typeof o.tls === 'object' && Array.isArray(o.tls.alpn)) alpn = o.tls.alpn.join(',');
+    // iGG VMess: method=auto is cipher; password often is sub token — not VMess auth
+    const isVmess = type === 'VMess' || String(typeRaw).toLowerCase() === 'vmess';
+    // tls object with enabled:false must NOT become tls on
+    const tlsObjOff = o.tls && typeof o.tls === 'object' && (o.tls.enabled === false || o.tls.enabled === 'false' || o.tls.enabled === 0);
+    const tlsExplicit = !tlsObjOff && (
+      o.tls === true || o.tls === 'tls' || o.tls === 'true'
+      || (o.tls && typeof o.tls === 'object' && o.tls.enabled === true)
+    );
+    // VMess plain WS (iGG): do NOT infer TLS from empty peer/sni or tls.server_name when enabled:false
+    const tlsOn = isHttps || isAnytls || isTuic || tlsExplicit
+      || (!isVmess && !tlsObjOff && !!(o.peer || o.sni));
+    const pathRaw = (tr && tr.path) || o.path || (o['ws-opts'] && o['ws-opts'].path) || '';
+    const path = (typeof pathRaw === 'string') ? pathRaw : '';
+    const fields = {
+      type: typeRaw,
+      server,
+      port,
+      username: o.username || o.user || '',
+      password: isVmess ? '' : (o.password || o.passwd || ''),
+      uuid: o.uuid || o.id || '',
+      // VMess cipher: prefer scy/cipher; method "auto" ok; never use TLS word
+      cipher: isVmess
+        ? (o.cipher || o.scy || o.security || (o.method && o.method !== 'none' ? o.method : '') || 'auto')
+        : (o.cipher || o.method || o.security || o.scy || ''),
+      method: o.method || o.cipher || '',
+      alterId: o.alterId ?? o.alter_id ?? o.aid ?? 0,
+      tls: tlsOn,
+      sni: tlsOn
+        ? (o.sni || o.peer || o.servername || o.server_name
+          || (o.tls && typeof o.tls === 'object' && o.tls.server_name) || '')
+        : '',
+      skip: !!(o['skip-cert-verify'] || o.insecure || o.allowInsecure || o.allow_insecure
+        || (o.tls && typeof o.tls === 'object' && o.tls.insecure)),
+      network: netFromObfs,
+      path,
+      host: (typeof hdrHost === 'string' ? hdrHost : '') || '',
+      flow: o.flow || '',
+      // iGG TUIC: proto=bbr; Clash: congestion-controller / congestion_control
+      // VMess: proto "none" is not congestion
+      congestion_control: isVmess ? '' : (o.congestion_control || o['congestion-controller'] || o.congestion_controller
+        || o.congestion || o.proto || ''),
+      alpn,
+      udp_relay_mode: o.udp_relay_mode || o['udp-relay-mode'] || '',
+    };
+    if (o.tls === true) fields.tls = true;
+    // Throne http/socks: password-only → username = password
+    if (!fields.username && fields.password && (type === 'HTTP' || type === 'HTTPS' || type === 'SOCKS')) {
+      fields.username = fields.password;
+    }
+    // AnyTLS: password is auth; some feeds put token only in password
+    if (isAnytls && !fields.password && fields.uuid) {
+      fields.password = fields.uuid;
+    }
+    const outbound = buildOutboundFromFields(fields);
+    const link = (typeof o.share === 'string' && o.share) || (typeof o.link === 'string' && o.link) || (typeof o.uri === 'string' && o.uri) || null;
+    const node = { name, type, addr: server + ':' + port, lat: null, flow: null };
+    if (outbound) node.outbound = outbound;
+    if (link) node.link = link;
+    return node;
+  }
+  function pickClashField(block, k) {
+    const re = new RegExp('(?:^|[\\n,])\\s*' + k + '\\s*:\\s*(?:"([^"]*)"|' + "'" + "([^']*)'" + '|([^,\\n}]+))', 'i');
+    const mm = String(block).match(re);
+    return mm ? (mm[1] ?? mm[2] ?? mm[3] ?? '').trim() : '';
+  }
+  function clashBlockToNode(block, i) {
+    const name = pickClashField(block, 'name');
+    const type = pickClashField(block, 'type') || 'ss';
+    const server = pickClashField(block, 'server');
+    const port = pickClashField(block, 'port') || '443';
+    if (!server || !name) return null;
+    const tlsRaw = pickClashField(block, 'tls');
+    const fields = {
+      type,
+      server,
+      port,
+      username: pickClashField(block, 'username') || pickClashField(block, 'user'),
+      password: pickClashField(block, 'password') || pickClashField(block, 'passwd'),
+      uuid: pickClashField(block, 'uuid') || pickClashField(block, 'id'),
+      cipher: pickClashField(block, 'cipher') || pickClashField(block, 'method'),
+      alterId: pickClashField(block, 'alterId') || pickClashField(block, 'alter-id') || '0',
+      tls: /^(true|tls|1)$/i.test(tlsRaw),
+      sni: pickClashField(block, 'sni') || pickClashField(block, 'servername'),
+      skip: /^(true|1)$/i.test(pickClashField(block, 'skip-cert-verify') || pickClashField(block, 'skip_cert_verify')),
+      network: pickClashField(block, 'network') || pickClashField(block, 'net'),
+      path: pickClashField(block, 'path'),
+      host: pickClashField(block, 'host'),
+      flow: pickClashField(block, 'flow'),
+    };
+    const outbound = buildOutboundFromFields(fields);
+    const node = { name, type: normalizeNodeType(type), addr: server + ':' + port, lat: null, flow: null };
+    if (outbound) node.outbound = outbound;
+    return node;
+  }
+
   function parseShareLines(text) {
     const out = [];
     const lines = String(text || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
     for (const line of lines) {
       // throne: protocol dispatch table — accept common share schemes
-      const m = line.match(/^(vless|trojan|ss|vmess|hysteria2?|hy2|socks5?|tuic|anytls):\/\//i);
-      if (!m && !line.startsWith('http://') && !line.startsWith('https://')) continue;
-      if (line.startsWith('http://') || line.startsWith('https://')) continue; // sub url, not node
-      const type = (m ? m[1] : 'VLESS').toUpperCase().replace('HY2', 'Hysteria2').replace('HYSTERIA2', 'Hysteria2').replace('SS', 'SS').replace('SOCKS5', 'SOCKS');
+      const m = line.match(/^(vless|trojan|ss|vmess|hysteria2?|hy2|socks5?|tuic|anytls|https?):\/\//i);
+      if (!m) continue;
+      if (/^https?:\/\//i.test(line) && !line.includes('@')) continue; // sub URL, not proxy share
+      let type = (m ? m[1] : 'VLESS').toUpperCase()
+        .replace('HY2', 'Hysteria2').replace('HYSTERIA2', 'Hysteria2')
+        .replace('SOCKS5', 'SOCKS');
+      // keep HTTPS ≠ HTTP (user product; sing-box still type http + tls)
+      if (type === 'HTTPS') type = 'HTTPS';
+      else if (type === 'HTTP') type = 'HTTP';
       let name = '';
       const hash = line.indexOf('#');
       if (hash >= 0) {
@@ -3693,58 +4415,162 @@
         const hostPart = at >= 0 ? body.slice(at + 1) : body;
         const hp = hostPart.split(/[/?]/)[0];
         if (hp && hp.includes(':')) addr = hp;
-        else if (hp) addr = hp + ':443';
+        else if (hp) addr = hp + (type === 'HTTP' ? ':80' : ':443');
       } catch (_) {}
-      out.push({ name, type: type === 'SS' ? 'SS' : (type.charAt(0) + type.slice(1).toLowerCase()).replace('Vless', 'VLESS').replace('Trojan', 'Trojan').replace('Vmess', 'VMess'), addr, lat: null, flow: null });
-    }
-    // normalize types
-    out.forEach(n => {
-      const u = (n.type || '').toUpperCase();
-      if (u === 'VLESS') n.type = 'VLESS';
-      else if (u === 'TROJAN') n.type = 'Trojan';
-      else if (u === 'VMESS') n.type = 'VMess';
-      else if (u === 'SS' || u === 'SHADOWSOCKS') n.type = 'SS';
-    });
-    return out;
-  }
-  function mockNodesFromUrl(url, baseCount) {
-    // ponytail: no real HTTP fetch until import/Start; synthesize from URL host like a successful pull
-    let host = 'nodes.local';
-    try { host = new URL(url).hostname || host; } catch (_) {
-      const m = String(url).match(/https?:\/\/([^/]+)/i);
-      if (m) host = m[1];
-    }
-    const n = Math.max(3, Math.min(18, baseCount || (5 + Math.floor(Math.random() * 8))));
-    const types = ['VLESS', 'VLESS', 'Trojan', 'SS', 'VMess'];
-    const nodes = [];
-    for (let i = 0; i < n; i++) {
-      const a = 100 + ((i * 17) % 120);
-      const b = 10 + ((i * 31) % 200);
-      nodes.push({
-        name: host.split('.')[0].slice(0, 8) + '-节点' + (i + 1),
-        type: types[i % types.length],
-        addr: `104.${(i % 50) + 16}.${a}.${b}:443`,
-        lat: 60 + Math.floor(Math.random() * 220),
+      out.push({
+        name,
+        type: normalizeNodeType(type),
+        addr,
+        lat: null,
         flow: null,
+        link: line,
       });
     }
-    return nodes;
+    return out;
+  }
+  function tryB64Decode(text) {
+    const s = String(text || '').replace(/\s+/g, '');
+    if (s.length < 16 || s.length % 4 === 1) return null;
+    if (!/^[A-Za-z0-9+\/_=-]+$/.test(s)) return null;
+    try {
+      const norm = s.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = norm + '===='.slice((norm.length % 4) || 4);
+      const bin = atob(pad);
+      // reject binary noise
+      if (/[\x00-\x08\x0e-\x1f]/.test(bin.slice(0, 200))) return null;
+      return bin;
+    } catch (_) { return null; }
+  }
+  function normalizeNodeType(t) {
+    const u = String(t || 'VLESS').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (u === 'VLESS') return 'VLESS';
+    if (u === 'TROJAN') return 'Trojan';
+    if (u === 'VMESS') return 'VMess';
+    if (u === 'SS' || u === 'SHADOWSOCKS') return 'SS';
+    if (u === 'HY2' || u === 'HYSTERIA2' || u === 'HYSTERIA') return 'Hysteria2';
+    if (u === 'TUIC') return 'TUIC';
+    // iGG: SSocks5 / Socks5 / SOCKS5
+    if (u === 'SOCKS' || u === 'SOCKS5' || u === 'SSOCKS5') return 'SOCKS';
+    if (u === 'ANYTLS') return 'AnyTLS';
+    // UI pill: HTTPS vs HTTP (sing-box outbound type stays "http"+tls)
+    if (u === 'HTTPS') return 'HTTPS';
+    if (u === 'HTTP') return 'HTTP';
+    return t || 'VLESS';
+  }
+  function parseSubscriptionBody(raw) {
+    // Throne: HttpGet body → base64 / share-lines / JSON / clash proxies
+    let text = String(raw || '').trim();
+    if (!text) return [];
+    // strip HTML error pages early
+    if (/^<!DOCTYPE\s+html/i.test(text) || /^<html[\s>]/i.test(text)) return [];
+    let nodes = parseShareLines(text);
+    if (nodes.length) return nodes;
+    const decoded = tryB64Decode(text);
+    if (decoded) {
+      nodes = parseShareLines(decoded);
+      if (nodes.length) return nodes;
+      text = decoded.trim();
+    }
+    // JSON: array / {proxies|outbounds|nodes} / full sing-box config
+    try {
+      const j = JSON.parse(text);
+      const arr = Array.isArray(j) ? j : (j.proxies || j.outbounds || j.nodes || []);
+      if (Array.isArray(arr) && arr.length) {
+        // full sing-box: outbounds include selector/urltest/direct — keep dial proxies only
+        const nodes = arr.map((o, i) => nodeFromProxyObject(o, i)).filter(Boolean);
+        if (nodes.length) return nodes;
+      }
+    } catch (_) {}
+    // Clash YAML proxies: inline - {..} or multi-line - name: (keep credentials → outbound)
+    if (/\bproxies\s*:/i.test(text) || /^\s*-\s*\{[^}]*name\s*:/m.test(text) || /^\s*-\s*name\s*:/m.test(text)) {
+      const out = [];
+      const re = /\{([^{}]*(?:name|server|type|port)[^{}]*)\}/g;
+      let m;
+      while ((m = re.exec(text)) && out.length < 5000) {
+        const n = clashBlockToNode(m[1], out.length);
+        if (n) out.push(n);
+      }
+      if (out.length) return out;
+      let body = text;
+      const pi = text.search(/^\s*proxies\s*:/im);
+      if (pi >= 0) body = text.slice(pi);
+      const lines = body.split(/\r?\n/);
+      let cur = null;
+      const flush = () => {
+        if (cur && out.length < 5000) {
+          const n = clashBlockToNode(cur, out.length);
+          if (n) out.push(n);
+        }
+        cur = null;
+      };
+      for (const line of lines) {
+        if (/^\s*proxy-groups\s*:/i.test(line) || /^\s*rules\s*:/i.test(line) || /^\s*rule-providers\s*:/i.test(line)) {
+          flush();
+          break;
+        }
+        if (/^\s*-\s+/.test(line) && !/^\s{4,}-\s/.test(line)) {
+          flush();
+          cur = line.replace(/^\s*-\s+/, '');
+          continue;
+        }
+        if (cur !== null) {
+          if (/^\S/.test(line) && !/^\s*#/.test(line) && !/^proxies\s*:/i.test(line)) {
+            flush();
+            continue;
+          }
+          cur += '\n' + line;
+        }
+      }
+      flush();
+      if (out.length) return out;
+    }
+    return parseShareLines(text);
+  }
+  async function fetchSubscriptionBody(url) {
+    const u = String(url || '').trim();
+    if (!u) throw new Error('empty url');
+    const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
+    if (typeof inv === 'function') {
+      const res = await inv('sub_fetch', { url: u });
+      if (res && res.ok && typeof res.body === 'string') return res.body;
+      throw new Error((res && res.error) || 'fetch failed');
+    }
+    // browser / non-tauri fallback
+    const r = await fetch(u, { method: 'GET', cache: 'no-store', credentials: 'omit' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.text();
+  }
+  function setGroupUpdateStatus(msg, kind) {
+    const el = document.getElementById('groupUpdateStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.dataset.kind = kind || '';
+    el.hidden = !msg;
   }
   function updateSubscription(gid, { all = false } = {}) {
     if (subUpdating) {
       log('SYS', 'warn', '订阅更新进行中…');
+      setGroupUpdateStatus('上一轮更新尚未结束', 'warn');
       return Promise.resolve(false);
     }
-    const groups = all ? [...GROUPS] : [GROUPS.find(g => g.id === (gid || (typeof activeGroupId === 'function' ? activeGroupId() : 'default')))].filter(Boolean);
+    if (typeof GROUPS === 'undefined' || !Array.isArray(GROUPS)) {
+      log('SYS', 'warn', '分组数据未就绪');
+      return Promise.resolve(false);
+    }
+    const groups = all
+      ? [...GROUPS]
+      : [GROUPS.find(g => g.id === (gid || (typeof activeGroupId === 'function' ? activeGroupId() : 'default')))].filter(Boolean);
     if (!groups.length) {
       log('SYS', 'warn', '无可用分组');
+      setGroupUpdateStatus('无可用分组', 'warn');
       return Promise.resolve(false);
     }
-    // Throne: empty url → no-op / disabled
+    // Throne should_skip_group: empty url
     const targets = groups.filter(g => g.url && String(g.url).trim());
+    const skipped = groups.length - targets.length;
     if (!targets.length) {
       log('SYS', 'warn', '当前分组无订阅链接（设置 → 订阅 中填写，或编辑分组）');
-      // focus settings if single
+      setGroupUpdateStatus('无订阅链接，已跳过', 'warn');
       if (!all) {
         const s = document.querySelector('.side-item[data-settings="sub"]');
         if (s) s.click();
@@ -3757,48 +4583,89 @@
     const btn = document.getElementById('refreshBtn');
     const label = btn?.querySelector('[data-i18n="tb.refresh"]') || btn;
     const prev = label?.textContent;
+    const allBtn = document.getElementById('groupUpdateAll');
+    const allPrev = allBtn?.textContent;
     if (btn) btn.disabled = true;
     if (label) label.textContent = '更新中…';
+    if (allBtn && all) { allBtn.disabled = true; allBtn.textContent = '更新中…'; }
+    setGroupUpdateStatus(all ? `正在更新 ${targets.length} 个订阅…` : `正在更新「${targets[0].name}」…`, 'info');
 
     return (async () => {
-      let totalAdd = 0, totalDel = 0;
-      for (const g of targets) {
-        log('SYS', 'info', `正在更新订阅：${g.name}…`);
-        await new Promise(r => setTimeout(r, 280));
-        const footHost = (g.url.match(/https?:\/\/([^/]+)/i) || [])[1] || g.id;
-        const prof = ensureProfile(g.id, g.name, footHost);
-        if (!prof) { log('SYS', 'warn', '节点表未就绪'); continue; }
-        const before = (prof.nodes || []).length;
-        const next = mockNodesFromUrl(g.url, before || g.count || 8);
-        // keep names that still exist as "updated", count add/del by size delta + random churn
-        const del = Math.max(0, before - next.length);
-        const add = Math.max(0, next.length - before);
-        // if same size, still report small churn like Throne diff
-        const addR = add || (before ? Math.floor(Math.random() * 2) : next.length);
-        const delR = del || (before ? Math.floor(Math.random() * 2) : 0);
-        prof.nodes = next;
-        prof.label = g.name;
-        try {
-          const h = new URL(g.url).hostname;
-          if (h) prof.foot = h;
-        } catch (_) {}
-        g.count = next.length;
-        totalAdd += addR;
-        totalDel += delR;
-        log('OK', 'ok', `「${g.name}」已更新 · +${addR} −${delR} · 共 ${next.length}`);
+      let totalAdd = 0, totalDel = 0, ok = 0, fail = 0;
+      try {
+        for (let i = 0; i < targets.length; i++) {
+          const g = targets[i];
+          log('SYS', 'info', `正在更新订阅：${g.name}…`);
+          if (allBtn && all) allBtn.textContent = `更新中 ${i + 1}/${targets.length}`;
+          setGroupUpdateStatus(`更新「${g.name}」(${i + 1}/${targets.length})…`, 'info');
+          try {
+            let bag;
+            try { bag = SUB_PROFILES; } catch (_) { bag = null; }
+            if (!bag) throw new Error('节点表未就绪');
+            const footHost = (String(g.url).match(/https?:\/\/([^/]+)/i) || [])[1] || g.id;
+            let prof = bag[g.id];
+            if (!prof) {
+              prof = { label: g.name, foot: footHost, nodes: [] };
+              bag[g.id] = prof;
+            }
+            const before = (prof.nodes || []).length;
+            // Throne GroupUpdater: HttpGet then parse; on fail keep existing nodes
+            const body = await fetchSubscriptionBody(g.url);
+            const next = parseSubscriptionBody(body);
+            if (!next.length) {
+              throw new Error('订阅内容无可解析节点（请检查链接或格式）');
+            }
+            const beforeKeys = new Set((prof.nodes || []).map(n => (n.addr || '') + '|' + (n.name || '')));
+            const nextKeys = new Set(next.map(n => (n.addr || '') + '|' + (n.name || '')));
+            let addR = 0, delR = 0;
+            for (const k of nextKeys) if (!beforeKeys.has(k)) addR++;
+            for (const k of beforeKeys) if (!nextKeys.has(k)) delR++;
+            prof.nodes = next;
+            prof.label = g.name;
+            try {
+              const h = new URL(g.url).hostname;
+              if (h) prof.foot = h;
+            } catch (_) { prof.foot = footHost; }
+            g.count = next.length;
+            if (typeof saveCatalog === 'function') saveCatalog();
+            totalAdd += addR;
+            totalDel += delR;
+            ok++;
+            log('OK', 'ok', `「${g.name}」已更新 · +${addR} −${delR} · 共 ${next.length}`);
+            if (typeof renderGroupList === 'function') renderGroupList();
+          } catch (err) {
+            fail++;
+            // keep existing nodes — no random replace
+            log('SYS', 'warn', `「${g.name}」更新失败：${err && err.message || err} · 保留 ${g.count || 0} 节点`);
+          }
+        }
+        const cur = typeof activeGroupId === 'function' ? activeGroupId() : 'default';
+        if (typeof renderNodes === 'function') renderNodes(cur);
+        if (typeof renderGroupList === 'function') renderGroupList();
+        if (typeof syncSubUrlField === 'function') syncSubUrlField();
+        const skipMsg = skipped ? ` · 跳过 ${skipped} 无 URL` : '';
+        if (fail && !ok) {
+          setGroupUpdateStatus(`更新失败${skipMsg}`, 'warn');
+          log('SYS', 'warn', '订阅更新失败');
+          return false;
+        }
+        const summary = `已更新 ${ok} 组 · +${totalAdd} −${totalDel}${skipMsg}${fail ? ` · 失败 ${fail}` : ''}`;
+        setGroupUpdateStatus(summary, fail ? 'warn' : 'ok');
+        if (targets.length > 1 || all) log('SYS', 'ok', '全部订阅更新完成 · ' + summary);
+        return true;
+      } catch (err) {
+        log('SYS', 'warn', '订阅更新异常：' + (err && err.message || err));
+        setGroupUpdateStatus('更新异常：' + (err && err.message || err), 'warn');
+        return false;
       }
-      const cur = typeof activeGroupId === 'function' ? activeGroupId() : 'default';
-      if (typeof renderNodes === 'function') renderNodes(cur);
-      if (typeof renderGroupList === 'function' && document.getElementById('groupsMask')?.classList.contains('open')) {
-        renderGroupList();
-      }
-      if (typeof syncSubUrlField === 'function') syncSubUrlField();
-      if (targets.length > 1) log('SYS', 'ok', `全部订阅更新完成 · +${totalAdd} −${totalDel}`);
-      return true;
     })().finally(() => {
       subUpdating = false;
       if (btn) btn.disabled = false;
       if (label && prev != null) label.textContent = prev || '更新';
+      if (allBtn) {
+        allBtn.disabled = false;
+        allBtn.textContent = allPrev || '更新全部';
+      }
     });
   }
   document.getElementById('refreshBtn')?.addEventListener('click', () => {
@@ -3827,13 +4694,60 @@
       } catch (err) { reject(err); }
     });
   }
+  function findNodeByName(name) {
+    const gid = typeof currentGid === 'function' ? currentGid() : 'default';
+    const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+    return prof?.nodes?.find(n => n.name === name) || null;
+  }
+  function looksLikeUuid(s) {
+    const t = String(s || '').trim();
+    if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(t)) return true;
+    if (/^[0-9a-fA-F]{32}$/.test(t)) return true;
+    return false;
+  }
+  /** True only for share URIs that can actually Start (not QR decorative fakes). */
+  function isShareUri(s) {
+    if (!s || typeof s !== 'string') return false;
+    if (/^ss:\/\//i.test(s)) return true;
+    if (/^(vless|trojan|socks5?|anytls|tuic|https?):\/\//i.test(s) && s.includes('@')) return true;
+    if (/^vmess:\/\//i.test(s)) {
+      // v2rayN b64 JSON body (no @) OR uuid@host
+      const rest = s.replace(/^vmess:\/\//i, '').split('#')[0];
+      if (!rest.includes('@')) return rest.length > 16; // likely b64 json
+      const user = rest.split('@')[0].split(':')[0];
+      return looksLikeUuid(user);
+    }
+    return false;
+  }
+  function hasRealShareLink(name) {
+    const node = findNodeByName(name);
+    if (!node) return false;
+    if (node.outbound && node.outbound.type && node.outbound.server) return true;
+    return isShareUri(node.link);
+  }
+  /** Payload for connect_selected: prefer outbound JSON (Clash), else share URI. */
+  function nodeConnectPayload(name) {
+    const node = findNodeByName(name);
+    if (!node) return null;
+    if (node.outbound && node.outbound.type && node.outbound.server) {
+      // refuse outbound with placeholder uuid (old synthetic)
+      if (node.outbound.type === 'vmess' || node.outbound.type === 'vless' || node.outbound.type === 'tuic') {
+        const id = node.outbound.uuid || '';
+        if (id && !looksLikeUuid(id)) return null;
+      }
+      return { outbound: node.outbound };
+    }
+    if (isShareUri(node.link)) return { link: node.link };
+    return null;
+  }
   function nodeShareLink(name) {
-    const row = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === name);
-    const type = (row?.querySelector('.pill')?.textContent || 'vless').toLowerCase();
-    const addr = row?.querySelector('.addr')?.textContent || '0.0.0.0:443';
-    const host = addr.split(':')[0];
-    const port = addr.split(':')[1] || '443';
-    return type + '://' + btoa(unescape(encodeURIComponent(name + '@' + host))).slice(0, 24) + '@' + host + ':' + port + '?security=tls#' + encodeURIComponent(name || 'node');
+    const node = findNodeByName(name);
+    // Real share only — never invent fake vmess://btoa(name)@host (broke Start + "系统代理不生效")
+    if (node?.link && isShareUri(node.link)) return node.link;
+    if (node?.outbound && typeof node.outbound === 'object') {
+      try { return JSON.stringify(node.outbound); } catch (_) {}
+    }
+    return '';
   }
   function openDialog(id) {
     const el = document.getElementById(id);
@@ -3847,21 +4761,147 @@
     el.classList.remove('open');
     el.hidden = true;
   }
+  /** sing-box outbound → flat edit fields (Throne dialog_edit_profile subset). */
+  function fieldsFromOutbound(ob, fallback) {
+    const o = (ob && typeof ob === 'object') ? ob : {};
+    const ty = String(o.type || fallback?.type || 'vless').toLowerCase();
+    const tls = o.tls && typeof o.tls === 'object' ? o.tls : {};
+    // UI: http + tls.enabled → HTTPS; anytls → AnyTLS; socks → SOCKS
+    let displayType = fallback?.type || ty;
+    if (ty === 'http' && (tls.enabled === true || fallback?.type === 'HTTPS')) {
+      displayType = 'HTTPS';
+    } else if (ty === 'http') {
+      displayType = fallback?.type === 'HTTP' ? 'HTTP' : (tls.enabled ? 'HTTPS' : 'HTTP');
+    } else if (ty === 'anytls') {
+      displayType = 'AnyTLS';
+    } else if (ty === 'socks') {
+      displayType = 'SOCKS';
+    } else if (ty === 'vmess') {
+      displayType = 'VMess';
+    } else if (ty === 'tuic') {
+      displayType = 'TUIC';
+    }
+    const norm = normalizeNodeType(displayType);
+    const server = o.server || (fallback?.addr || '').split(':')[0] || '';
+    const port = o.server_port || o.port || (fallback?.addr || '').split(':')[1] || '443';
+    const tr = o.transport && typeof o.transport === 'object' ? o.transport : {};
+    let hostHdr = '';
+    if (tr.headers && typeof tr.headers === 'object') {
+      hostHdr = tr.headers.Host || tr.headers.host || '';
+    }
+    let alpn = '';
+    if (Array.isArray(tls.alpn)) alpn = tls.alpn.join(',');
+    else if (typeof tls.alpn === 'string') alpn = tls.alpn;
+    // throng/sing-box may put WS Host in transport.host (not only headers)
+    if (!hostHdr && tr.host) hostHdr = String(tr.host);
+    return {
+      name: fallback?.name || '',
+      type: norm,
+      server,
+      port: String(port),
+      uuid: o.uuid || '',
+      flow: o.flow || '',
+      security: o.security || 'auto',
+      alterId: o.alter_id ?? o.alterId ?? 0,
+      username: o.username || '',
+      password: o.password || '',
+      method: o.method || o.cipher || '',
+      // surface SNI whenever present (tls off still keeps server_name in some feeds — show for edit, save gated by TLS checkbox)
+      sni: (tls.server_name || o.sni || '') || '',
+      network: tr.type || o.network || '',
+      path: tr.path || o.path || '',
+      host: hostHdr || '',
+      insecure: !!(tls.insecure || o.insecure),
+      // explicit truth: only enabled===true is ON (missing tls object = off for VMess plain WS)
+      tls: tls.enabled === true,
+      congestion_control: o.congestion_control || '',
+      alpn,
+      note: fallback?.note || '',
+    };
+  }
+  function editTypeKey(typeLabel) {
+    const u = String(typeLabel || 'VLESS').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (u === 'VLESS') return 'vless';
+    if (u === 'VMESS') return 'vmess';
+    if (u === 'TROJAN') return 'trojan';
+    if (u === 'SS' || u === 'SHADOWSOCKS') return 'ss';
+    if (u === 'HTTPS') return 'https';
+    if (u === 'HTTP') return 'http';
+    if (u === 'SOCKS' || u === 'SOCKS5' || u === 'SSOCKS5') return 'socks';
+    if (u === 'ANYTLS') return 'anytls';
+    if (u === 'TUIC' || u === 'TUIC5') return 'tuic';
+    return u.toLowerCase();
+  }
+  function syncEditFieldsByType(typeLabel) {
+    const key = editTypeKey(typeLabel);
+    document.querySelectorAll('#editForm [data-edit-for]').forEach(el => {
+      const keys = String(el.getAttribute('data-edit-for') || '').split(/\s+/).filter(Boolean);
+      const show = keys.includes(key);
+      el.hidden = !show;
+    });
+  }
+  function setEditField(id, val) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = !!val;
+    else el.value = val == null ? '' : String(val);
+  }
+  function getEditField(id) {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    if (el.type === 'checkbox') return !!el.checked;
+    return (el.value || '').trim();
+  }
   function openEditDialog(name) {
     const row = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === name) || selectedRows()[0];
     const n = name || row?.dataset.name || '';
-    const type = row?.querySelector('.pill')?.textContent || 'VLESS';
-    const addr = row?.querySelector('.addr')?.textContent || '';
-    const [host, port] = addr.split(':');
-    document.getElementById('editName').value = n;
-    document.getElementById('editAddr').value = host || '';
-    document.getElementById('editPort').value = port || '443';
-    document.getElementById('editNote').value = '';
+    const node = (typeof findNodeByName === 'function' ? findNodeByName(n) : null) || null;
+    const type = node?.type || row?.querySelector('.pill')?.textContent || 'VLESS';
+    const addr = node?.addr || row?.querySelector('.addr')?.textContent || '';
+    const f = fieldsFromOutbound(node?.outbound, { name: n, type, addr, note: node?.note || '' });
+    // share-link only: still show host/port from addr
+    if (!node?.outbound && addr) {
+      const [h, p] = addr.split(':');
+      if (h) f.server = h;
+      if (p) f.port = p;
+    }
+    setEditField('editName', f.name);
+    setEditField('editAddr', f.server);
+    setEditField('editPort', f.port);
+    setEditField('editUuid', f.uuid);
+    setEditField('editFlow', f.flow);
+    setEditField('editSecurity', f.security || 'auto');
+    setEditField('editAlterId', f.alterId != null ? f.alterId : 0);
+    setEditField('editUser', f.username);
+    setEditField('editPass', f.password);
+    setEditField('editMethod', f.method || 'aes-128-gcm');
+    setEditField('editCongest', f.congestion_control || 'bbr');
+    setEditField('editAlpn', f.alpn || (editTypeKey(f.type) === 'tuic' ? 'h3' : ''));
+    setEditField('editSni', f.sni);
+    setEditField('editNetwork', f.network);
+    setEditField('editPath', f.path);
+    setEditField('editHost', f.host);
+    setEditField('editTls', f.tls);
+    setEditField('editInsecure', f.insecure);
+    setEditField('editNote', f.note);
     const typeBtn = document.getElementById('editType');
     if (typeBtn) {
-      typeBtn.dataset.value = type;
+      typeBtn.dataset.value = f.type;
       const v = typeBtn.querySelector('.sel-val');
-      if (v) v.textContent = type;
+      if (v) v.textContent = f.type;
+    }
+    syncEditFieldsByType(f.type);
+    const hint = document.getElementById('editOutboundHint');
+    if (hint) {
+      const net = String(f.network || '').toLowerCase();
+      const missingWs = (net === 'ws' || net === 'websocket') && !f.host;
+      const bits = [];
+      bits.push(f.tls ? 'TLS=ON' : 'TLS=OFF（明文 WS/TCP）');
+      if (f.host) bits.push('Host=' + f.host);
+      if (f.path) bits.push('path=' + f.path);
+      if (missingWs) bits.push('⚠ WS 缺 Host — 隧道会失败，请填 Host 或重新「更新」订阅');
+      hint.textContent = bits.join(' · ');
+      hint.hidden = false;
     }
     openDialog('editMask');
   }
@@ -3870,12 +4910,71 @@
     if (e.target.id === 'editMask') closeDialog('editMask');
   });
   document.getElementById('editSave')?.addEventListener('click', () => {
-    const name = document.getElementById('editName').value.trim() || '未命名';
-    const host = document.getElementById('editAddr').value.trim() || '0.0.0.0';
-    const port = document.getElementById('editPort').value.trim() || '443';
+    const name = getEditField('editName') || '未命名';
+    const host = getEditField('editAddr') || '0.0.0.0';
+    const port = getEditField('editPort') || '443';
     const type = document.getElementById('editType')?.dataset.value || 'VLESS';
+    const tk = editTypeKey(type);
+    const fields = {
+      type,
+      server: host,
+      port,
+      uuid: getEditField('editUuid'),
+      flow: getEditField('editFlow'),
+      security: getEditField('editSecurity'),
+      cipher: getEditField('editSecurity') || getEditField('editMethod'),
+      method: getEditField('editMethod'),
+      alterId: getEditField('editAlterId') || 0,
+      username: getEditField('editUser'),
+      password: getEditField('editPass'),
+      sni: getEditField('editSni'),
+      network: getEditField('editNetwork'),
+      path: getEditField('editPath'),
+      host: getEditField('editHost'),
+      skip: getEditField('editInsecure'),
+      congestion_control: getEditField('editCongest'),
+      alpn: getEditField('editAlpn'),
+      // Default TLS only for protocols that always use it; VMess/VLESS/HTTP from checkbox.
+      tls: tk === 'https' || tk === 'trojan' || tk === 'tuic' || tk === 'anytls',
+    };
+    // SS uses method not security; VMess uses security
+    if (tk === 'ss') {
+      fields.cipher = getEditField('editMethod');
+      fields.method = fields.cipher;
+    }
+    if (tk === 'http') {
+      fields.tls = !!getEditField('editTls') || !!getEditField('editSni');
+    }
+    if (tk === 'https') {
+      fields.tls = true;
+      fields.type = 'https';
+    }
+    if (tk === 'anytls') {
+      fields.tls = true;
+      fields.type = 'anytls';
+    }
+    if (tk === 'tuic') {
+      fields.tls = true;
+      fields.type = 'tuic';
+    }
+    // VMess/VLESS: TLS from checkbox only (iGG plain WS has SNI string but tls.enabled:false)
+    if (tk === 'vmess') {
+      fields.tls = !!getEditField('editTls');
+      fields.type = 'vmess';
+      fields.cipher = getEditField('editSecurity') || 'auto';
+      fields.security = fields.cipher;
+    }
+    if (tk === 'vless') {
+      fields.tls = !!getEditField('editTls');
+      fields.type = 'vless';
+    }
+    // Throne http/socks: empty user + password → username = password
+    if ((tk === 'http' || tk === 'https' || tk === 'socks') && !fields.username && fields.password) {
+      fields.username = fields.password;
+    }
     let row = selectedRows()[0];
     if (!row) row = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === selectedName);
+    const oldName = row?.dataset.name || selectedName;
     if (row) {
       row.dataset.name = name;
       const nameEl = row.querySelector('.name');
@@ -3885,8 +4984,50 @@
       const addrEl = row.querySelector('.addr');
       if (addrEl) addrEl.textContent = host + ':' + port;
       selectedName = name;
-      if (typeof setConnected === 'function') setConnected(connected);
+      // rename of the live tunnel node updates hero label only
+      if (connected && connectedName === oldName) {
+        connectedName = name;
+      }
+      if (typeof setConnected === 'function') setConnected(connected, { pin: false });
     }
+    const gid = typeof currentGid === 'function' ? currentGid() : 'default';
+    const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+    if (prof?.nodes) {
+      const node = prof.nodes.find(n => n.name === oldName);
+      if (node) {
+        node.name = name;
+        node.type = type;
+        node.addr = host + ':' + port;
+        node.note = getEditField('editNote') || undefined;
+        const outbound = (typeof buildOutboundFromFields === 'function')
+          ? buildOutboundFromFields(fields)
+          : null;
+        if (outbound) {
+          // Rebuild from form is source of truth for known protocol keys.
+          // Shallow-merge used to keep stale tls/security/password and break iGG VMess.
+          if (node.outbound && typeof node.outbound === 'object') {
+            const prev = node.outbound;
+            const keep = { ...outbound };
+            // only carry advanced keys form does not edit
+            for (const k of ['multiplex', 'dialer', 'detour', 'domain_strategy', 'domain_resolver', 'bind_interface', 'routing_mark', 'packet_encoding', 'global_padding', 'authenticated_length']) {
+              if (prev[k] != null && keep[k] == null) keep[k] = prev[k];
+            }
+            if (prev.tls && typeof prev.tls === 'object' && keep.tls && typeof keep.tls === 'object') {
+              // keep utls/reality extras under tls when still TLS
+              for (const k of ['utls', 'reality', 'alpn', 'min_version', 'max_version']) {
+                if (prev.tls[k] != null && keep.tls[k] == null) keep.tls[k] = prev.tls[k];
+              }
+            }
+            node.outbound = keep;
+          } else {
+            node.outbound = outbound;
+          }
+          // edited outbound supersedes share link (may be stale)
+          if (node.link) delete node.link;
+        }
+      }
+    }
+    if (typeof saveCatalog === 'function') saveCatalog(true);
     closeDialog('editMask');
     log('SYS', 'ok', '已保存节点：' + name);
   });
@@ -3895,7 +5036,7 @@
     const n = name || selectedName || '节点';
     const link = nodeShareLink(n);
     document.getElementById('qrName').textContent = n;
-    document.getElementById('qrLink').textContent = link;
+    document.getElementById('qrLink').textContent = link || '（无真实分享链接 — 节点仅有 outbound 或未导入凭证）';
     openDialog('qrMask');
   }
   document.getElementById('qrClose')?.addEventListener('click', () => closeDialog('qrMask'));
@@ -3910,15 +5051,164 @@
   // ——— group management ———
   let GROUPS = [
     { id: 'default', name: 'Default', count: 11, url: '', autoUpdate: true },
-    { id: 'backup', name: '备用', count: 5, url: 'https://backup.example-sub.net/sub', autoUpdate: true },
+    // ponytail: no fake sub host — empty URL skips update (Throne should_skip); demo nodes stay fixed until user sets a real link
+    { id: 'backup', name: '备用', count: 5, url: '', autoUpdate: false },
   ];
   let groupEditId = null;
   let groupEditMode = 'edit'; // edit | create | rename
+
+  // Persist groups + nodes across reload (localStorage). Demo seed only when no snapshot.
+  const CATALOG_KEY = 'nexus.catalog.v1';
+  let _catalogSaveTimer = null;
+  function serializeCatalog() {
+    const groups = (GROUPS || []).map(g => ({
+      id: g.id,
+      name: g.name,
+      count: g.count | 0,
+      url: g.url || '',
+      autoUpdate: !!g.autoUpdate,
+    }));
+    const profiles = {};
+    const bag = (typeof SUB_PROFILES !== 'undefined' && SUB_PROFILES) ? SUB_PROFILES : {};
+    for (const id of Object.keys(bag)) {
+      const p = bag[id] || {};
+      profiles[id] = {
+        label: p.label || id,
+        foot: p.foot || '',
+        nodes: (p.nodes || []).map(n => ({
+          name: n.name,
+          type: n.type,
+          addr: n.addr,
+          lat: n.lat == null ? null : n.lat,
+          flow: n.flow == null ? null : n.flow,
+          // keep connect material
+          link: n.link || undefined,
+          outbound: n.outbound || undefined,
+        })),
+      };
+    }
+    const active = (typeof activeGroupId === 'function')
+      ? activeGroupId()
+      : (document.querySelector('#subSeg button.active')?.dataset.sub || groups[0]?.id || 'default');
+    return { v: 1, active, groups, profiles };
+  }
+  function saveCatalog(immediate) {
+    const run = () => {
+      try {
+        localStorage.setItem(CATALOG_KEY, JSON.stringify(serializeCatalog()));
+      } catch (e) {
+        try { log('SYS', 'warn', '订阅缓存写入失败：' + (e && e.message || e)); } catch (_) {}
+      }
+    };
+    if (immediate) {
+      if (_catalogSaveTimer) { clearTimeout(_catalogSaveTimer); _catalogSaveTimer = null; }
+      run();
+      return;
+    }
+    if (_catalogSaveTimer) clearTimeout(_catalogSaveTimer);
+    _catalogSaveTimer = setTimeout(() => { _catalogSaveTimer = null; run(); }, 80);
+  }
+  function loadCatalog() {
+    try {
+      const raw = localStorage.getItem(CATALOG_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data || data.v !== 1 || !Array.isArray(data.groups) || !data.groups.length) return null;
+      if (!data.profiles || typeof data.profiles !== 'object') return null;
+      return data;
+    } catch (_) {
+      return null;
+    }
+  }
+  function applyCatalog(data) {
+    if (!data) return false;
+    GROUPS = data.groups.map(g => ({
+      id: String(g.id || ''),
+      name: String(g.name || g.id || '分组'),
+      count: Number(g.count) || 0,
+      url: String(g.url || ''),
+      autoUpdate: !!g.autoUpdate,
+    })).filter(g => g.id);
+    if (!GROUPS.length) return false;
+    const next = {};
+    for (const g of GROUPS) {
+      const p = data.profiles[g.id] || {};
+      const nodes = Array.isArray(p.nodes) ? p.nodes.map(n => {
+        const o = {
+          name: n.name || '节点',
+          type: n.type || 'VLESS',
+          addr: n.addr || '',
+          lat: (n.lat == null || n.lat === '') ? null : n.lat,
+          flow: n.flow == null ? null : n.flow,
+        };
+        if (n.link) o.link = n.link;
+        if (n.outbound) o.outbound = repairStoredOutbound(n.outbound);
+        return o;
+      }) : [];
+      g.count = nodes.length;
+      next[g.id] = {
+        label: p.label || g.name,
+        foot: p.foot || g.id + '.local',
+        nodes,
+      };
+    }
+    // drop orphan profiles not in GROUPS
+    SUB_PROFILES = next;
+    return true;
+  }
+  /**
+   * Stale catalog from old edit-save: VMess tls.on + transport.ws missing path/Host
+   * (iGG truth is plain WS). Cannot invent Host — strip false TLS so re-edit/hint is honest.
+   * Full fix = 更新订阅.
+   */
+  function repairStoredOutbound(ob) {
+    if (!ob || typeof ob !== 'object') return ob;
+    let o;
+    try { o = JSON.parse(JSON.stringify(ob)); } catch (_) { return ob; }
+    const tr = o.transport && typeof o.transport === 'object' ? o.transport : null;
+    const ty = String(o.type || '').toLowerCase();
+    if (ty === 'vmess' && tr && (tr.type === 'ws' || tr.type === 'websocket')) {
+      const host = (tr.headers && (tr.headers.Host || tr.headers.host)) || tr.host || '';
+      const path = tr.path || '';
+      if (!host && !path && o.tls && o.tls.enabled === true) {
+        delete o.tls;
+      }
+    }
+    if (typeof sanitizeSingBoxOutbound === 'function') {
+      const s = sanitizeSingBoxOutbound(o);
+      if (s) return s;
+    }
+    return o;
+  }
+  function hydrateCatalogOnBoot() {
+    const data = loadCatalog();
+    if (data && applyCatalog(data)) {
+      // persist repairs so next Start sees fixed outbound without re-import
+      try { if (typeof saveCatalog === 'function') saveCatalog(true); } catch (_) {}
+      if (typeof syncSubSegFromGroups === 'function') syncSubSegFromGroups();
+      const want = data.active && GROUPS.some(g => g.id === data.active)
+        ? data.active
+        : (GROUPS[0] && GROUPS[0].id);
+      if (want && typeof setActiveGroup === 'function') {
+        setActiveGroup(want, { render: true, logIt: false });
+      } else if (typeof renderNodes === 'function' && want) {
+        renderNodes(want);
+      }
+      if (typeof syncSubSettingsFromActiveGroup === 'function') syncSubSettingsFromActiveGroup();
+      const n = GROUPS.reduce((s, g) => s + (g.count | 0), 0);
+      try { log('SYS', 'info', `已恢复订阅 · ${GROUPS.length} 组 · ${n} 节点`); } catch (_) {}
+      return true;
+    }
+    // no snapshot: keep demo seed, still paint
+    if (typeof renderNodes === 'function') renderNodes(GROUPS[0]?.id || 'default');
+    return false;
+  }
 
   function activeGroupId() {
     return document.querySelector('#subSeg button.active')?.dataset.sub || GROUPS[0]?.id || 'default';
   }
   function setActiveGroup(id, { render = true, logIt = false } = {}) {
+    // Throne: current_group switch → node list + subscription settings for that group
     const seg = document.getElementById('subSeg');
     if (!seg) return;
     const btn = seg.querySelector(`button[data-sub="${id}"]`);
@@ -3935,7 +5225,10 @@
       log('SYS', 'info', '已切换订阅：' + (g?.name || id));
     }
     if (document.getElementById('groupsMask')?.classList.contains('open')) renderGroupList();
-    if (typeof syncSubUrlField === 'function') syncSubUrlField();
+    // settings 订阅 panel must follow top-bar group (URL + auto-update)
+    if (typeof syncSubSettingsFromActiveGroup === 'function') syncSubSettingsFromActiveGroup();
+    else if (typeof syncSubUrlField === 'function') syncSubUrlField();
+    if (typeof saveCatalog === 'function') saveCatalog(); // persist active group id
   }
   function renderGroupList() {
     const list = document.getElementById('groupList');
@@ -4004,10 +5297,12 @@
     syncSubSegFromGroups();
     if (wasActive && GROUPS[0]) setActiveGroup(GROUPS[0].id, { logIt: false });
     renderGroupList();
+    if (typeof saveCatalog === 'function') saveCatalog(true);
     log('SYS', 'warn', '已删除分组：' + g.name);
   }
   function openGroupsDialog() {
     renderGroupList();
+    setGroupUpdateStatus('', '');
     openDialog('groupsMask');
   }
   document.getElementById('groupsBtn')?.addEventListener('click', openGroupsDialog);
@@ -4016,15 +5311,9 @@
     if (e.target.id === 'groupsMask') closeDialog('groupsMask');
   });
   document.getElementById('groupAdd')?.addEventListener('click', () => openGroupEdit(null, 'create'));
-  document.getElementById('groupUpdateAll')?.addEventListener('click', async () => {
-    const btn = document.getElementById('groupUpdateAll');
-    if (btn) { btn.disabled = true; btn.textContent = '更新中…'; }
-    try {
-      await updateSubscription(null, { all: true });
-      renderGroupList();
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '更新全部'; }
-    }
+  document.getElementById('groupUpdateAll')?.addEventListener('click', () => {
+    // Throne DialogManageGroups::on_update_all_clicked → UI_update_all_groups()
+    updateSubscription(null, { all: true });
   });
 
   // ——— log right-click: Copy / Select All / 清除 ———
@@ -4158,11 +5447,81 @@
     });
   });
 
-  // ——— connection table sort ———
+  // ——— connection table: Core QueryConnections → rows ———
   let connSortKey = null, connSortDir = 1;
+  let connPollTimer = null;
+  function fmtBytes(n) {
+    n = Number(n) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  }
+  function escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+  function renderConnections(list) {
+    const tb = document.getElementById('connTable');
+    if (!tb) return;
+    const rows = Array.isArray(list) ? list : [];
+    if (!rows.length) {
+      tb.innerHTML = '';
+      return;
+    }
+    tb.innerHTML = rows.map(c => {
+      const app = c.process || '—';
+      const dest = c.domain || c.dest || '—';
+      let proto = c.network || '';
+      if (c.protocol) proto = proto ? `${proto} (${c.protocol})` : c.protocol;
+      if (!proto) proto = '—';
+      const out = c.outbound || '—';
+      const flow = `${fmtBytes(c.upload)}↑ ${fmtBytes(c.download)}↓`;
+      const flowBytes = (Number(c.upload) || 0) + (Number(c.download) || 0);
+      return `<tr data-id="${escHtml(c.id || '')}" data-app="${escHtml(app)}" data-dest="${escHtml(dest)}" data-proto="${escHtml(proto)}" data-out="${escHtml(out)}" data-flow="${flowBytes}">
+        <td class="app">${escHtml(app)}</td>
+        <td>${escHtml(dest)}</td>
+        <td>${escHtml(proto)}</td>
+        <td class="rule">${escHtml(out)}</td>
+        <td>${escHtml(flow)}</td>
+      </tr>`;
+    }).join('');
+    if (connSortKey) sortConnTable(connSortKey, connSortDir);
+  }
+  async function refreshConnections() {
+    if (!connected) {
+      renderConnections([]);
+      return;
+    }
+    try {
+      const r = await nexusInvoke('query_connections');
+      if (r && r.ok && r.data) {
+        renderConnections(r.data.active || []);
+        const st = document.getElementById('stConn');
+        if (st) st.textContent = String(r.data.count ?? (r.data.active || []).length);
+      }
+    } catch (_) { /* offline / core down */ }
+  }
+  function startConnPoll() {
+    stopConnPoll();
+    refreshConnections();
+    connPollTimer = setInterval(() => {
+      if (!connected) { stopConnPoll(); return; }
+      const open = dock?.classList.contains('open');
+      const onConn = document.querySelector('.dock-tab.active')?.dataset?.panel === 'conn';
+      if (open && onConn) refreshConnections();
+    }, 1500);
+  }
+  function stopConnPoll() {
+    if (connPollTimer) { clearInterval(connPollTimer); connPollTimer = null; }
+    renderConnections([]);
+  }
   function parseConnFlow(row) {
-    const t = row.dataset.flow || row.cells[4]?.textContent || '';
-    const m = String(t).match(/([\d.]+)\s*([KMG]?B)/i);
+    const t = row.dataset.flow;
+    if (t != null && t !== '' && isFinite(Number(t))) return Number(t);
+    const txt = row.cells[4]?.textContent || '';
+    const m = String(txt).match(/([\d.]+)\s*([KMG]?B)/i);
     if (!m) return -1;
     let n = parseFloat(m[1]);
     const u = m[2].toUpperCase();
@@ -4213,20 +5572,56 @@
   });
 
   // ——— runtime stats ———
-  let statsStarted = Date.now(); // ponytail: real uptime starts at boot; no fake 1h
-  function fillRuntimeStats() {
-    const coreOn = connected;
-    document.getElementById('stCore').textContent = coreOn ? '运行中 · sing-box' : '已停止';
+  // ponytail: uptime only while "connected"; no fake exit IP / country / traffic
+  let statsStarted = null;
+  let lastExitIp = null;
+  let lastCountry = null;
+  async function fillRuntimeStats() {
+    // Core Start()/traffic/IPTest not fully ported — query real process if up, never invent metrics.
+    let coreLabel = '已停止';
+    let coreRunning = false;
+    try {
+      const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
+      if (typeof inv === 'function') {
+        // process may exist even when UI "connected" is CheckConfig-only
+        const st = await inv('core_query_state');
+        if (st && st.running) {
+          coreRunning = true;
+          coreLabel = (st.profile_id != null && st.profile_id >= 0)
+            ? `运行中 · profile ${st.profile_id}`
+            : '运行中';
+        } else if (connected) {
+          coreLabel = '进程在线 · 隧道未跑';
+        } else {
+          coreLabel = '进程在线 · 空闲';
+        }
+      } else if (connected) {
+        coreLabel = '已连接（状态未知）';
+      }
+    } catch (e) {
+      // core process not up
+      if (connected) coreLabel = '核心未响应';
+      else coreLabel = '已停止';
+    }
+    document.getElementById('stCore').textContent = coreLabel;
     document.getElementById('stConn').textContent = String(document.querySelectorAll('#connTable tr').length);
-    document.getElementById('stProxy').textContent = coreOn ? (document.getElementById('sbProxy')?.textContent || '—') : '—';
-    document.getElementById('stDirect').textContent = coreOn ? (document.getElementById('sbDirect')?.textContent || '128 KB') : '—';
-    const sec = Math.floor((Date.now() - statsStarted) / 1000);
-    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-    document.getElementById('stUptime').textContent = `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
-    document.getElementById('stOutIp').textContent = coreOn ? `104.16.${40 + (selectedName.length % 200)}.${10 + (sec % 200)}` : '—';
-    document.getElementById('stCountry').textContent = coreOn ? 'US' : '—';
-    const next = new Date(Date.now() + 25 * 60 * 1000);
-    document.getElementById('stNextSub').textContent = next.toTimeString().slice(0, 5);
+    const px = document.getElementById('sbProxy')?.textContent;
+    const dx = document.getElementById('sbDirect')?.textContent;
+    const live = coreRunning || connected;
+    document.getElementById('stProxy').textContent = (live && px && px !== '—') ? px : '—';
+    document.getElementById('stDirect').textContent = (live && dx && dx !== '—') ? dx : '—';
+    if (live && statsStarted != null) {
+      const sec = Math.floor((Date.now() - statsStarted) / 1000);
+      const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+      document.getElementById('stUptime').textContent = `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+    } else {
+      document.getElementById('stUptime').textContent = '—';
+    }
+    // Throne IPTest via Core — until wired, never invent 104.16.*
+    document.getElementById('stOutIp').textContent = lastExitIp || '—';
+    document.getElementById('stCountry').textContent = lastCountry || '—';
+    const g = (typeof GROUPS !== 'undefined') ? GROUPS.find(x => x.id === (typeof activeGroupId === 'function' ? activeGroupId() : 'default')) : null;
+    document.getElementById('stNextSub').textContent = (g && g.url && g.autoUpdate) ? '（自动·待调度）' : '—';
   }
   function openStatsDialog() {
     fillRuntimeStats();
@@ -4234,16 +5629,16 @@
   }
   document.getElementById('statsClose')?.addEventListener('click', () => closeDialog('statsMask'));
   document.getElementById('statsRefresh')?.addEventListener('click', () => {
-    fillRuntimeStats();
-    log('SYS', 'info', '已刷新运行状态');
+    fillRuntimeStats().then(() => log('SYS', 'info', '已刷新运行状态'));
   });
   document.getElementById('statsMask')?.addEventListener('click', e => {
     if (e.target.id === 'statsMask') closeDialog('statsMask');
   });
 
   // ——— export config ———
-  function buildExportConfig() {
-    const nodes = [...nodeTable.querySelectorAll('tr')].slice(0, 5).map(r => ({
+  function buildExportConfigLocal() {
+    // UI-only sketch when Core generate_preview unavailable
+    const nodes = [...nodeTable.querySelectorAll('tr')].slice(0, 8).map(r => ({
       type: (r.querySelector('.pill')?.textContent || 'vless').toLowerCase(),
       tag: r.dataset.name || 'node',
       server: (r.querySelector('.addr')?.textContent || '0.0.0.0:443').split(':')[0],
@@ -4252,14 +5647,31 @@
     const obj = {
       log: { level: 'info' },
       inbounds: [{ type: 'mixed', listen: '127.0.0.1', listen_port: 2080 }],
-      outbounds: nodes.length ? nodes : [{ type: 'direct', tag: 'direct' }],
-      route: { final: nodes[0]?.tag || 'direct' }
+      outbounds: nodes.length
+        ? nodes.concat([{ type: 'direct', tag: 'direct' }])
+        : [{ type: 'direct', tag: 'direct' }],
+      route: { final: nodes[0]?.tag || 'direct' },
+      _note: 'local sketch — not Core generate_preview',
     };
     return JSON.stringify(obj, null, 2);
   }
-  function openExportDialog() {
-    document.getElementById('exportPre').textContent = buildExportConfig();
+  async function openExportDialog() {
+    const pre = document.getElementById('exportPre');
+    if (pre) pre.textContent = '生成中…';
     openDialog('exportMask');
+    try {
+      const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
+      if (typeof inv === 'function') {
+        const cfg = await inv('generate_preview');
+        if (pre) pre.textContent = JSON.stringify(cfg, null, 2);
+        log('SYS', 'ok', '已导出 Core generate_preview');
+        return;
+      }
+    } catch (e) {
+      log('SYS', 'warn', 'generate_preview 失败：' + (e && e.message || e));
+    }
+    if (pre) pre.textContent = buildExportConfigLocal();
+    log('SYS', 'info', '导出为本地草图（非 Core）');
   }
   document.getElementById('exportClose')?.addEventListener('click', () => closeDialog('exportMask'));
   document.getElementById('exportCopy')?.addEventListener('click', () => {
@@ -4349,6 +5761,7 @@
       setActiveGroup(id, { logIt: false });
       renderGroupList();
       closeDialog('groupEditMask');
+      if (typeof saveCatalog === 'function') saveCatalog(true);
       log('SYS', 'ok', '已新建分组：' + name);
       return;
     }
@@ -4369,6 +5782,7 @@
     syncSubSegFromGroups();
     renderGroupList();
     closeDialog('groupEditMask');
+    if (typeof saveCatalog === 'function') saveCatalog(true);
     log('SYS', 'ok', groupEditMode === 'rename' ? ('已重命名：' + name) : ('已保存分组：' + name + (g.url ? ' · ' + g.url : '')));
   });
 
@@ -4390,11 +5804,30 @@
     }
   }
   function syncSubUrlField() {
-    const el = document.getElementById('subUrlField');
-    if (!el || typeof GROUPS === 'undefined') return;
-    const id = (typeof activeGroupId === 'function') ? activeGroupId() : (document.querySelector('#subSeg button.active')?.dataset.sub);
+    // kept for callers; full settings sync below
+    syncSubSettingsFromActiveGroup();
+  }
+  function syncSubSettingsFromActiveGroup() {
+    // Top-bar group ↔ 设置→订阅：URL + 自动更新开关跟随当前分组
+    if (typeof GROUPS === 'undefined') return;
+    const id = (typeof activeGroupId === 'function')
+      ? activeGroupId()
+      : (document.querySelector('#subSeg button.active')?.dataset.sub);
     const g = GROUPS.find(x => x.id === id) || GROUPS[0];
-    setFieldText(el, g?.url || '');
+    const el = document.getElementById('subUrlField');
+    if (el) setFieldText(el, g?.url || '');
+    // auto-update switch in panel-sub (first data-switch under 自动更新订阅 row)
+    const autoBtn = document.querySelector('#panel-sub .set-row .switch-only[data-switch]');
+    if (autoBtn && g) {
+      const on = !!g.autoUpdate;
+      autoBtn.classList.toggle('on', on);
+      autoBtn.setAttribute('aria-pressed', String(on));
+    }
+    // hint shows which group is bound
+    const hint = document.querySelector('#panel-sub .set-row .set-hint');
+    if (hint && g) {
+      hint.textContent = '当前顶栏分组「' + g.name + '」的订阅 URL；粘贴后点应用';
+    }
   }
   function applySubUrlFromField() {
     const el = document.getElementById('subUrlField');
@@ -4413,6 +5846,7 @@
     if (!g) { log('SYS', 'warn', '无可用分组'); return; }
     g.url = url;
     setFieldText(el, url);
+    if (typeof saveCatalog === 'function') saveCatalog(true);
     log('SYS', 'ok', url ? (`已保存订阅链接 → ${g.name}`) : (`已清空「${g.name}」订阅链接`));
     // Throne: saving URL often followed by AsyncUpdate when user expects nodes
     if (url && typeof updateSubscription === 'function') {
@@ -4442,6 +5876,19 @@
       applySubUrlFromField();
     }
   });
+  // 自动更新订阅 switch → current group.autoUpdate
+  document.querySelector('#panel-sub .set-row .switch-only[data-switch]')?.addEventListener('click', () => {
+    requestAnimationFrame(() => {
+      const btn = document.querySelector('#panel-sub .set-row .switch-only[data-switch]');
+      if (!btn || typeof GROUPS === 'undefined') return;
+      const id = activeGroupId();
+      const g = GROUPS.find(x => x.id === id);
+      if (!g) return;
+      g.autoUpdate = btn.classList.contains('on') || btn.getAttribute('aria-pressed') === 'true';
+      if (typeof saveCatalog === 'function') saveCatalog();
+      log('SYS', 'info', '「' + g.name + '」自动更新订阅：' + (g.autoUpdate ? '开' : '关'));
+    });
+  });
   // clear placeholder on focus/input handled by existing field helpers; ensure sync when opening 订阅 panel
   const _showViewSub = typeof showView === 'function' ? null : null;
 
@@ -4464,13 +5911,44 @@
     }, 0);
   });
 
-  // ——— tray float preview ———
+  // ——— tray float: mirror home chips / store (same paths as settings) ———
   const trayFloat = document.getElementById('trayFloat');
   function closeTrayFloat() {
     trayFloat?.classList.remove('open');
   }
+  function refreshTrayMenu() {
+    if (!trayFloat) return;
+    const sysOn = !!document.getElementById('sysToggle')?.checked;
+    const tunOn = !!document.getElementById('tunToggle')?.checked;
+    trayFloat.querySelectorAll('[data-tray]').forEach(btn => {
+      const act = btn.dataset.tray;
+      let checked = null;
+      if (act === 'sysproxy') checked = sysOn;
+      else if (act === 'tun') checked = tunOn;
+      else if (act === 'toggle') checked = !!connected;
+      if (checked == null) {
+        btn.classList.remove('checked');
+        const ch = btn.querySelector('.check');
+        if (ch) ch.textContent = '';
+        return;
+      }
+      btn.classList.toggle('checked', checked);
+      let ch = btn.querySelector('.check');
+      if (!ch) {
+        ch = document.createElement('span');
+        ch.className = 'check';
+        btn.insertBefore(ch, btn.firstChild);
+      }
+      ch.textContent = checked ? '✓' : '';
+      if (act === 'toggle') {
+        const g = btn.querySelector('.grow');
+        if (g) g.textContent = connected ? '断开' : '连接';
+      }
+    });
+  }
   function openTrayFloat() {
     closeMenus();
+    refreshTrayMenu();
     trayFloat?.classList.add('open');
   }
   document.querySelectorAll('#trayFloat [data-tray]').forEach(btn => {
@@ -4480,8 +5958,29 @@
       if (act === 'show') log('SYS', 'info', '显示主窗口');
       else if (act === 'toggle') powerBtn.click();
       else if (act === 'sysproxy') {
+        // same path as menu proxy-on/off + chip
         const t = document.getElementById('sysToggle');
-        if (t) { t.checked = !t.checked; t.dispatchEvent(new Event('change')); }
+        if (!t) return;
+        const next = !t.checked;
+        t.checked = next;
+        document.getElementById('sysChip')?.classList.toggle('on', next);
+        if (typeof nexusInvoke === 'function') {
+          nexusInvoke('set_system_proxy_cmd', { enabled: next }).then(r => {
+            if (r.ok) log('SYS', 'info', String(r.data || (next ? '已开启系统代理' : '已关闭系统代理')));
+            else if (!r.offline && r.error) log('SYS', 'warn', `系统代理: ${r.error}`);
+            refreshTrayMenu();
+          });
+        } else {
+          t.dispatchEvent(new Event('change'));
+          refreshTrayMenu();
+        }
+      } else if (act === 'tun') {
+        if (typeof setTun === 'function') setTun(!isTunOn());
+        else {
+          const t = document.getElementById('tunToggle');
+          if (t) { t.checked = !t.checked; t.dispatchEvent(new Event('change')); }
+        }
+        refreshTrayMenu();
       } else if (act === 'quit') log('SYS', 'warn', '退出（示意）');
     });
   });
@@ -4551,6 +6050,9 @@
     if (connPanel) connPanel.hidden = !(open && panel === 'conn');
     const logFilter = document.getElementById('logFilter');
     if (logFilter) logFilter.hidden = !(open && panel === 'log');
+    if (open && panel === 'conn' && connected && typeof refreshConnections === 'function') {
+      refreshConnections();
+    }
   }
   dockToggle.addEventListener('click', () => setDockOpen(!dock.classList.contains('open')));
   // drag top edge to resize open height; persist as default
@@ -4820,12 +6322,15 @@
       if (!key) return;
       el.innerHTML = t(key);
     });
-    // dynamic status strings
-    statusText.textContent = connected ? t('status.connected') : t('status.disconnected');
-    statusSub.innerHTML = connected
-      ? t('status.subOn', { name: selectedName, lat: selectedLat })
-      : t('status.subOff', { name: selectedName });
-    sbStatus.textContent = connected ? t('sb.running') : t('sb.stopped');
+    // dynamic status strings (connected hero ≠ list selection)
+    if (typeof refreshHeroStatus === 'function') refreshHeroStatus();
+    else {
+      statusText.textContent = connected ? t('status.connected') : t('status.disconnected');
+      statusSub.innerHTML = connected
+        ? t('status.subOn', { name: connectedName || selectedName, lat: connectedLat || selectedLat })
+        : t('status.subOff', { name: selectedName });
+      sbStatus.textContent = connected ? t('sb.running') : t('sb.stopped');
+    }
     // panel titles
     panelTitles.basic = t('panel.basic');
     panelTitles.routing = t('panel.routing');
@@ -5100,6 +6605,8 @@
             applyIconStyle(o, { logIt: true });
           } else if (btn.id === 'warpModeSelect') {
             if (typeof applyWarpMode === 'function') applyWarpMode(o);
+          } else if (btn.id === 'editType') {
+            if (typeof syncEditFieldsByType === 'function') syncEditFieldsByType(o);
           }
           markSettingsDirty();
         });
@@ -5161,33 +6668,33 @@
     });
   });
 
-  const SUB_PROFILES = {
+  let SUB_PROFILES = {
     default: {
       label: 'Default',
       foot: '',
       nodes: [
-        { name: 'CF官方优选12', type: 'VLESS', addr: '188.164.248.100:443', lat: 162, flow: '250 B↑ · 981 B↓' },
-        { name: 'CF官方优选10', type: 'VLESS', addr: '104.17.191.229:443', lat: 168, flow: null },
-        { name: 'CF官方优选7', type: 'VLESS', addr: '104.17.60.27:443', lat: 170, flow: '125 B↑ · 491 B↓' },
-        { name: 'CF官方优选11', type: 'VLESS', addr: '104.16.248.230:443', lat: 171, flow: null },
-        { name: 'CF官方优选14', type: 'VLESS', addr: '104.17.127.183:443', lat: 171, flow: null },
-        { name: 'CF官方优选5', type: 'VLESS', addr: '104.19.32.109:443', lat: 176, flow: null },
-        { name: 'CF官方优选13', type: 'VLESS', addr: '198.41.208.95:443', lat: 181, flow: null },
-        { name: 'CF官方优选6', type: 'VLESS', addr: '198.41.208.132:443', lat: 184, flow: null },
-        { name: 'CF官方优选9', type: 'VLESS', addr: '104.17.181.174:443', lat: 188, flow: null },
-        { name: 'CF官方优选4', type: 'VLESS', addr: '104.16.241.14:443', lat: 195, flow: null },
-        { name: 'CF官方优选8', type: 'VLESS', addr: '104.17.27.113:443', lat: 277, flow: null },
+        { name: 'CF官方优选12', type: 'VLESS', addr: '188.164.248.100:443', lat: null, flow: null },
+        { name: 'CF官方优选10', type: 'VLESS', addr: '104.17.191.229:443', lat: null, flow: null },
+        { name: 'CF官方优选7', type: 'VLESS', addr: '104.17.60.27:443', lat: null, flow: null },
+        { name: 'CF官方优选11', type: 'VLESS', addr: '104.16.248.230:443', lat: null, flow: null },
+        { name: 'CF官方优选14', type: 'VLESS', addr: '104.17.127.183:443', lat: null, flow: null },
+        { name: 'CF官方优选5', type: 'VLESS', addr: '104.19.32.109:443', lat: null, flow: null },
+        { name: 'CF官方优选13', type: 'VLESS', addr: '198.41.208.95:443', lat: null, flow: null },
+        { name: 'CF官方优选6', type: 'VLESS', addr: '198.41.208.132:443', lat: null, flow: null },
+        { name: 'CF官方优选9', type: 'VLESS', addr: '104.17.181.174:443', lat: null, flow: null },
+        { name: 'CF官方优选4', type: 'VLESS', addr: '104.16.241.14:443', lat: null, flow: null },
+        { name: 'CF官方优选8', type: 'VLESS', addr: '104.17.27.113:443', lat: null, flow: null },
       ]
     },
     backup: {
       label: '备用',
-      foot: 'backup.example-sub.net',
+      foot: '未配置订阅源',
       nodes: [
-        { name: '备用-东京A', type: 'VLESS', addr: '13.230.12.8:443', lat: 89, flow: '1.2 KB↑ · 4.8 KB↓' },
-        { name: '备用-新加坡B', type: 'Trojan', addr: '47.74.11.22:443', lat: 112, flow: null },
-        { name: '备用-香港C', type: 'VLESS', addr: '103.21.244.15:443', lat: 64, flow: '512 B↑ · 2.1 KB↓' },
-        { name: '备用-美西D', type: 'SS', addr: '104.21.33.9:8388', lat: 148, flow: null },
-        { name: '备用-法兰克福E', type: 'VLESS', addr: '185.199.108.55:443', lat: 201, flow: null },
+        { name: '备用-东京A', type: 'VLESS', addr: '13.230.12.8:443', lat: null, flow: null },
+        { name: '备用-新加坡B', type: 'Trojan', addr: '47.74.11.22:443', lat: null, flow: null },
+        { name: '备用-香港C', type: 'VLESS', addr: '103.21.244.15:443', lat: null, flow: null },
+        { name: '备用-美西D', type: 'SS', addr: '104.21.33.9:8388', lat: null, flow: null },
+        { name: '备用-法兰克福E', type: 'VLESS', addr: '185.199.108.55:443', lat: null, flow: null },
       ]
     }
   };
@@ -5200,12 +6707,16 @@
   function renderNodes(subKey) {
     const prof = SUB_PROFILES[subKey] || SUB_PROFILES.default;
     const rows = prof.nodes.map((n, i) => {
-      const latTxt = n.lat != null ? n.lat + ' ms' : '—';
+      let latTxt = '—';
+      let latCls = 'lat';
+      if (n.lat != null && isFinite(n.lat)) {
+        if (n.lat < 0) { latTxt = 'timeout'; latCls = 'lat bad'; }
+        else { latTxt = n.lat + ' ms'; latCls = latClass(n.lat); }
+      }
       let flowHtml = '—';
       let flowCls = 'flow muted';
       if (n.flow) {
         flowCls = 'flow';
-        // "250 B↑ · 981 B↓" → colored spans
         const parts = n.flow.split('·').map(s => s.trim());
         const up = parts[0] || '';
         const down = parts[1] || '';
@@ -5216,14 +6727,17 @@
                   <td><span class="pill">${n.type}</span></td>
                   <td class="addr">${n.addr}</td>
                   <td class="name">${n.name}</td>
-                  <td class="${latClass(n.lat)}">${latTxt}</td>
+                  <td class="${latCls}">${latTxt}</td>
                   <td class="${flowCls}">${flowHtml}</td>
                 </tr>`;
     }).join('');
     nodeTable.innerHTML = rows;
     nodeCount.textContent = String(prof.nodes.length);
     selectedName = prof.nodes[0]?.name || '—';
-    selectedLat = prof.nodes[0] ? (prof.nodes[0].lat + ' ms') : '—';
+    {
+      const L = prof.nodes[0]?.lat;
+      selectedLat = (L != null && L >= 0 && isFinite(L)) ? (L + ' ms') : '—';
+    }
     const foot = document.getElementById('sideFoot');
     const footV = document.getElementById('sideFootV');
     if (footV) footV.textContent = prof.foot;
@@ -5231,22 +6745,31 @@
     sortKey = null; sortDir = 1;
     document.querySelectorAll('thead th.sortable').forEach(th => th.removeAttribute('aria-sort'));
     if (searchInput) searchInput.value = '';
-    // refresh hero line for current connection state
-    if (typeof setConnected === 'function') setConnected(connected);
+    // rebind selection anchor to live row (Shift-range after re-render)
+    selectAnchorRow = nodeTable.querySelector('tr.selected')
+      || [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === selectedName)
+      || null;
+    // refresh hero only — do not re-pin connectedName from list selection
+    if (typeof setConnected === 'function') setConnected(connected, { pin: false });
+    else if (typeof refreshConnectedRow === 'function') refreshConnectedRow();
   }
+  // single path: always setActiveGroup → nodes + 订阅设置同步
   document.querySelectorAll('#subSeg button, .seg button[data-sub]').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#subSeg button').forEach(b => {
-        b.classList.remove('active');
-        b.setAttribute('aria-selected', 'false');
-      });
-      btn.classList.add('active');
-      btn.setAttribute('aria-selected', 'true');
       const key = btn.dataset.sub || 'default';
-      renderNodes(key);
-      log('SYS', 'info', '已切换订阅：' + (SUB_PROFILES[key]?.label || key));
+      if (typeof setActiveGroup === 'function') setActiveGroup(key, { logIt: true });
+      else {
+        renderNodes(key);
+        if (typeof syncSubUrlField === 'function') syncSubUrlField();
+      }
     });
   });
+
+  // boot: restore catalog from localStorage (or demo seed if empty)
+  hydrateCatalogOnBoot();
+  window.addEventListener('pagehide', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
+  window.addEventListener('beforeunload', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
+
 
 
   function closeMenus() {
@@ -5309,6 +6832,7 @@
     }
     if (g) g.count = prof.nodes.length;
     if (typeof renderNodes === 'function') renderNodes(gid);
+    if (typeof saveCatalog === 'function') saveCatalog(true);
     log('SYS', 'ok', `已导入 ${added} 个节点` + (added < nodes.length ? `（去重 ${nodes.length - added}）` : '') + ' · ' + (src || ''));
     return added;
   }
@@ -5322,6 +6846,7 @@
         const g = GROUPS.find(x => x.id === gid);
         if (g) {
           g.url = text.trim();
+          if (typeof saveCatalog === 'function') saveCatalog(true);
           if (typeof syncSubUrlField === 'function') syncSubUrlField();
           log('SYS', 'info', '剪贴板为订阅链接，开始更新…');
           await updateSubscription(gid);
@@ -5351,28 +6876,14 @@
           const g = GROUPS.find(x => x.id === gid);
           if (g) {
             g.url = text.trim();
+            if (typeof saveCatalog === 'function') saveCatalog(true);
             log('SYS', 'info', '文件为订阅链接，开始更新…');
             await updateSubscription(gid);
             return;
           }
         }
-        // JSON array of nodes (light)
-        let nodes = parseShareLines(text);
-        if (!nodes.length) {
-          try {
-            const j = JSON.parse(text);
-            const arr = Array.isArray(j) ? j : (j.outbounds || j.proxies || j.nodes || []);
-            if (Array.isArray(arr)) {
-              nodes = arr.map((o, i) => ({
-                name: o.name || o.tag || o.ps || ('节点' + (i + 1)),
-                type: (o.type || o.protocol || 'VLESS').toString(),
-                addr: (o.server || o.address || o.host || '0.0.0.0') + ':' + (o.server_port || o.port || 443),
-                lat: null,
-                flow: null,
-              }));
-            }
-          } catch (_) {}
-        }
+        // share lines / JSON / clash — same path as sub update (keep credentials)
+        let nodes = parseSubscriptionBody(text);
         addNodesToCurrent(nodes, f.name);
       } catch (err) {
         log('SYS', 'warn', '读取文件失败：' + (err && err.message || err));
@@ -5429,12 +6940,20 @@
       'proxy-on': () => {
         document.getElementById('sysToggle').checked = true;
         document.getElementById('sysChip').classList.add('on');
-        log('SYS', 'info', '已开启系统代理');
+        nexusInvoke('set_system_proxy_cmd', { enabled: true }).then(r => {
+          if (r.ok) log('SYS', 'info', String(r.data || '已开启系统代理'));
+          else if (!r.offline && r.error) log('SYS', 'warn', `系统代理: ${r.error}`);
+          else log('SYS', 'info', '已开启系统代理');
+        });
       },
       'proxy-off': () => {
         document.getElementById('sysToggle').checked = false;
         document.getElementById('sysChip').classList.remove('on');
-        log('SYS', 'info', '已关闭系统代理');
+        nexusInvoke('set_system_proxy_cmd', { enabled: false }).then(r => {
+          if (r.ok) log('SYS', 'info', String(r.data || '已关闭系统代理'));
+          else if (!r.offline && r.error) log('SYS', 'warn', `系统代理: ${r.error}`);
+          else log('SYS', 'info', '已关闭系统代理');
+        });
       },
       'proxy-pac': () => log('SYS', 'info', '系统代理：PAC 模式'),
       'tun-on': () => {
@@ -5527,18 +7046,42 @@
     if (id.ok) log('SYS', 'info', `后端 ${id.data?.identifier || 'Nexus'} · ${id.data?.phase || ''}`);
     else log('SYS', 'info', '浏览器预览模式（无 Tauri 后端）');
     const st = await nexusInvoke('store_snapshot');
-    if (st.ok) log('SYS', 'info', `本地配置 ${st.data?.profiles?.length || 0} 节点`);
+    if (st.ok) {
+      const d = st.data || {};
+      log('SYS', 'info', `本地配置 ${d.profiles?.length || 0} 节点 · Tun ${d.tun ? '开' : '关'} · 系统代理 ${d.system_proxy ? '开' : '关'}`);
+      // Throne refresh_status: chips follow spmode_vpn / spmode_system_proxy
+      // UI-only paint — do not re-invoke set_* (would re-apply OS proxy/dns)
+      if (typeof setChipOn === 'function') {
+        setChipOn('tunToggle', 'tunChip', !!d.tun);
+        setChipOn('sysToggle', 'sysChip', !!d.system_proxy);
+        const dns = document.getElementById('dnsToggle');
+        if (dns) {
+          dns.checked = !!d.system_dns;
+          document.getElementById('dnsChip')?.classList.toggle('on', !!d.system_dns);
+        }
+      }
+      if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
+    }
     const w = await nexusInvoke('warp_status');
     if (w.ok) {
       const d = w.data || {};
       const okCli = !!d.installed;
       const mode = String(d.ui_mode || 'udp').toUpperCase();
-      log('SYS', okCli ? 'ok' : 'warn',
-        okCli
-          ? `WARP CLI · ${d.connected ? '已连接' : '未连接'} · Mode ${mode}`
-          : '未找到 warp-cli（请构建时捆绑或安装 Cloudflare WARP）');
+      // Open = WARP off by default (never mirror residual daemon → chip on)
+      if (typeof setChipOn === 'function') {
+        setChipOn('warpToggle', 'warpChip', false, 'warpSwitch');
+      }
       if (okCli && d.connected) {
-        setChipOn('warpToggle', 'warpChip', true, 'warpSwitch');
+        log('SYS', 'info', `WARP CLI · 启动时断开残留连接 · Mode ${mode}`);
+        nexusInvoke('warp_set', { enabled: false }).then(r => {
+          if (r.ok) log('SYS', 'ok', String(r.data || 'warp-cli disconnect'));
+          else if (!r.offline) log('SYS', 'warn', r.error || 'WARP 断开失败');
+        });
+      } else {
+        log('SYS', okCli ? 'ok' : 'warn',
+          okCli
+            ? `WARP CLI · 未连接 · Mode ${mode}`
+            : '未找到 warp-cli（请构建时捆绑或安装 Cloudflare WARP）');
       }
       const ms = document.getElementById('warpModeSelect');
       if (ms && ['UDP','HTTPS','TLS'].includes(mode)) {
@@ -5575,9 +7118,12 @@
     });
   };
   document.getElementById('sysToggle')?.addEventListener('change', (e) => {
-    nexusInvoke('set_system_proxy_cmd', { enabled: !!e.target.checked }).then(r => {
+    const on = !!e.target.checked;
+    document.getElementById('sysChip')?.classList.toggle('on', on);
+    nexusInvoke('set_system_proxy_cmd', { enabled: on }).then(r => {
       if (r.ok) log('SYS', 'info', String(r.data));
       else if (!r.offline && r.error) log('SYS', 'warn', `系统代理: ${r.error}`);
+      if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
     });
   });
   document.getElementById('dnsToggle')?.addEventListener('change', (e) => {

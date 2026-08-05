@@ -1,6 +1,9 @@
 //! GUI-side session: listen unix socket, spawn NexusCore, accept, libcore calls.
 use super::frame::LibcoreClient;
-use super::proto_min::{decode_core_state, decode_error_resp, encode_load_config_core_json};
+use super::proto_min::{
+        decode_core_state, decode_error_resp, decode_query_connections, encode_load_config_core_json,
+        encode_load_config_req, ConnRow,
+    };
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -73,7 +76,99 @@ impl CoreSession {
         PathBuf::from("")
     }
 
+    /// Core child stdout/stderr. Piped+unread → kernel pipe fills → Core blocks
+    /// on write while mixed still LISTENs (sysproxy "stuck").
+    fn core_stdio_sinks() -> (Stdio, Stdio) {
+        let log_path = Self::dirs_core_log();
+        match std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            Ok(f) => {
+                // second handle for stderr (same file)
+                match f.try_clone() {
+                    Ok(f2) => (Stdio::from(f), Stdio::from(f2)),
+                    Err(_) => (Stdio::from(f), Stdio::null()),
+                }
+            }
+            Err(_) => (Stdio::null(), Stdio::null()),
+        }
+    }
+
+    fn dirs_core_log() -> PathBuf {
+        // ~/Library/Logs/Nexus/core.log (macOS); fallback temp
+        if let Some(home) = std::env::var_os("HOME") {
+            let dir = PathBuf::from(home).join("Library/Logs/Nexus");
+            let _ = std::fs::create_dir_all(&dir);
+            return dir.join("core.log");
+        }
+        std::env::temp_dir().join("nexus-core.log")
+    }
+
+    fn core_workdir() -> PathBuf {
+        if let Some(home) = std::env::var_os("HOME") {
+            let dir = PathBuf::from(home).join("Library/Application Support/Nexus");
+            let _ = std::fs::create_dir_all(&dir);
+            return dir;
+        }
+        std::env::temp_dir()
+    }
+
+    /// GUI crash / force-quit leaves NexusCore as ppid=1 with exclusive
+    /// bbolt on cache.db + :2080. Next Start → `initialize cache-file: timeout`.
+    /// Kill every other NexusCore before we spawn (keep `except` = our child).
+    pub fn kill_stray_cores(except: Option<u32>) {
+        let Ok(out) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
+            return;
+        };
+        if !out.status.success() && out.stdout.is_empty() {
+            return;
+        }
+        let me = std::process::id();
+        for tok in String::from_utf8_lossy(&out.stdout).split_whitespace() {
+            let Ok(pid) = tok.parse::<u32>() else { continue };
+            if pid == me {
+                continue;
+            }
+            if except == Some(pid) {
+                continue;
+            }
+            let _ = Command::new("kill")
+                .args(["-TERM", &pid.to_string()])
+                .status();
+        }
+        // brief wait so bbolt / :2080 release
+        std::thread::sleep(Duration::from_millis(250));
+        // stubborn leftovers
+        let Ok(out2) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
+            return;
+        };
+        for tok in String::from_utf8_lossy(&out2.stdout).split_whitespace() {
+            let Ok(pid) = tok.parse::<u32>() else { continue };
+            if pid == me || except == Some(pid) {
+                continue;
+            }
+            let _ = Command::new("kill")
+                .args(["-KILL", &pid.to_string()])
+                .status();
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    pub fn child_pid(&self) -> Option<u32> {
+        self.child.as_ref().map(|c| c.id())
+    }
+
+    /// Absolute cache.db path (must match generate.rs).
+    pub fn cache_db_path() -> PathBuf {
+        Self::core_workdir().join("cache.db")
+    }
+
     pub fn start(core_bin: &Path) -> io::Result<Self> {
+        // Drop orphans first — they hold cache.db exclusively (bbolt).
+        Self::kill_stray_cores(None);
+
         let path = Self::socket_path();
         let _ = std::fs::remove_file(&path);
         let listener = UnixListener::bind(&path)?;
@@ -84,11 +179,16 @@ impl CoreSession {
         }
         listener.set_nonblocking(true)?;
 
+        // File sink (not piped): keeps THRONE_CORE_DEBUG without freezing Core.
+        // cwd under Application Support so relative paths never hit `/` (read-only).
+        let (stdout, stderr) = Self::core_stdio_sinks();
+        let core_cwd = Self::core_workdir();
         let mut child = Command::new(core_bin)
+            .current_dir(&core_cwd)
             .env("THRONE_CORE_SOCKET", &path)
             .env("THRONE_CORE_DEBUG", "1")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stdout(stdout)
+            .stderr(stderr)
             .spawn()?;
 
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -133,10 +233,28 @@ impl CoreSession {
         Ok(decode_error_resp(&data))
     }
 
+    /// Throne Client::Start(LoadConfigReq) — load sing-box config into running Core process.
+    pub fn start_rpc(&mut self, core_json: &str, profile_id: i32) -> Result<Option<String>, String> {
+        let c = self.client.as_mut().ok_or("no client")?;
+        let payload = encode_load_config_req(core_json, Some(profile_id));
+        // Start can take longer than smoke CheckConfig (box create + bind)
+        let data = c
+            .call_timeout("Start", &payload, std::time::Duration::from_secs(60))
+            .map_err(|e| e.to_string())?;
+        Ok(decode_error_resp(&data))
+    }
+
     pub fn stop_rpc(&mut self) -> Result<Option<String>, String> {
         let c = self.client.as_mut().ok_or("no client")?;
         let data = c.call("Stop", &[]).map_err(|e| e.to_string())?;
         Ok(decode_error_resp(&data))
+    }
+
+    /// Throne QueryConnections — live traffic rows for the connection table.
+    pub fn query_connections(&mut self) -> Result<Vec<ConnRow>, String> {
+        let c = self.client.as_mut().ok_or("no client")?;
+        let data = c.call("QueryConnections", &[]).map_err(|e| e.to_string())?;
+        Ok(decode_query_connections(&data))
     }
 
     pub fn stop_core_process(&mut self) -> io::Result<()> {

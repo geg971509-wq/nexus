@@ -42,6 +42,9 @@ namespace Configs {
         // Unix seconds when `latency` was measured; 0 = unknown/never. Lets a
         // consumer decide whether a stored result is still worth trusting.
         qint64 latency_at = 0;
+        // Mux A/B probe: Unknown=0 Yes=1 No=2. Default-on injects only when Yes.
+        int mux_capability = 0;
+        qint64 mux_capability_at = 0;
         QString dl_speed;
         QString ul_speed;
         QString test_country;
@@ -64,6 +67,9 @@ namespace Configs {
         // Always set latency through here: it stamps latency_at, which is what
         // lets consumers judge whether a stored result is still fresh.
         void SetLatency(int ms);
+
+        // 0=unknown 1=yes 2=no; stamps mux_capability_at (0 when unknown).
+        void SetMuxCapability(int cap);
 
         [[nodiscard]] QString DisplayTestResult() const;
 
