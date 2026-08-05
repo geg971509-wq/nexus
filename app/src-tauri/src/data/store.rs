@@ -40,8 +40,6 @@ pub struct Store {
     /// Throne spmode_vpn — default off (needs privilege).
     #[serde(default)]
     pub tun: bool,
-    #[serde(default)]
-    pub system_dns: bool,
 }
 
 fn default_true() -> bool {
@@ -56,7 +54,6 @@ impl Default for Store {
             selected_profile_id: None,
             system_proxy: true,
             tun: false,
-            system_dns: false,
         }
     }
 }

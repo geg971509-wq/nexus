@@ -158,15 +158,28 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         // Throne generate.cpp genTunName(): macOS empty → sing-box CalculateInterfaceName → utunN.
         // Non-empty non-utun name → "bad tun name" on darwin (sing-tun tun_darwin.go).
         // address array (sing-box ≥1.10); inet4_address removed in 1.12.
-        // strict_route default false on non-Windows (Throne SettingsRepo).
+        // Throne SettingsRepo: vpn_tun_ipv4_cidr default 172.19.0.1/24; private_range_bypass true.
+        const TUN_V4: &str = "172.19.0.1/24";
         let mut tun_obj = serde_json::Map::new();
         tun_obj.insert("type".into(), json!("tun"));
         tun_obj.insert("tag".into(), json!("tun-in"));
-        tun_obj.insert("address".into(), json!(["172.19.0.1/30"]));
+        tun_obj.insert("address".into(), json!([TUN_V4]));
         tun_obj.insert("auto_route".into(), json!(true));
         tun_obj.insert("strict_route".into(), json!(false));
-        tun_obj.insert("stack".into(), json!("system"));
+        // Throne SettingsRepo macOS default: gvisor (Windows may use system).
+        tun_obj.insert("stack".into(), json!("gvisor"));
         tun_obj.insert("mtu".into(), json!(9000));
+        // Do NOT set route_address to Tun CIDR (sing-tun allowlist replaces full auto_route).
+        // Carve Tun out of private excludes so Tun+1 DNS stays on-iface while LAN bypasses.
+        tun_obj.insert(
+            "route_exclude_address".into(),
+            Value::Array(
+                private_range_bypass_excluding_tun(TUN_V4)
+                    .into_iter()
+                    .map(Value::String)
+                    .collect(),
+            ),
+        );
         // macOS: omit interface_name (auto utunN). Elsewhere: named device ok.
         #[cfg(not(target_os = "macos"))]
         {
@@ -225,6 +238,110 @@ fn cache_file_path() -> String {
         .join("nexus-cache.db")
         .to_string_lossy()
         .into_owned()
+}
+
+/// Throne TunPrivateBypass::privateRangeBypassExcludingTun — private LAN bypass at OS route
+/// level, with Tun subnet carved out so Core system DNS (Tun+1) is not swallowed by 172.16/12.
+fn private_range_bypass_excluding_tun(tun_cidr: &str) -> Vec<String> {
+    const PRIVATE: &[&str] = &[
+        "127.0.0.0/8",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "224.0.0.0/4",
+        "255.255.255.255/32",
+    ];
+    let tun = parse_v4_cidr(tun_cidr);
+    let mut out = Vec::new();
+    for range_text in PRIVATE {
+        let Some(range) = parse_v4_cidr(range_text) else {
+            out.push((*range_text).to_string());
+            continue;
+        };
+        match tun {
+            Some(t) if cidr_contains_v4(range, t) => {
+                out.extend(subtract_v4_cidr(range, t));
+            }
+            _ => out.push((*range_text).to_string()),
+        }
+    }
+    out
+}
+
+fn parse_v4_cidr(text: &str) -> Option<(u32, u8)> {
+    let (ip, bits_s) = text.split_once('/')?;
+    let bits: u8 = bits_s.parse().ok()?;
+    if bits > 32 {
+        return None;
+    }
+    let parts: Vec<_> = ip.split('.').collect();
+    if parts.len() != 4 {
+        return None;
+    }
+    let mut host = 0u32;
+    for p in parts {
+        let o: u8 = p.parse().ok()?;
+        host = (host << 8) | u32::from(o);
+    }
+    let mask = if bits == 0 {
+        0
+    } else {
+        u32::MAX << (32 - bits)
+    };
+    Some((host & mask, bits))
+}
+
+fn format_v4_cidr(network: u32, bits: u8) -> String {
+    format!(
+        "{}.{}.{}.{}/{}",
+        (network >> 24) & 0xff,
+        (network >> 16) & 0xff,
+        (network >> 8) & 0xff,
+        network & 0xff,
+        bits
+    )
+}
+
+fn cidr_contains_v4(outer: (u32, u8), inner: (u32, u8)) -> bool {
+    let (outer_net, outer_bits) = outer;
+    let (inner_net, inner_bits) = inner;
+    if outer_bits > inner_bits {
+        return false;
+    }
+    let mask = if outer_bits == 0 {
+        0
+    } else {
+        u32::MAX << (32 - outer_bits)
+    };
+    (inner_net & mask) == (outer_net & mask)
+}
+
+/// base \ hole as CIDR list; hole must sit inside base (Throne subtractV4Cidr).
+fn subtract_v4_cidr(base: (u32, u8), hole: (u32, u8)) -> Vec<String> {
+    if !cidr_contains_v4(base, hole) {
+        return vec![format_v4_cidr(base.0, base.1)];
+    }
+    if base.1 == hole.1 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut cur_net = base.0;
+    let mut cur_bits = base.1;
+    while cur_bits < hole.1 {
+        cur_bits += 1;
+        let bit = 1u32 << (32 - cur_bits);
+        let left = cur_net;
+        let right = cur_net | bit;
+        if (hole.0 & bit) == 0 {
+            out.push(format_v4_cidr(right, cur_bits));
+            cur_net = left;
+        } else {
+            out.push(format_v4_cidr(left, cur_bits));
+            cur_net = right;
+        }
+    }
+    out
 }
 
 /// Build config from an explicit outbound (UI-selected share link / JSON).
@@ -320,7 +437,17 @@ mod tests {
             .iter()
             .find(|i| i["type"] == "tun")
             .expect("tun inbound");
-        assert_eq!(tun["address"][0], "172.19.0.1/30");
+        assert_eq!(tun["address"][0], "172.19.0.1/24");
+        assert_eq!(tun["stack"], "gvisor");
+        let excl = tun["route_exclude_address"]
+            .as_array()
+            .expect("route_exclude_address");
+        let excl_s: Vec<_> = excl.iter().filter_map(|v| v.as_str()).collect();
+        assert!(excl_s.contains(&"10.0.0.0/8"));
+        assert!(excl_s.contains(&"192.168.0.0/16"));
+        // Tun /24 carved out of 172.16.0.0/12 — full /12 must not remain.
+        assert!(!excl_s.iter().any(|s| *s == "172.16.0.0/12"));
+        assert!(!excl_s.iter().any(|s| *s == "172.19.0.0/24"));
         #[cfg(target_os = "macos")]
         {
             assert!(
@@ -332,6 +459,16 @@ mod tests {
         {
             assert_eq!(tun["interface_name"], "nexus-tun");
         }
+    }
+
+    #[test]
+    fn private_bypass_carves_tun_from_172_16() {
+        let list = private_range_bypass_excluding_tun("172.19.0.1/24");
+        assert!(list.contains(&"10.0.0.0/8".into()));
+        assert!(!list.iter().any(|s| s == "172.16.0.0/12"));
+        // hole 172.19.0.0/24 → siblings cover the rest of 172.16/12
+        assert!(list.iter().any(|s| s.starts_with("172.")));
+        assert!(!list.iter().any(|s| s == "172.19.0.0/24"));
     }
     #[test]
     fn route_defaults_proxy_final() {

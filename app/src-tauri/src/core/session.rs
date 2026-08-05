@@ -303,6 +303,28 @@ impl CoreSession {
         let _ = std::fs::remove_file(&self.listener_path);
         Ok(())
     }
+
+    /// True if any NexusCore process is still alive (incl. orphan after GUI quit).
+    pub fn core_process_alive() -> bool {
+        let Ok(out) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
+            return false;
+        };
+        if out.stdout.is_empty() {
+            return false;
+        }
+        let me = std::process::id();
+        String::from_utf8_lossy(&out.stdout)
+            .split_whitespace()
+            .filter_map(|t| t.parse::<u32>().ok())
+            .any(|pid| pid != me)
+    }
+
+    /// Mixed inbound still accepting (tunnel Start left it up even if GUI SESSION died).
+    pub fn mixed_port_open(port: u16) -> bool {
+        use std::net::{SocketAddr, TcpStream};
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
+    }
 }
 
 /// Process-wide optional session for Tauri commands (Phase B smoke).

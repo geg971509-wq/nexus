@@ -211,11 +211,3 @@ pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
     }
 }
 
-/// System DNS: intent only until elevation UX exists (Throne needs admin for resolver rewrite).
-pub fn set_system_dns(enabled: bool) -> Result<String, String> {
-    Ok(if enabled {
-        "system_dns intent=on (apply deferred without admin UX)".into()
-    } else {
-        "system_dns intent=off".into()
-    })
-}

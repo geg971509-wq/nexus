@@ -81,6 +81,44 @@ async fn core_query_state() -> Result<serde_json::Value, String> {
     .map_err(|e| format!("core_query_state join: {e}"))?
 }
 
+/// Boot / power sync: store chips + live Core (SESSION QueryState, or orphan process/port).
+/// GUI quit without Stop leaves NexusCore + utun/mixed; power must show 已连接.
+#[tauri::command]
+async fn session_status() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        use data::store::Store;
+        let st = Store::load();
+        let mut rpc_running = false;
+        let mut profile_id = -1i32;
+        let mut has_session = false;
+        if let Ok(mut g) = SESSION.lock() {
+            if let Some(s) = g.as_mut() {
+                has_session = true;
+                if let Ok((r, pid)) = s.query_state() {
+                    rpc_running = r;
+                    profile_id = pid;
+                }
+            }
+        }
+        let process_alive = CoreSession::core_process_alive();
+        let mixed_open = CoreSession::mixed_port_open(2080);
+        // Live tunnel if Start still loaded, or orphan Core still holding mixed/utun.
+        let live = rpc_running || (!has_session && (process_alive || mixed_open));
+        Ok(serde_json::json!({
+            "running": live,
+            "rpc_running": rpc_running,
+            "has_session": has_session,
+            "process_alive": process_alive,
+            "mixed_open": mixed_open,
+            "profile_id": profile_id,
+            "tun": st.tun,
+            "system_proxy": st.system_proxy,
+        }))
+    })
+    .await
+    .map_err(|e| format!("session_status join: {e}"))?
+}
+
 #[tauri::command]
 async fn core_check_config(json: String) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -187,19 +225,6 @@ async fn set_system_proxy_cmd(enabled: bool) -> Result<String, String> {
     })
     .await
     .map_err(|e| format!("system proxy join: {e}"))?
-}
-
-#[tauri::command]
-async fn set_system_dns_cmd(enabled: bool) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        use data::store::Store;
-        let mut st = Store::load();
-        st.system_dns = enabled;
-        st.save()?;
-        sys::set_system_dns(enabled)
-    })
-    .await
-    .map_err(|e| format!("system dns join: {e}"))?
 }
 
 /// Throne set_spmode_vpn: persist + elevate Core (osascript password sheet).
@@ -468,18 +493,24 @@ async fn disconnect_selected() -> Result<serde_json::Value, String> {
 }
 
 fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
-    use core::session::SESSION;
     use data::store::Store;
 
-    // SESSION only for Stop + QueryState; clear OS proxy after unlock.
+    // SESSION for Stop; orphan Core (GUI relaunched) → kill process so power can go off.
     let (stop_err, running, pid, clear_proxy) = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
-        let s = g.as_mut().ok_or("core not started")?;
-        let stop_err = s.stop_rpc()?;
-        let (running, pid) = s.query_state().unwrap_or((false, -1));
-        // Throne profile_stop: if system proxy was on for this session, clear OS (intent may stay on).
-        let clear_proxy = Store::load().system_proxy;
-        (stop_err, running, pid, clear_proxy)
+        if g.is_none() {
+            CoreSession::kill_stray_cores(None);
+            let clear_proxy = Store::load().system_proxy;
+            (None, false, -1i32, clear_proxy)
+        } else {
+            let s = g.as_mut().unwrap();
+            let stop_err = s.stop_rpc()?;
+            let (running, pid) = s.query_state().unwrap_or((false, -1));
+            let clear_proxy = Store::load().system_proxy;
+            let _ = s.stop_core_process();
+            *g = None;
+            (stop_err, running, pid, clear_proxy)
+        }
     };
 
     let mut proxy_note = None;
@@ -589,8 +620,22 @@ async fn net_resolve_hosts(
     .map_err(|e| format!("resolve join: {e}"))
 }
 
+fn shutdown_core_best_effort() {
+    // Quit with Tun/proxy up must not leave orphan NexusCore (power desync on relaunch).
+    let _ = (|| -> Result<(), String> {
+        let mut g = SESSION.lock().map_err(|e| e.to_string())?;
+        if let Some(mut s) = g.take() {
+            let _ = s.stop_rpc();
+            let _ = s.stop_core_process();
+        }
+        CoreSession::kill_stray_cores(None);
+        Ok(())
+    })();
+}
+
 #[tauri::command]
 fn app_quit(app: tauri::AppHandle) {
+    shutdown_core_best_effort();
     app.exit(0);
 }
 
@@ -612,12 +657,12 @@ pub fn run() {
             qr_svg,
             core_start,
             core_query_state,
+            session_status,
             core_check_config,
             core_stop,
             store_snapshot,
             generate_preview,
             set_system_proxy_cmd,
-            set_system_dns_cmd,
             set_tun_cmd,
             connect_selected,
             disconnect_selected,
@@ -655,7 +700,10 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main_window(app),
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        shutdown_core_best_effort();
+                        app.exit(0);
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {

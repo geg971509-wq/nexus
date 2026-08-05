@@ -2075,11 +2075,6 @@
                   <span class="switch" aria-hidden="true"></span>
                   系统代理
                 </label>
-                <label class="toggle" id="dnsChip" title="改写系统 DNS 以配合分流（可在设置中隐藏此开关）">
-                  <input type="checkbox" id="dnsToggle" />
-                  <span class="switch" aria-hidden="true"></span>
-                  系统 DNS
-                </label>
               </div>
             </div>
           </div>
@@ -2203,13 +2198,6 @@
                     <div class="set-right">
                       <span class="set-hint" data-i18n="hint.hideTray">仅保留主窗口入口，不在菜单栏显示</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
-                    </div>
-                  </div>
-                  <div class="set-row">
-                    <div class="set-label" data-i18n="label.showDns">显示系统 DNS 选项</div>
-                    <div class="set-right">
-                      <span class="set-hint" data-i18n="hint.showDns">关闭后隐藏首页「系统 DNS」开关</span>
-                      <div class="set-ctrl"><button type="button" class="switch-only on" id="showDnsSwitch" data-switch aria-pressed="true"></button></div>
                     </div>
                   </div>
                   <div class="set-section" data-i18n="sec.launch">启动与窗口</div>
@@ -2500,13 +2488,6 @@
                     <div class="set-label" data-i18n="label.e090c506">开启系统代理</div>
                     <div class="set-right">
                       <span class="set-hint" data-i18n="hint.4a7d95d3">写入系统 HTTP/HTTPS/SOCKS 代理设置</span>
-                      <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
-                    </div>
-                  </div>
-                  <div class="set-row">
-                    <div class="set-label" data-i18n="label.4ee3e499">修改系统 DNS</div>
-                    <div class="set-right">
-                      <span class="set-hint" data-i18n="hint.56a62864">核心启动时改写系统 DNS 以配合分流</span>
                       <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
@@ -3155,21 +3136,22 @@
           return;
         }
         setConnected(true); // pins connectedName = selectedName at Start success
+        try { localStorage.setItem('nexus.lastConnected', connectedName || selectedName || ''); } catch (_) {}
         const port = r.data?.listen_port || 2080;
         log('OK', 'ok', `隧道已启动 · mixed 127.0.0.1:${port} · ${connectedName || selectedName}`);
         if (r.data?.proxy_note) log('SYS', 'info', r.data.proxy_note);
         if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
       } else {
         log('CORE', 'warn', `Stop 配置档 <span class="node">${connectedName || selectedName}</span>`);
-        // Throne: Stop RPC keeps Core process; fall back to core_stop kill only if needed
+        // Throne: Stop RPC; also kill Core process (orphan after quit left power desynced).
         let r = await nexusInvoke('disconnect_selected');
         if (r && !r.ok && String(r.error || '').includes('core not started')) {
           r = await nexusInvoke('core_stop');
         } else if (r && !r.ok) {
-          // try hard stop
           await nexusInvoke('core_stop');
         }
         setConnected(false);
+        try { localStorage.removeItem('nexus.lastConnected'); } catch (_) {}
         log('OK', 'ok', '已断开（Stop）');
         if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
       }
@@ -4891,7 +4873,7 @@
   let GROUPS = [
     { id: 'default', name: 'Default', count: 11, url: '', autoUpdate: true },
     // ponytail: no fake sub host — empty URL skips update (Throne should_skip); demo nodes stay fixed until user sets a real link
-    { id: 'backup', name: '备用', count: 5, url: '', autoUpdate: false },
+    { id: 'backup', name: '备用', count: 0, url: '', autoUpdate: false },
   ];
   let groupEditId = null;
   let groupEditMode = 'edit'; // edit | create | rename
@@ -5019,9 +5001,22 @@
     }
     return o;
   }
+  function stripDemoBackupNodes() {
+    // old seed filled 备用 with 5 fake nodes; default is empty
+    const DEMO = new Set(['备用-东京A', '备用-新加坡B', '备用-香港C', '备用-美西D', '备用-法兰克福E']);
+    const bag = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES : null;
+    if (!bag || !bag.backup || !Array.isArray(bag.backup.nodes)) return false;
+    const before = bag.backup.nodes.length;
+    bag.backup.nodes = bag.backup.nodes.filter(n => n && !DEMO.has(n.name));
+    if (bag.backup.nodes.length === before) return false;
+    const g = (GROUPS || []).find(x => x.id === 'backup');
+    if (g) g.count = bag.backup.nodes.length;
+    return true;
+  }
   function hydrateCatalogOnBoot() {
     const data = loadCatalog();
     if (data && applyCatalog(data)) {
+      const stripped = stripDemoBackupNodes();
       // persist repairs so next Start sees fixed outbound without re-import
       try { if (typeof saveCatalog === 'function') saveCatalog(true); } catch (_) {}
       if (typeof syncSubSegFromGroups === 'function') syncSubSegFromGroups();
@@ -5035,10 +5030,10 @@
       }
       if (typeof syncSubSettingsFromActiveGroup === 'function') syncSubSettingsFromActiveGroup();
       const n = GROUPS.reduce((s, g) => s + (g.count | 0), 0);
-      try { log('SYS', 'info', `已恢复订阅 · ${GROUPS.length} 组 · ${n} 节点`); } catch (_) {}
+      try { log('SYS', 'info', `已恢复订阅 · ${GROUPS.length} 组 · ${n} 节点` + (stripped ? ' · 已清空演示备用' : '')); } catch (_) {}
       return true;
     }
-    // no snapshot: keep demo seed, still paint
+    // no snapshot: default seed (备用 empty)
     if (typeof renderNodes === 'function') renderNodes(GROUPS[0]?.id || 'default');
     return false;
   }
@@ -5746,25 +5741,6 @@
   // clear placeholder on focus/input handled by existing field helpers; ensure sync when opening 订阅 panel
   const _showViewSub = typeof showView === 'function' ? null : null;
 
-  // ——— system DNS chip + settings show/hide ———
-  bindChip('dnsToggle', 'dnsChip', '已开启系统 DNS', '已关闭系统 DNS');
-  function applyShowDns(on) {
-    const chip = document.getElementById('dnsChip');
-    if (chip) chip.style.display = on ? '' : 'none';
-    const sw = document.getElementById('showDnsSwitch');
-    if (sw) {
-      sw.classList.toggle('on', on);
-      sw.setAttribute('aria-pressed', String(on));
-    }
-  }
-  document.getElementById('showDnsSwitch')?.addEventListener('click', () => {
-    setTimeout(() => {
-      const on = document.getElementById('showDnsSwitch')?.classList.contains('on');
-      applyShowDns(!!on);
-      log('SYS', 'info', on ? '已显示系统 DNS 选项' : '已隐藏系统 DNS 选项');
-    }, 0);
-  });
-
   // ——— tray float: mirror home chips / store (same paths as settings) ———
   const trayFloat = document.getElementById('trayFloat');
   function closeTrayFloat() {
@@ -6205,7 +6181,6 @@
       'label.1a03f672': 'MTU',
       'label.2ca08bab': '自动更新订阅',
       'label.3bed1a91': 'IPv4 CIDR',
-      'label.4ee3e499': '修改系统 DNS',
       'label.5f2e3188': '系统代理旁路',
       'label.728c7d71': '订阅链接',
       'label.85341566': '清除订阅代理前缀',
@@ -6251,7 +6226,6 @@
       'label.routeProfile': '路由配置档',
       'label.ruleMirror': '远程规则集镜像',
       'label.ruleTimeout': '决策超时',
-      'label.showDns': '显示系统 DNS 选项',
       'label.showMain': '开启时显示主窗口',
       'label.sniff': '启用嗅探',
       'label.sniffOverride': '覆盖目标地址',
@@ -6271,7 +6245,6 @@
       'hint.4382ce79': '按规则集拦截广告域名',
       'hint.44584962': '多久检查一次订阅与规则',
       'hint.4a7d95d3': '写入系统 HTTP/HTTPS/SOCKS 代理设置',
-      'hint.56a62864': '核心启动时改写系统 DNS 以配合分流',
       'hint.67558c6e': '由核心管理 Tun 默认路由',
       'hint.6ec41acc': '去掉节点名前的地区/套餐前缀',
       'hint.7caf7245': '单连接承载多路请求；默认仅对探测支持 mux 的节点开启（unknown/no 不注入）',
@@ -6314,7 +6287,6 @@
       'hint.ruleMirror': '拉取 GeoIP/域名规则时的 CDN 源；访问 GitHub 慢可换 jsDelivr',
       'hint.ruleTable': '轻量示意：域名匹配 → 出站；完整规则 DSL 在 Qt 实现',
       'hint.ruleTimeout': '路由判定最长等待；0 为不限制',
-      'hint.showDns': '关闭后隐藏首页「系统 DNS」开关',
       'hint.sniff': '从流量中识别真实域名与协议，改善分流',
       'hint.sniffOverride': '用嗅探到的域名改写连接目标',
       'hint.sniffTimeout': '等待协议特征的最长时间',
@@ -6419,7 +6391,6 @@
       'label.1a03f672': 'MTU',
       'label.2ca08bab': 'Auto-update subscriptions',
       'label.3bed1a91': 'IPv4 CIDR',
-      'label.4ee3e499': 'Modify system DNS',
       'label.5f2e3188': 'System proxy bypass',
       'label.728c7d71': 'Subscription URL',
       'label.85341566': 'Strip sub name prefixes',
@@ -6465,7 +6436,6 @@
       'label.routeProfile': 'Routing profile',
       'label.ruleMirror': 'Rule-set mirror',
       'label.ruleTimeout': 'Decision timeout',
-      'label.showDns': 'Show system DNS option',
       'label.showMain': 'Show main window on launch',
       'label.sniff': 'Enable sniffing',
       'label.sniffOverride': 'Override destination',
@@ -6485,7 +6455,6 @@
       'hint.4382ce79': 'Block ad domains via rule sets',
       'hint.44584962': 'How often to check subscriptions and rules',
       'hint.4a7d95d3': 'Write system HTTP/HTTPS/SOCKS proxy settings',
-      'hint.56a62864': 'Rewrite system DNS when core starts to aid routing',
       'hint.67558c6e': 'Let the core manage Tun default routes',
       'hint.6ec41acc': 'Strip region/plan prefixes from node names',
       'hint.7caf7245': 'Multiplex many requests on one connection; only nodes probed as mux-capable (skip unknown/no)',
@@ -6528,7 +6497,6 @@
       'hint.ruleMirror': 'CDN for GeoIP/domain rules; use jsDelivr if GitHub is slow',
       'hint.ruleTable': 'Lightweight demo: domain → outbound; full DSL is in Qt',
       'hint.ruleTimeout': 'Max wait for routing decision; 0 = unlimited',
-      'hint.showDns': 'When off, hide the home “System DNS” switch',
       'hint.sniff': 'Detect real domain/protocol from traffic for better routing',
       'hint.sniffOverride': 'Rewrite destination with sniffed domain',
       'hint.sniffTimeout': 'Max wait for protocol fingerprints',
@@ -6633,7 +6601,6 @@
       'label.1a03f672': 'MTU',
       'label.2ca08bab': 'Автообновление подписок',
       'label.3bed1a91': 'IPv4 CIDR',
-      'label.4ee3e499': 'Менять системный DNS',
       'label.5f2e3188': 'Обход системного прокси',
       'label.728c7d71': 'Ссылка подписки',
       'label.85341566': 'Убирать префиксы узлов',
@@ -6679,7 +6646,6 @@
       'label.routeProfile': 'Профиль маршрутов',
       'label.ruleMirror': 'Зеркало наборов правил',
       'label.ruleTimeout': 'Таймаут решения',
-      'label.showDns': 'Показать системный DNS',
       'label.showMain': 'Показывать окно при запуске',
       'label.sniff': 'Включить sniff',
       'label.sniffOverride': 'Переопределять адрес',
@@ -6699,7 +6665,6 @@
       'hint.4382ce79': 'Блокировать рекламные домены наборами правил',
       'hint.44584962': 'Как часто проверять подписки и правила',
       'hint.4a7d95d3': 'Записывать системные HTTP/HTTPS/SOCKS прокси',
-      'hint.56a62864': 'При старте ядра менять системный DNS для маршрутизации',
       'hint.67558c6e': 'Ядро управляет маршрутами Tun по умолчанию',
       'hint.6ec41acc': 'Убирать регион/тариф из имён узлов',
       'hint.7caf7245': 'Несколько запросов в одном соединении; только узлы с mux (unknown/no не включаются)',
@@ -6742,7 +6707,6 @@
       'hint.ruleMirror': 'CDN для GeoIP/доменов; jsDelivr при медленном GitHub',
       'hint.ruleTable': 'Демо: домен → исходящий; полный DSL в Qt',
       'hint.ruleTimeout': 'Макс. ожидание решения; 0 — без лимита',
-      'hint.showDns': 'Выкл. — скрыть переключатель «Системный DNS» на главной',
       'hint.sniff': 'Определять домен/протокол из трафика',
       'hint.sniffOverride': 'Подменять цель sniffer-доменом',
       'hint.sniffTimeout': 'Ожидание отпечатков протокола',
@@ -6847,7 +6811,6 @@
       'label.1a03f672': 'MTU',
       'label.2ca08bab': '自動更新訂閱',
       'label.3bed1a91': 'IPv4 CIDR',
-      'label.4ee3e499': '修改系統 DNS',
       'label.5f2e3188': '系統代理旁路',
       'label.728c7d71': '訂閱連結',
       'label.85341566': '清除訂閱代理前綴',
@@ -6893,7 +6856,6 @@
       'label.routeProfile': '路由設定檔',
       'label.ruleMirror': '遠端規則集鏡像',
       'label.ruleTimeout': '決策逾時',
-      'label.showDns': '顯示系統 DNS 選項',
       'label.showMain': '啟動時顯示主視窗',
       'label.sniff': '啟用嗅探',
       'label.sniffOverride': '覆蓋目標位址',
@@ -6913,7 +6875,6 @@
       'hint.4382ce79': '按規則集攔截廣告網域',
       'hint.44584962': '多久檢查一次訂閱與規則',
       'hint.4a7d95d3': '寫入系統 HTTP/HTTPS/SOCKS 代理設定',
-      'hint.56a62864': '核心啟動時改寫系統 DNS 以配合分流',
       'hint.67558c6e': '由核心管理 Tun 預設路由',
       'hint.6ec41acc': '去掉節點名前的地區/方案前綴',
       'hint.7caf7245': '單連線承載多路請求；預設僅對探測支援 mux 的節點開啟（unknown/no 不注入）',
@@ -6956,7 +6917,6 @@
       'hint.ruleMirror': '拉取 GeoIP/網域規則時的 CDN 源；存取 GitHub 慢可換 jsDelivr',
       'hint.ruleTable': '輕量示意：網域匹配 → 出站；完整規則 DSL 在 Qt 實作',
       'hint.ruleTimeout': '路由判定最長等待；0 為不限制',
-      'hint.showDns': '關閉後隱藏首頁「系統 DNS」開關',
       'hint.sniff': '從流量中識別真實網域與協定，改善分流',
       'hint.sniffOverride': '用嗅探到的網域改寫連線目標',
       'hint.sniffTimeout': '等待協定特徵的最長時間',
@@ -7422,13 +7382,7 @@
     backup: {
       label: '备用',
       foot: '未配置订阅源',
-      nodes: [
-        { name: '备用-东京A', type: 'VLESS', addr: '13.230.12.8:443', lat: null, flow: null },
-        { name: '备用-新加坡B', type: 'Trojan', addr: '47.74.11.22:443', lat: null, flow: null },
-        { name: '备用-香港C', type: 'VLESS', addr: '103.21.244.15:443', lat: null, flow: null },
-        { name: '备用-美西D', type: 'SS', addr: '104.21.33.9:8388', lat: null, flow: null },
-        { name: '备用-法兰克福E', type: 'VLESS', addr: '185.199.108.55:443', lat: null, flow: null },
-      ]
+      nodes: []
     }
   };
   function latClass(ms) {
@@ -7786,20 +7740,41 @@
     const st = await nexusInvoke('store_snapshot');
     if (st.ok) {
       const d = st.data || {};
-      log('SYS', 'info', `本地配置 ${d.profiles?.length || 0} 节点 · Tun ${d.tun ? '开' : '关'} · 系统代理 ${d.system_proxy ? '开' : '关'}`);
-      // Throne refresh_status: chips follow spmode_vpn / spmode_system_proxy
-      // UI-only paint — do not re-invoke set_* (would re-apply OS proxy/dns)
+      // Chips = spmode preference (store). Power = live tunnel (SESSION or orphan Core).
       if (typeof setChipOn === 'function') {
         setChipOn('tunToggle', 'tunChip', !!d.tun);
         setChipOn('sysToggle', 'sysChip', !!d.system_proxy);
-        const dns = document.getElementById('dnsToggle');
-        if (dns) {
-          dns.checked = !!d.system_dns;
-          document.getElementById('dnsChip')?.classList.toggle('on', !!d.system_dns);
-        }
       }
-      if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
+      log('SYS', 'info', `本地配置 ${d.profiles?.length || 0} 节点 · Tun ${d.tun ? '开' : '关'} · 系统代理 ${d.system_proxy ? '开' : '关'}`);
     }
+    // Power sync: GUI quit while Tun/Start left NexusCore alive → show 已连接, not 未连接.
+    try {
+      const ss = await nexusInvoke('session_status');
+      if (ss && ss.ok && ss.data && ss.data.running) {
+        if (typeof setChipOn === 'function') {
+          if (ss.data.tun != null) setChipOn('tunToggle', 'tunChip', !!ss.data.tun);
+          if (ss.data.system_proxy != null) setChipOn('sysToggle', 'sysChip', !!ss.data.system_proxy);
+        }
+        let pinName = '';
+        try { pinName = localStorage.getItem('nexus.lastConnected') || ''; } catch (_) {}
+        if (pinName && typeof selectedName !== 'undefined') {
+          selectedName = pinName;
+          connectedName = pinName;
+          const row = nodeTable && [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === pinName);
+          if (row) {
+            nodeTable.querySelectorAll('tr.selected').forEach(r => r.classList.remove('selected'));
+            row.classList.add('selected');
+          }
+        }
+        if (typeof setConnected === 'function') setConnected(true, { pin: !!pinName });
+        const bits = [];
+        if (ss.data.process_alive) bits.push('Core 进程');
+        if (ss.data.mixed_open) bits.push('mixed:2080');
+        if (ss.data.rpc_running) bits.push('RPC');
+        log('OK', 'ok', '已同步连接状态 · ' + (bits.join(' · ') || '隧道仍在'));
+      }
+    } catch (_) {}
+    if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
 }
   const _applyTun = applyTun;
   applyTun = function(on, opts) {
@@ -7854,12 +7829,6 @@
       if (r.ok) log('SYS', 'info', String(r.data));
       else if (!r.offline && r.error) log('SYS', 'warn', `系统代理: ${r.error}`);
       if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
-    });
-  });
-  document.getElementById('dnsToggle')?.addEventListener('change', (e) => {
-    nexusInvoke('set_system_dns_cmd', { enabled: !!e.target.checked }).then(r => {
-      if (r.ok) log('SYS', 'info', String(r.data));
-      else if (!r.offline && r.error) log('SYS', 'warn', `系统 DNS: ${r.error}`);
     });
   });
   syncSubUrlField();
