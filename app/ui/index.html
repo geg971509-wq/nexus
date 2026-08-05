@@ -577,27 +577,6 @@
   }
   .window.sidebar-collapsed .side-collapse svg { transform: rotate(180deg); }
   .window.sidebar-collapsed .side-collapse .side-label { display: none; }
-  .side-foot {
-    margin-top: 4px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    background: var(--fill-3);
-    overflow: hidden;
-    transition: opacity .15s var(--ease), padding .2s var(--ease);
-  }
-  .side-foot .k {
-    font-size: 10px;
-    color: var(--tertiary);
-    margin-bottom: 2px;
-  }
-  .side-foot .v {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--secondary);
-    font-family: var(--mono);
-    word-break: break-all;
-    line-height: 1.35;
-  }
   /* Collapsed: icon rail */
   .window.sidebar-collapsed .sidebar {
     padding: 10px 8px 12px;
@@ -622,24 +601,6 @@
   .window.sidebar-collapsed .side-item.active::before {
     top: 9px;
     bottom: 9px;
-  }
-  .window.sidebar-collapsed .side-foot {
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    display: grid;
-    place-items: center;
-    border-radius: 8px;
-  }
-  .window.sidebar-collapsed .side-foot .k,
-  .window.sidebar-collapsed .side-foot .v { display: none; }
-  .window.sidebar-collapsed .side-foot::after {
-    content: '';
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--blue);
-    box-shadow: 0 0 0 3px var(--blue-soft);
   }
 
   /* Main — views fill the pane */
@@ -2076,12 +2037,8 @@
         <div class="side-spacer" data-tauri-drag-region aria-hidden="true"></div>
         <button class="side-collapse" id="sideCollapse" title="收窄为图标栏，腾出主区域" aria-label="收窄或展开侧栏" aria-expanded="true" aria-controls="sidebar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6 9 12l6 6"/></svg>
-          <span class="side-label">收窄</span>
+          <span class="side-label" data-i18n="nav.collapse">收窄</span>
         </button>
-        <div class="side-foot" id="sideFoot" data-tauri-drag-region="deep" title="订阅 ">
-          <div class="k" id="sideFootK">订阅</div>
-          <div class="v" id="sideFootV"></div>
-        </div>
         <div class="side-resizer" id="sideResizer" title="拖动调节侧栏宽度" role="separator" aria-orientation="vertical" aria-label="调节侧栏宽度"></div>
       </nav>
 
@@ -6045,7 +6002,10 @@
   function setSidebarCollapsed(collapsed) {
     win.classList.toggle('sidebar-collapsed', collapsed);
     sideCollapse.setAttribute('aria-expanded', String(!collapsed));
-    sideCollapse.title = collapsed ? '展开侧栏' : '收窄侧栏';
+    sideCollapse.title = collapsed
+      ? (typeof t === 'function' ? t('nav.expandTitle') : '展开侧栏')
+      : (typeof t === 'function' ? t('nav.collapseTitle') : '收窄侧栏');
+    sideCollapse.setAttribute('aria-label', sideCollapse.title);
     // Inline --sidebar (from drag/load) beats .sidebar-collapsed CSS.
     // Collapse: drop inline so --sidebar-collapsed (56px) wins; expand: restore remembered width.
     if (collapsed) win.style.removeProperty('--sidebar');
@@ -6186,6 +6146,9 @@
   };
   const I18N = {
     'zh-CN': {
+      'nav.collapse': '收窄',
+      'nav.collapseTitle': '收窄侧栏',
+      'nav.expandTitle': '展开侧栏',
       'nav.home': '节点',
       'nav.routing': '路由',
       'nav.settings': '设置',
@@ -6397,6 +6360,9 @@
       'th.outbound': '出站',
     },
     'en': {
+      'nav.collapse': 'Collapse',
+      'nav.collapseTitle': 'Collapse sidebar',
+      'nav.expandTitle': 'Expand sidebar',
       'nav.home': 'Nodes',
       'nav.routing': 'Routing',
       'nav.settings': 'Settings',
@@ -6608,6 +6574,9 @@
       'th.outbound': 'Outbound',
     },
     'ru': {
+      'nav.collapse': 'Свернуть',
+      'nav.collapseTitle': 'Свернуть боковую панель',
+      'nav.expandTitle': 'Развернуть боковую панель',
       'nav.home': 'Узлы',
       'nav.routing': 'Маршруты',
       'nav.settings': 'Настройки',
@@ -6819,6 +6788,9 @@
       'th.outbound': 'Исходящий',
     },
     'zh-TW': {
+      'nav.collapse': '收窄',
+      'nav.collapseTitle': '收窄側欄',
+      'nav.expandTitle': '展開側欄',
       'nav.home': '節點',
       'nav.routing': '路由',
       'nav.settings': '設定',
@@ -7098,6 +7070,15 @@
     }
     // language option display stays native names; optional localized in log
     if (typeof refreshSelectLabels === 'function') refreshSelectLabels();
+    const sc = document.getElementById('sideCollapse');
+    if (sc) {
+      const collapsed = document.getElementById('window')?.classList.contains('sidebar-collapsed')
+        || document.body.classList.contains('sidebar-collapsed')
+        || document.querySelector('.window.sidebar-collapsed');
+      const isCollapsed = !!(document.querySelector('.window.sidebar-collapsed'));
+      sc.title = isCollapsed ? t('nav.expandTitle') : t('nav.collapseTitle');
+      sc.setAttribute('aria-label', sc.title);
+    }
     if (logIt) log('SYS', 'info', t('log.lang', { lang: langLabel }));
   }
   const FONT_MAP = {
@@ -7490,10 +7471,6 @@
       const L = prof.nodes[0]?.lat;
       selectedLat = (L != null && L >= 0 && isFinite(L)) ? (L + ' ms') : '—';
     }
-    const foot = document.getElementById('sideFoot');
-    const footV = document.getElementById('sideFootV');
-    if (footV) footV.textContent = prof.foot;
-    if (foot) foot.title = '订阅 ' + prof.foot;
     sortKey = null; sortDir = 1;
     document.querySelectorAll('thead th.sortable').forEach(th => th.removeAttribute('aria-sort'));
     if (searchInput) searchInput.value = '';
