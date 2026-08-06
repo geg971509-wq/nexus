@@ -2032,6 +2032,10 @@
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5h15M4.5 12h15M4.5 16.5h10"/><path d="m16.5 15 2.5 2.5L22 14"/></svg></span>
           <span class="side-label" data-i18n="nav.sub">订阅</span>
         </button>
+        <button class="side-item" data-view="block" title="拦截域名与 IP">
+          <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.25"/><path d="M6.2 6.2 17.8 17.8"/></svg></span>
+          <span class="side-label" data-i18n="nav.block">拦截</span>
+        </button>
         <button class="side-item" data-view="settings" data-settings="basic" title="界面、启动与核心">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.24.3.4.65.5 1.02.1.36.15.74.15 1.13s-.05.77-.15 1.13c-.1.37-.26.72-.5 1.02Z"/></svg></span>
           <span class="side-label" data-i18n="nav.settings">设置</span>
@@ -2159,6 +2163,22 @@
             </table>
           </div>
         </section>
+        </section>
+
+        <section class="view view-block" id="view-block" hidden>
+          <div class="settings">
+            <div class="settings-head">拦截列表</div>
+            <div class="settings-body">
+              <div class="set-card" style="padding:16px 18px;">
+                <div class="block-add-row" style="display:flex;gap:8px;margin-bottom:12px;">
+                  <input type="text" id="blockHostInput" placeholder="域名或 IP" title="例如 ads.example.com 或 1.2.3.4" style="flex:1;min-width:0;" />
+                  <button type="button" class="tb-btn solid" id="blockAddBtn">添加</button>
+                </div>
+                <div id="blockEmpty" class="set-hint" hidden>暂无拦截项。可在底部「连接」表右键目标 → Block。</div>
+                <ul id="blockList" class="block-list" style="list-style:none;margin:0;padding:0;"></ul>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="view view-settings" id="view-settings" hidden>
@@ -2716,6 +2736,7 @@
 
   <div class="ctx-menu" id="connCtxMenu" role="menu" aria-label="连接菜单" hidden>
     <button class="menu-item" data-conn-ctx="copy" role="menuitem"><span class="grow">复制</span></button>
+    <button class="menu-item danger" data-conn-ctx="block" role="menuitem"><span class="grow">Block</span></button>
   </div>
 
   <div class="confirm-mask" id="confirmMask" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden>
@@ -5156,6 +5177,121 @@
     try { log('SYS', 'info', `已恢复订阅 · ${GROUPS.length} 组 · ${n} 节点` + (src ? ' · ' + src : '') + (stripped ? ' · 已清空演示节点' : '')); } catch (_) {}
     return true;
   }
+  let blocklistItems = [];
+
+  async function loadBlocklist() {
+    try {
+      const r = await nexusInvoke('blocklist_get');
+      if (r && r.offline) return blocklistItems;
+      if (!r || !r.ok) {
+        if (r && r.error) log('SYS', 'warn', '读取拦截列表失败：' + r.error);
+        return blocklistItems;
+      }
+      const items = (r.data && Array.isArray(r.data.items)) ? r.data.items : [];
+      blocklistItems = items.slice();
+      renderBlocklist(blocklistItems);
+      return blocklistItems;
+    } catch (e) {
+      try { log('SYS', 'warn', '读取拦截列表失败：' + (e && e.message || e)); } catch (_) {}
+      return blocklistItems;
+    }
+  }
+
+  function renderBlocklist(items) {
+    const ul = document.getElementById('blockList');
+    const empty = document.getElementById('blockEmpty');
+    if (!ul) return;
+    const list = Array.isArray(items) ? items : [];
+    if (empty) empty.hidden = list.length > 0;
+    ul.innerHTML = list.map((h, i) => (
+      `<li class="block-row" data-host="${escHtml(h)}" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--separator);">
+        <span class="grow" style="font-family:var(--mono);font-size:12.5px;">${escHtml(h)}</span>
+        <button type="button" class="tb-btn" data-block-del="${i}">删除</button>
+      </li>`
+    )).join('');
+    ul.querySelectorAll('[data-block-del]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const idx = Number(btn.getAttribute('data-block-del'));
+        if (!Number.isFinite(idx)) return;
+        const next = blocklistItems.slice();
+        next.splice(idx, 1);
+        await saveBlocklist(next, { reason: 'delete' });
+      });
+    });
+  }
+
+  async function applyBlocklistLive() {
+    if (typeof connected === 'undefined' || !connected) return;
+    const name = (typeof connectedName !== 'undefined' && connectedName) || selectedName;
+    const payload = (typeof nodeConnectPayload === 'function') ? nodeConnectPayload(name) : null;
+    if (!payload) {
+      log('SYS', 'warn', '已记录但配置未生效，请手动重连');
+      return;
+    }
+    try {
+      log('CORE', 'info', '应用拦截列表 · 重载配置');
+      const r = await nexusInvoke('connect_selected', Object.assign({
+        profile_id: 1,
+        tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
+        system_proxy: !!document.getElementById('sysToggle')?.checked,
+      }, payload));
+      if (!r || r.offline || !r.ok || r.data?.start_error || !r.data?.started) {
+        log('SYS', 'warn', '已记录但配置未生效，请手动重连'
+          + (r?.data?.start_error ? ('：' + r.data.start_error) : (r?.error ? ('：' + r.error) : '')));
+        return;
+      }
+      log('OK', 'ok', '拦截规则已应用');
+    } catch (e) {
+      log('SYS', 'warn', '已记录但配置未生效，请手动重连：' + (e && e.message || e));
+    }
+  }
+
+  async function saveBlocklist(items, { reason } = {}) {
+    try {
+      const r = await nexusInvoke('blocklist_put', { items });
+      if (r && r.offline) {
+        log('SYS', 'warn', '后端未就绪，无法保存拦截列表');
+        return false;
+      }
+      if (!r || !r.ok || !r.data || !Array.isArray(r.data.items)) {
+        log('SYS', 'warn', '保存拦截列表失败' + (r && r.error ? ('：' + r.error) : ''));
+        return false;
+      }
+      blocklistItems = r.data.items;
+      renderBlocklist(blocklistItems);
+      log('SYS', 'ok', reason === 'delete' ? '已移除拦截项' : '拦截列表已更新');
+      await applyBlocklistLive();
+      return true;
+    } catch (e) {
+      log('SYS', 'warn', '保存拦截列表失败：' + (e && e.message || e));
+      return false;
+    }
+  }
+
+  async function addBlockHost(raw) {
+    const host = String(raw || '').trim();
+    if (!host) {
+      log('SYS', 'warn', '无效地址');
+      return false;
+    }
+    if (host.includes('://') || host.includes('/') || /\s/.test(host)) {
+      log('SYS', 'warn', '无效地址');
+      return false;
+    }
+    return saveBlocklist(blocklistItems.concat([host]), { reason: 'add' });
+  }
+
+  document.getElementById('blockAddBtn')?.addEventListener('click', () => {
+    const inp = document.getElementById('blockHostInput');
+    addBlockHost(inp?.value).then(ok => { if (ok && inp) inp.value = ''; });
+  });
+  document.getElementById('blockHostInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('blockAddBtn')?.click();
+    }
+  });
+
   async function hydrateCatalogOnBoot() {
     // store first; migrate LS → store once if store empty
     let fromStore = null;
@@ -5391,8 +5527,14 @@
     if (!row) { closeConnCtxMenu(); return; }
     openConnCtxMenu(e.clientX, e.clientY);
   });
+  function hostFromConnRow(row) {
+    if (!row) return '';
+    const raw = (row.dataset.dest || '').trim();
+    if (!raw || raw === '—') return '';
+    return raw;
+  }
   document.querySelectorAll('#connCtxMenu [data-conn-ctx]').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const act = btn.dataset.connCtx;
       closeConnCtxMenu();
       if (act === 'copy') {
@@ -5400,6 +5542,19 @@
         if (!text) { log('SYS', 'info', '无可复制连接'); return; }
         copyText(text).then(() => log('SYS', 'ok', '已复制连接：' + text.replace(/\t/g, ' · ')))
           .catch(() => log('SYS', 'ok', '已复制连接（示意）'));
+      } else if (act === 'block') {
+        const host = hostFromConnRow(connCtxRow);
+        if (!host) {
+          log('SYS', 'warn', '无效地址');
+          return;
+        }
+        const key = host.toLowerCase();
+        if (typeof blocklistItems !== 'undefined' && Array.isArray(blocklistItems)
+          && blocklistItems.some(x => String(x).toLowerCase() === key || String(x) === host)) {
+          log('SYS', 'info', '已在拦截列表：' + host);
+          return;
+        }
+        if (typeof addBlockHost === 'function') await addBlockHost(host);
       }
     });
   });
@@ -6216,10 +6371,12 @@
         showView(view, btn.dataset.settings || 'basic', btn.dataset.focus || null);
         if (view === 'settings') beginSettingsSession();
         else setDirty(false);
+        if (view === 'block' && typeof loadBlocklist === 'function') loadBlocklist();
       };
+      const nextView = btn.dataset.view || 'home';
       const leavingSettings = document.getElementById('view-settings')?.classList.contains('active')
-        && (btn.dataset.view || 'home') === 'home';
-      // switching among settings panels keeps session; leaving to home may prompt
+        && nextView !== 'settings';
+      // switching among settings panels keeps session; leaving settings may prompt
       if (leavingSettings && settingsDirty) {
         requestLeaveSettings((action) => {
           if (action === 'save') saveSettings();
@@ -6299,6 +6456,7 @@
       'nav.routing': '路由',
       'nav.settings': '设置',
       'nav.sub': '订阅',
+      'nav.block': '拦截',
       'nav.vpn': '连接',
       'tb.backup': '备用',
       'tb.refresh': '更新',
@@ -6510,6 +6668,7 @@
       'nav.routing': 'Routing',
       'nav.settings': 'Settings',
       'nav.sub': 'Subscription',
+      'nav.block': 'Block',
       'nav.vpn': 'Connection',
       'tb.backup': 'Backup',
       'tb.refresh': 'Update',
@@ -6721,6 +6880,7 @@
       'nav.routing': 'Маршруты',
       'nav.settings': 'Настройки',
       'nav.sub': 'Подписки',
+      'nav.block': 'Блок',
       'nav.vpn': 'Подключение',
       'tb.backup': 'Резерв',
       'tb.refresh': 'Обновить',
@@ -6932,6 +7092,7 @@
       'nav.routing': '路由',
       'nav.settings': '設定',
       'nav.sub': '訂閱',
+      'nav.block': '攔截',
       'nav.vpn': '連線',
       'tb.backup': '備用',
       'tb.refresh': '更新',
@@ -7615,6 +7776,7 @@
   // boot: store catalog first (LS migrate); hide unwired routing/DNS for release UI
   if (typeof hideUnwiredSettings === 'function') hideUnwiredSettings();
   hydrateCatalogOnBoot();
+  if (typeof loadBlocklist === 'function') loadBlocklist();
   window.addEventListener('pagehide', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
   window.addEventListener('beforeunload', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
 
