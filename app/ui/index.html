@@ -5178,6 +5178,7 @@
     return true;
   }
   let blocklistItems = [];
+  let blocklistLoaded = false;
 
   async function loadBlocklist() {
     try {
@@ -5189,6 +5190,7 @@
       }
       const items = (r.data && Array.isArray(r.data.items)) ? r.data.items : [];
       blocklistItems = items.slice();
+      blocklistLoaded = true;
       renderBlocklist(blocklistItems);
       return blocklistItems;
     } catch (e) {
@@ -5222,6 +5224,10 @@
 
   async function applyBlocklistLive() {
     if (typeof connected === 'undefined' || !connected) return;
+    if (typeof powerBusy !== 'undefined' && powerBusy) {
+      log('SYS', 'info', '连接操作进行中，拦截列表已保存，稍后手动重连以生效');
+      return;
+    }
     const name = (typeof connectedName !== 'undefined' && connectedName) || selectedName;
     const payload = (typeof nodeConnectPayload === 'function') ? nodeConnectPayload(name) : null;
     if (!payload) {
@@ -5229,6 +5235,7 @@
       return;
     }
     try {
+      if (typeof powerBusy !== 'undefined') powerBusy = true;
       log('CORE', 'info', '应用拦截列表 · 重载配置');
       const r = await nexusInvoke('connect_selected', Object.assign({
         profile_id: 1,
@@ -5243,11 +5250,14 @@
       log('OK', 'ok', '拦截规则已应用');
     } catch (e) {
       log('SYS', 'warn', '已记录但配置未生效，请手动重连：' + (e && e.message || e));
+    } finally {
+      if (typeof powerBusy !== 'undefined') powerBusy = false;
     }
   }
 
   async function saveBlocklist(items, { reason } = {}) {
     try {
+      if (!blocklistLoaded) await loadBlocklist();
       const r = await nexusInvoke('blocklist_put', { items });
       if (r && r.offline) {
         log('SYS', 'warn', '后端未就绪，无法保存拦截列表');
@@ -5278,6 +5288,7 @@
       log('SYS', 'warn', '无效地址');
       return false;
     }
+    if (!blocklistLoaded) await loadBlocklist();
     return saveBlocklist(blocklistItems.concat([host]), { reason: 'add' });
   }
 
