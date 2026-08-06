@@ -33,7 +33,7 @@
     --separator-opaque: #d2d2d7;
     --label: #1d1d1f;
     --secondary: #6e6e73;
-    --tertiary: #86868b;
+    --tertiary: #6e6e73;
     --quaternary: #aeaeb2;
     --blue: #007aff;
     --blue-soft: rgba(0, 122, 255, 0.12);
@@ -88,7 +88,7 @@
     --foot-bg: rgba(250, 250, 252, 0.92);
     --dock-bg: rgba(255, 255, 255, 0.72);
     --sidebar-bg: linear-gradient(180deg, rgba(244, 244, 248, 0.92) 0%, rgba(239, 239, 244, 0.78) 100%);
-    --section-label: rgba(60, 60, 67, 0.45);
+    --section-label: rgba(60, 60, 67, 0.58);
     --knob: #ffffff;
     --scrim: rgba(0, 0, 0, 0.36);
     --focus-ring: 0 0 0 3px rgba(0, 122, 255, 0.18);
@@ -307,26 +307,6 @@
   .t-r { background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.08); }
   .t-y { background: #febc2e; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.08); }
   .t-g { background: #28c840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.08); }
-  /* app-mark removed (user: 标题栏图标去掉) */
-  .app-mark { display: none !important;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    color: #fff;
-    background: linear-gradient(145deg, #5AC8FA 0%, #0A84FF 50%, #1E3A5F 100%);
-    box-shadow: 0 0.5px 1px rgba(0,0,0,.12);
-  }
-  .app-mark svg {
-    width: 17px;
-    height: 17px;
-    color: #fff;
-  }
-  html[data-theme="dark"] .app-mark {
-    box-shadow: 0 0.5px 2px rgba(0,0,0,.35);
-  }
   .app-name {
     font-size: 13px;
     font-weight: 600;
@@ -398,7 +378,7 @@
     justify-content: center;
     gap: 5px;
     font-size: 12px;
-    font-weight: 550;
+    font-weight: 500;
     color: var(--blue);
     transition: background .15s var(--ease), box-shadow .15s var(--ease);
   }
@@ -536,7 +516,7 @@
   html[data-icons="mono"] .tb-btn:not(.solid) { color: var(--secondary); }
   html[data-icons="mono"] .menu-btn { color: var(--secondary); }
   html[data-icons="mono"] .power:not(.on) { color: var(--secondary); background: var(--fill); }
-  /* Auto: colorful when light, mono when dark (overridden by resolve) */
+  /* Auto: always mono (formal default; Colorful is explicit only) */
 
   .side-spacer {
     flex: 1 1 auto;
@@ -615,7 +595,7 @@
 
   /* Hero connection bar — compact, list is primary */
   .hero {
-    padding: 12px 18px 6px;
+    padding: 14px 20px 10px;
   }
   .hero-card {
     background: var(--hero-card);
@@ -638,8 +618,8 @@
   }
 
   .power {
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     display: grid;
     place-items: center;
@@ -649,7 +629,7 @@
   }
   .power:hover { transform: scale(1.04); background: rgba(120, 120, 128, 0.2); }
   .power:active { transform: scale(0.96); }
-  .power svg { width: 16px; height: 16px; }
+  .power svg { width: 18px; height: 18px; }
   .power.on {
     background: var(--green);
     color: #fff;
@@ -658,8 +638,8 @@
 
   .hero-meta { min-width: 0; }
   .hero-state {
-    font-size: 13.5px;
-    font-weight: 650;
+    font-size: 13px;
+    font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 1.2;
     display: flex;
@@ -687,7 +667,7 @@
   }
   .hero-sub strong {
     color: var(--label);
-    font-weight: 550;
+    font-weight: 500;
   }
 
   .hero-actions {
@@ -709,7 +689,7 @@
     border-radius: 999px;
     background: rgba(120, 120, 128, 0.1);
     font-size: 12px;
-    font-weight: 550;
+    font-weight: 500;
     color: var(--secondary);
     transition: background .15s var(--ease), color .15s var(--ease);
     user-select: none;
@@ -747,7 +727,7 @@
   /* List area — primary focus */
   .list-wrap {
     min-height: 0;
-    padding: 2px 18px 8px;
+    padding: 4px 20px 10px;
     display: grid;
     grid-template-rows: auto 1fr;
     gap: 8px;
@@ -759,7 +739,7 @@
   }
   .list-title {
     font-size: 12px;
-    font-weight: 650;
+    font-weight: 600;
     color: var(--secondary);
     letter-spacing: -0.01em;
   }
@@ -954,7 +934,7 @@
     padding: 0 7px;
     border-radius: 6px;
     font-size: 10px;
-    font-weight: 650;
+    font-weight: 600;
     letter-spacing: 0.02em;
     background: rgba(0, 122, 255, 0.1);
     color: var(--blue);
@@ -1062,7 +1042,7 @@
   }
   .conn-table th {
     text-align: left;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--tertiary);
     padding: 4px 8px 6px;
@@ -1123,7 +1103,7 @@
     align-items: center;
     padding: 0 20px;
     font-size: 15px;
-    font-weight: 650;
+    font-weight: 600;
     letter-spacing: -0.02em;
     color: var(--label);
     border-bottom: 0.5px solid var(--separator);
@@ -1252,7 +1232,7 @@
   /* lighter, smaller section headers (annotation) */
   .set-section {
     padding: 14px 16px 6px;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 500;
     letter-spacing: 0.04em;
     color: var(--section-label);
@@ -1496,7 +1476,7 @@
   .confirm-card h3 {
     margin: 0 0 6px;
     font-size: 15px;
-    font-weight: 650;
+    font-weight: 600;
     color: var(--label);
   }
   .confirm-card p {
@@ -1622,7 +1602,7 @@
   .groups-card { width: min(460px, calc(100vw - 40px)); padding: 20px 20px 16px; }
   .groups-card h3 {
     margin: 0;
-    font: 650 16px/1.25 var(--font);
+    font: 600 16px/1.25 var(--font);
     letter-spacing: -0.02em;
     color: var(--label);
   }
@@ -1655,7 +1635,7 @@
   .rule-table td.domain { font-family: var(--mono); font-size: 11.5px; color: var(--label); }
   .rule-table .pill-out {
     display: inline-block; padding: 1px 7px; border-radius: 5px;
-    background: rgba(0,122,255,.12); color: var(--blue); font-size: 11px; font-weight: 550;
+    background: rgba(0,122,255,.12); color: var(--blue); font-size: 11px; font-weight: 500;
   }
   .rule-table .pill-out.direct { background: rgba(52,199,89,.14); color: var(--green); }
   .qr-box {
@@ -1713,7 +1693,7 @@
     background: var(--fill); border: 0.5px solid var(--separator);
   }
   .stats-cell .k { font-size: 11px; color: var(--tertiary); font-weight: 600; margin-bottom: 4px; }
-  .stats-cell .v { font-size: 13px; color: var(--label); font-weight: 550; font-variant-numeric: tabular-nums; }
+  .stats-cell .v { font-size: 13px; color: var(--label); font-weight: 500; font-variant-numeric: tabular-nums; }
   .stats-cell .v.mono { font-family: var(--mono); font-size: 12px; }
   /* log filter */
   .log-filter {
@@ -1735,7 +1715,7 @@
   .log-filter .lf-chip {
     height: 22px; padding: 0 7px; border-radius: 5px;
     border: 0.5px solid transparent; background: transparent;
-    color: var(--secondary); font-size: 10.5px; font-weight: 550; cursor: pointer;
+    color: var(--secondary); font-size: 11px; font-weight: 500; cursor: pointer;
   }
   .log-filter .lf-chip:hover { background: var(--fill); }
   .log-filter .lf-chip.active { background: rgba(0,122,255,.12); color: var(--blue); }
@@ -7277,11 +7257,8 @@
   }
   function resolveIconMode(label) {
     if (label === 'Colorful') return 'colorful';
-    if (label === 'Auto') {
-      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
-      return dark ? 'mono' : 'colorful';
-    }
-    return 'mono'; // Monochrome default
+    // Monochrome + Auto → mono (formal default)
+    return 'mono';
   }
   function applyIconStyle(iconLabel, { logIt } = {}) {
     const mode = resolveIconMode(iconLabel);
