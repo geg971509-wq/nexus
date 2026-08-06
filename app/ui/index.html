@@ -5205,26 +5205,31 @@
     if (!ul) return;
     const list = Array.isArray(items) ? items : [];
     if (empty) empty.hidden = list.length > 0;
-    ul.innerHTML = list.map((h, i) => (
+    ul.innerHTML = list.map((h) => (
       `<li class="block-row" data-host="${escHtml(h)}" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--separator);">
         <span class="grow" style="font-family:var(--mono);font-size:12.5px;">${escHtml(h)}</span>
-        <button type="button" class="tb-btn" data-block-del="${i}">删除</button>
+        <button type="button" class="tb-btn" data-block-del>删除</button>
       </li>`
     )).join('');
     ul.querySelectorAll('[data-block-del]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const idx = Number(btn.getAttribute('data-block-del'));
-        if (!Number.isFinite(idx)) return;
-        const next = blocklistItems.slice();
-        next.splice(idx, 1);
+        const host = btn.closest('[data-host]')?.dataset.host || '';
+        if (!host) return;
+        if (!blocklistLoaded) await loadBlocklist();
+        if (!blocklistLoaded) {
+          log('SYS', 'warn', '拦截列表未加载，拒绝删除以免清空');
+          return;
+        }
+        const next = blocklistItems.filter(x => x !== host);
         await saveBlocklist(next, { reason: 'delete' });
       });
     });
   }
 
+  let blocklistApplyBusy = false;
   async function applyBlocklistLive() {
     if (typeof connected === 'undefined' || !connected) return;
-    if (typeof powerBusy !== 'undefined' && powerBusy) {
+    if (blocklistApplyBusy || (typeof powerBusy !== 'undefined' && powerBusy)) {
       log('SYS', 'info', '连接操作进行中，拦截列表已保存，稍后手动重连以生效');
       return;
     }
@@ -5234,8 +5239,9 @@
       log('SYS', 'warn', '已记录但配置未生效，请手动重连');
       return;
     }
+    blocklistApplyBusy = true;
+    if (typeof powerBusy !== 'undefined') powerBusy = true;
     try {
-      if (typeof powerBusy !== 'undefined') powerBusy = true;
       log('CORE', 'info', '应用拦截列表 · 重载配置');
       const r = await nexusInvoke('connect_selected', Object.assign({
         profile_id: 1,
@@ -5251,13 +5257,19 @@
     } catch (e) {
       log('SYS', 'warn', '已记录但配置未生效，请手动重连：' + (e && e.message || e));
     } finally {
+      blocklistApplyBusy = false;
       if (typeof powerBusy !== 'undefined') powerBusy = false;
     }
   }
 
   async function saveBlocklist(items, { reason } = {}) {
     try {
+      // full-replace put: never write before a successful get (would wipe store)
       if (!blocklistLoaded) await loadBlocklist();
+      if (!blocklistLoaded) {
+        log('SYS', 'warn', '拦截列表未加载，拒绝写入以免清空');
+        return false;
+      }
       const r = await nexusInvoke('blocklist_put', { items });
       if (r && r.offline) {
         log('SYS', 'warn', '后端未就绪，无法保存拦截列表');
@@ -5268,6 +5280,7 @@
         return false;
       }
       blocklistItems = r.data.items;
+      blocklistLoaded = true;
       renderBlocklist(blocklistItems);
       log('SYS', 'ok', reason === 'delete' ? '已移除拦截项' : '拦截列表已更新');
       await applyBlocklistLive();
@@ -5289,6 +5302,14 @@
       return false;
     }
     if (!blocklistLoaded) await loadBlocklist();
+    if (!blocklistLoaded) {
+      log('SYS', 'warn', '拦截列表未加载，拒绝添加以免清空');
+      return false;
+    }
+    if (blocklistItems.some(x => String(x).toLowerCase() === host.toLowerCase())) {
+      log('SYS', 'info', '已在拦截列表：' + host);
+      return true;
+    }
     return saveBlocklist(blocklistItems.concat([host]), { reason: 'add' });
   }
 
