@@ -926,7 +926,15 @@
   .lat.good { color: var(--lat-good); }
   .lat.mid { color: var(--lat-mid); }
   .lat.bad { color: var(--lat-bad); }
-  /* flow = 流量列 (never reuse .traffic — clashes with traffic-lights) */
+  /* decorative settings not wired to generate */
+  .set-row.unwired { opacity: 0.55; }
+  .set-row.unwired .set-ctrl { pointer-events: none; }
+  .set-row.unwired .set-hint.unwired-tag::before {
+    content: '未接线 · ';
+    color: var(--orange, #ff9f0a);
+    font-weight: 600;
+  }
+    /* flow = 流量列 (never reuse .traffic — clashes with traffic-lights) */
   .flow {
     width: 140px;
     min-width: 140px;
@@ -1994,7 +2002,7 @@
           <div class="menu-wrap test-menu-wrap">
             <button class="tb-btn" id="testBtn" title="测试菜单" aria-haspopup="menu" aria-expanded="false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>
-              <span data-i18n="tb.test">测速</span>
+              <span data-i18n="tb.test">连通</span>
             </button>
             <div class="menu" id="testMenu" role="menu">
               <button class="menu-item" data-test="url-selected" role="menuitem"><span class="grow">URL 测试选定项</span></button>
@@ -3066,16 +3074,23 @@
     const latShow = connected
       ? ((connectedLat && connectedLat !== '—' && connectedLat !== '…') ? connectedLat : '—')
       : ((selectedLat && selectedLat !== '—' && selectedLat !== '…') ? selectedLat : '—');
+    const mismatch = !!(connected && connectedName && selectedName && selectedName !== '—' && selectedName !== connectedName);
     if (typeof t === 'function') {
       statusText.textContent = connected ? t('status.connected') : t('status.disconnected');
-      statusSub.innerHTML = connected
-        ? t('status.subOn', { name: via, lat: latShow })
-        : t('status.subOff', { name: selectedName });
+      if (connected && mismatch) {
+        statusSub.innerHTML = t('status.subMismatch', { tunnel: connectedName, selected: selectedName, lat: latShow });
+      } else {
+        statusSub.innerHTML = connected
+          ? t('status.subOn', { name: via, lat: latShow })
+          : t('status.subOff', { name: selectedName });
+      }
       sbStatus.textContent = connected ? t('sb.running') : t('sb.stopped');
     } else {
       statusText.textContent = connected ? '已连接' : '未连接';
       statusSub.innerHTML = connected
-        ? `经 <strong>${via}</strong> · 延迟 ${latShow}`
+        ? (mismatch
+          ? `当前隧道：<strong>${connectedName}</strong> · 选定：<strong>${selectedName}</strong>（需重新连接）· 延迟 ${latShow}`
+          : `经 <strong>${via}</strong> · 延迟 ${latShow}`)
         : `选择节点后点左侧连接 · 当前 <strong>${selectedName}</strong>`;
       sbStatus.textContent = connected ? '运行中' : '未在运行';
     }
@@ -3425,6 +3440,8 @@
             const sbDirect = document.getElementById('sbDirect');
             if (sbDirect) sbDirect.textContent = '—';
           }
+          if (typeof _flowUpMax !== 'undefined') { _flowUpMax = 0; _flowDownMax = 0; }
+          if (typeof _flowUpMax !== 'undefined') { _flowUpMax = 0; _flowDownMax = 0; }
           log('SYS', 'info', '已重置流量 · ' + targets.length + ' 个节点');
         },
         edit: () => openEditDialog(one),
@@ -3663,7 +3680,7 @@
     urlTesting = true;
     urlTestAbort = false;
     const label = scope === 'group' ? 'URL 测试当前组' : 'URL 测试选定项';
-    log('TEST', 'info', `${label} · ${targets.length} 个节点 · TCP 连通性（逐条刷新）…`);
+    log('TEST', 'info', `${label} · ${targets.length} 个节点 · TCP 直连 RTT（非代理路径）…`);
     // mark pending + index by id for progressive paint
     const byId = new Map();
     for (const t of targets) {
@@ -4918,10 +4935,13 @@
   }
   function saveCatalog(immediate) {
     const run = () => {
-      try {
-        localStorage.setItem(CATALOG_KEY, JSON.stringify(serializeCatalog()));
-      } catch (e) {
-        try { log('SYS', 'warn', '订阅缓存写入失败：' + (e && e.message || e)); } catch (_) {}
+      const blob = serializeCatalog();
+      // Rust store is source of truth; LS kept as best-effort mirror for non-Tauri preview
+      try { localStorage.setItem(CATALOG_KEY, JSON.stringify(blob)); } catch (_) {}
+      if (typeof nexusInvoke === 'function') {
+        nexusInvoke('catalog_put', { blob }).catch(e => {
+          try { log('SYS', 'warn', '订阅写入 store 失败：' + (e && e.message || e)); } catch (_) {}
+        });
       }
     };
     if (immediate) {
@@ -4932,7 +4952,7 @@
     if (_catalogSaveTimer) clearTimeout(_catalogSaveTimer);
     _catalogSaveTimer = setTimeout(() => { _catalogSaveTimer = null; run(); }, 80);
   }
-  function loadCatalog() {
+  function loadCatalogFromLocal() {
     try {
       const raw = localStorage.getItem(CATALOG_KEY);
       if (!raw) return null;
@@ -4943,6 +4963,10 @@
     } catch (_) {
       return null;
     }
+  }
+  function loadCatalog() {
+    // sync path: LS only (boot uses hydrateCatalogOnBoot async store-first)
+    return loadCatalogFromLocal();
   }
   function applyCatalog(data) {
     if (!data) return false;
@@ -5037,27 +5061,61 @@
     }
     return changed;
   }
-  function hydrateCatalogOnBoot() {
-    const data = loadCatalog();
-    if (data && applyCatalog(data)) {
-      const stripped = stripDemoSeedNodes();
-      // persist repairs so next Start sees fixed outbound without re-import
-      try { if (typeof saveCatalog === 'function') saveCatalog(true); } catch (_) {}
-      if (typeof syncSubSegFromGroups === 'function') syncSubSegFromGroups();
-      const want = data.active && GROUPS.some(g => g.id === data.active)
-        ? data.active
-        : (GROUPS[0] && GROUPS[0].id);
-      if (want && typeof setActiveGroup === 'function') {
-        setActiveGroup(want, { render: true, logIt: false });
-      } else if (typeof renderNodes === 'function' && want) {
-        renderNodes(want);
+  function markUnwiredSettings() {
+    // routing/DNS decorative controls — generate hardcodes DoH + simple route
+    const panel = document.getElementById('panel-routing');
+    if (!panel) return;
+    panel.querySelectorAll('.set-row').forEach(row => {
+      row.classList.add('unwired');
+      row.querySelectorAll('button, [contenteditable], .switch-only, .select, .field').forEach(el => {
+        el.setAttribute('aria-disabled', 'true');
+        if (el.tagName === 'BUTTON') el.disabled = true;
+        if (el.isContentEditable) el.contentEditable = 'false';
+      });
+      const hint = row.querySelector('.set-hint');
+      if (hint && !hint.classList.contains('unwired-tag')) hint.classList.add('unwired-tag');
+    });
+  }
+  function applyHydratedCatalog(data, src) {
+    if (!data || !applyCatalog(data)) return false;
+    const stripped = stripDemoSeedNodes();
+    try { if (typeof saveCatalog === 'function') saveCatalog(true); } catch (_) {}
+    if (typeof syncSubSegFromGroups === 'function') syncSubSegFromGroups();
+    const want = data.active && GROUPS.some(g => g.id === data.active)
+      ? data.active
+      : (GROUPS[0] && GROUPS[0].id);
+    if (want && typeof setActiveGroup === 'function') {
+      setActiveGroup(want, { render: true, logIt: false });
+    } else if (typeof renderNodes === 'function' && want) {
+      renderNodes(want);
+    }
+    if (typeof syncSubSettingsFromActiveGroup === 'function') syncSubSettingsFromActiveGroup();
+    const n = GROUPS.reduce((s, g) => s + (g.count | 0), 0);
+    try { log('SYS', 'info', `已恢复订阅 · ${GROUPS.length} 组 · ${n} 节点` + (src ? ' · ' + src : '') + (stripped ? ' · 已清空演示节点' : '')); } catch (_) {}
+    return true;
+  }
+  async function hydrateCatalogOnBoot() {
+    // store first; migrate LS → store once if store empty
+    let fromStore = null;
+    try {
+      if (typeof nexusInvoke === 'function') {
+        const r = await nexusInvoke('catalog_get');
+        const blob = r && r.ok ? r.data : r;
+        if (blob && typeof blob === 'object' && !Array.isArray(blob) && blob.v === 1) fromStore = blob;
       }
-      if (typeof syncSubSettingsFromActiveGroup === 'function') syncSubSettingsFromActiveGroup();
-      const n = GROUPS.reduce((s, g) => s + (g.count | 0), 0);
-      try { log('SYS', 'info', `已恢复订阅 · ${GROUPS.length} 组 · ${n} 节点` + (stripped ? ' · 已清空演示节点' : '')); } catch (_) {}
+    } catch (_) {}
+    if (fromStore && applyHydratedCatalog(fromStore, 'store')) return true;
+    const ls = loadCatalogFromLocal();
+    if (ls && applyHydratedCatalog(ls, 'local→store')) {
+      // saveCatalog already put to store; drop LS only after successful put attempt
+      try {
+        if (typeof nexusInvoke === 'function') {
+          await nexusInvoke('catalog_put', { blob: serializeCatalog() });
+          try { localStorage.removeItem(CATALOG_KEY); } catch (_) {}
+        }
+      } catch (_) {}
       return true;
     }
-    // no snapshot: empty Default + 备用
     if (typeof renderNodes === 'function') renderNodes(GROUPS[0]?.id || 'default');
     return false;
   }
@@ -5358,6 +5416,40 @@
     }).join('');
     if (connSortKey) sortConnTable(connSortKey, connSortDir);
   }
+  /** Monotonic session totals for connected node flow column (bytes). */
+  let _flowUpMax = 0, _flowDownMax = 0;
+  function applyNodeFlow(up, down) {
+    up = Math.max(0, Number(up) || 0);
+    down = Math.max(0, Number(down) || 0);
+    // monotonic — closed-window shrink must not drop the cell
+    if (up < _flowUpMax) up = _flowUpMax; else _flowUpMax = up;
+    if (down < _flowDownMax) down = _flowDownMax; else _flowDownMax = down;
+    const flowStr = `${fmtBytes(up)}↑ · ${fmtBytes(down)}↓`;
+    const name = connectedName || '';
+    if (name && typeof SUB_PROFILES !== 'undefined') {
+      for (const id of Object.keys(SUB_PROFILES || {})) {
+        const nodes = SUB_PROFILES[id]?.nodes;
+        if (!Array.isArray(nodes)) continue;
+        const n = nodes.find(x => x && x.name === name);
+        if (n) n.flow = flowStr;
+      }
+    }
+    if (name && nodeTable) {
+      const row = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === name);
+      if (row) {
+        const el = row.querySelector('td.flow, .flow');
+        if (el) {
+          el.classList.remove('muted');
+          el.classList.add('flow');
+          const parts = flowStr.split('·').map(s => s.trim());
+          const u = parts[0] || '';
+          const d = parts[1] || '';
+          el.innerHTML = `<span class="up">${u}</span>` + (d ? ` · <span class="down">${d}</span>` : '');
+        }
+      }
+    }
+    if (sbProxy) sbProxy.textContent = fmtBytes(up + down);
+  }
   async function refreshConnections() {
     if (!connected) {
       renderConnections([]);
@@ -5366,20 +5458,29 @@
     try {
       const r = await nexusInvoke('query_connections');
       if (r && r.ok && r.data) {
-        renderConnections(r.data.active || []);
+        const list = r.data.active || [];
+        // table body only when conn dock visible
+        const open = dock?.classList.contains('open');
+        const onConn = document.querySelector('.dock-tab.active')?.dataset?.panel === 'conn';
+        if (open && onConn) renderConnections(list);
         const st = document.getElementById('stConn');
-        if (st) st.textContent = String(r.data.count ?? (r.data.active || []).length);
+        if (st) st.textContent = String(r.data.count ?? list.length);
+        let up = 0, down = 0;
+        for (const c of list) {
+          up += Number(c.upload) || 0;
+          down += Number(c.download) || 0;
+        }
+        applyNodeFlow(up, down);
       }
     } catch (_) { /* offline / core down */ }
   }
   function startConnPoll() {
     stopConnPoll();
+    _flowUpMax = 0; _flowDownMax = 0;
     refreshConnections();
     connPollTimer = setInterval(() => {
       if (!connected) { stopConnPoll(); return; }
-      const open = dock?.classList.contains('open');
-      const onConn = document.querySelector('.dock-tab.active')?.dataset?.panel === 'conn';
-      if (open && onConn) refreshConnections();
+      refreshConnections(); // always poll for node flow; table render gated inside
     }, 1500);
   }
   function stopConnPoll() {
@@ -6156,11 +6257,12 @@
       'nav.vpn': '连接',
       'tb.backup': '备用',
       'tb.refresh': '更新',
-      'tb.test': '测速',
+      'tb.test': '连通',
       'status.connected': '已连接',
       'status.disconnected': '未连接',
       'status.subOff': '选择节点后点左侧连接 · 当前 <strong>{name}</strong>',
       'status.subOn': '经 <strong>{name}</strong> · 延迟 {lat}',
+      'status.subMismatch': '当前隧道：<strong>{tunnel}</strong> · 选定：<strong>{selected}</strong>（需重新连接）· 延迟 {lat}',
       'sb.direct': '直连',
       'sb.mixed': '混合入站',
       'sb.proxy': '代理',
@@ -6366,11 +6468,12 @@
       'nav.vpn': 'Connection',
       'tb.backup': 'Backup',
       'tb.refresh': 'Update',
-      'tb.test': 'Test',
+      'tb.test': 'TCP',
       'status.connected': 'Connected',
       'status.disconnected': 'Disconnected',
       'status.subOff': 'Select a node, then connect · Current <strong>{name}</strong>',
       'status.subOn': 'Via <strong>{name}</strong> · Latency {lat}',
+      'status.subMismatch': 'Tunnel: <strong>{tunnel}</strong> · Selected: <strong>{selected}</strong> (reconnect) · {lat}',
       'sb.direct': 'Direct',
       'sb.mixed': 'Mixed inbound',
       'sb.proxy': 'Proxy',
@@ -6576,11 +6679,12 @@
       'nav.vpn': 'Подключение',
       'tb.backup': 'Резерв',
       'tb.refresh': 'Обновить',
-      'tb.test': 'Тест',
+      'tb.test': 'TCP',
       'status.connected': 'Подключено',
       'status.disconnected': 'Отключено',
       'status.subOff': 'Выберите узел и подключитесь · Сейчас <strong>{name}</strong>',
       'status.subOn': 'Через <strong>{name}</strong> · Задержка {lat}',
+      'status.subMismatch': 'Туннель: <strong>{tunnel}</strong> · Выбран: <strong>{selected}</strong> (переподключить) · {lat}',
       'sb.direct': 'Прямой',
       'sb.mixed': 'Смешанный вход',
       'sb.proxy': 'Прокси',
@@ -6786,11 +6890,12 @@
       'nav.vpn': '連線',
       'tb.backup': '備用',
       'tb.refresh': '更新',
-      'tb.test': '測速',
+      'tb.test': '連通',
       'status.connected': '已連線',
       'status.disconnected': '未連線',
       'status.subOff': '選擇節點後點左側連線 · 目前 <strong>{name}</strong>',
       'status.subOn': '經 <strong>{name}</strong> · 延遲 {lat}',
+      'status.subMismatch': '目前隧道：<strong>{tunnel}</strong> · 選定：<strong>{selected}</strong>（需重新連線）· 延遲 {lat}',
       'sb.direct': '直連',
       'sb.mixed': '混合入站',
       'sb.proxy': '代理',
@@ -7465,7 +7570,8 @@
     });
   });
 
-  // boot: restore catalog from localStorage (or demo seed if empty)
+  // boot: store catalog first (LS migrate); gray unwired routing/DNS settings
+  if (typeof markUnwiredSettings === 'function') markUnwiredSettings();
   hydrateCatalogOnBoot();
   window.addEventListener('pagehide', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
   window.addEventListener('beforeunload', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });

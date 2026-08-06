@@ -40,6 +40,9 @@ pub struct Store {
     /// Throne spmode_vpn — default off (needs privilege).
     #[serde(default)]
     pub tun: bool,
+    /// UI node catalog blob (`nexus.catalog.v1` shape). Single source after migration from localStorage.
+    #[serde(default)]
+    pub catalog: Option<serde_json::Value>,
 }
 
 fn default_true() -> bool {
@@ -54,6 +57,7 @@ impl Default for Store {
             selected_profile_id: None,
             system_proxy: true,
             tun: false,
+            catalog: None,
         }
     }
 }

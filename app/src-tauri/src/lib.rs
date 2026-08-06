@@ -170,12 +170,8 @@ pub fn core_smoke_run() -> Result<(), String> {
 async fn store_snapshot() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(|| {
         use data::store::Store;
-        let mut st = Store::load();
-        // seed demo only once when empty — snapshot otherwise read-only
-        if st.profiles.is_empty() {
-            st.upsert_direct_demo();
-            st.save()?;
-        }
+        let st = Store::load();
+        // read-only — never upsert Direct demo (UI catalog is truth)
         serde_json::to_value(&st).map_err(|e| e.to_string())
     })
     .await
@@ -187,12 +183,39 @@ async fn generate_preview() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(|| {
         use data::generate::generate_for_store;
         use data::store::Store;
-        let mut st = Store::load();
-        st.upsert_direct_demo();
+        let st = Store::load();
         generate_for_store(&st, 2080)
     })
     .await
     .map_err(|e| format!("generate_preview join: {e}"))?
+}
+
+/// UI catalog blob (groups + nodes). Replaces localStorage nexus.catalog.v1 as source of truth.
+#[tauri::command]
+async fn catalog_get() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        use data::store::Store;
+        let st = Store::load();
+        Ok(st.catalog.unwrap_or(serde_json::Value::Null))
+    })
+    .await
+    .map_err(|e| format!("catalog_get join: {e}"))?
+}
+
+#[tauri::command]
+async fn catalog_put(blob: serde_json::Value) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use data::store::Store;
+        if !blob.is_object() {
+            return Err("catalog blob must be object".into());
+        }
+        let mut st = Store::load();
+        st.catalog = Some(blob);
+        st.save()?;
+        Ok("ok".into())
+    })
+    .await
+    .map_err(|e| format!("catalog_put join: {e}"))?
 }
 
 /// Persist chip intent; OS apply only when Core is running (or always on disable).
@@ -620,14 +643,11 @@ async fn net_resolve_hosts(
     .map_err(|e| format!("resolve join: {e}"))
 }
 
-/// Single quit/teardown path: stop Core + clear OS system proxy when store says on.
+/// Single quit/teardown path: stop Core + always best-effort clear OS proxy at :2080.
 /// Used by app_quit, tray quit, and ExitRequested (Cmd+Q). Idempotent.
 fn teardown_session() {
-    // Clear OS proxy before killing Core so browsers don't hang on dead :2080.
-    let clear_proxy = data::store::Store::load().system_proxy;
-    if clear_proxy {
-        let _ = sys::set_system_proxy(false, 2080);
-    }
+    // Always clear — store flag can lag OS; exit must not leave browsers on dead :2080.
+    let _ = sys::set_system_proxy(false, 2080);
     let _ = (|| -> Result<(), String> {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         if let Some(mut s) = g.take() {
@@ -668,6 +688,8 @@ pub fn run() {
             core_stop,
             store_snapshot,
             generate_preview,
+            catalog_get,
+            catalog_put,
             set_system_proxy_cmd,
             set_tun_cmd,
             connect_selected,
