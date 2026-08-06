@@ -1,16 +1,17 @@
-//! macOS system proxy / DNS — upstream QvProxyConfigurator subset.
-//! networksetup over services; proxy only meaningful when mixed is up.
-//!
-//! Latency: full scan of every service is ~1s on multi-NIC Macs. Apply primary
-//! first (return), rest in background so the chip feels instant.
+//! System proxy: macOS networksetup; Windows WinINet Internet Settings (HKCU).
 
 use std::process::{Command, Stdio};
+#[cfg(target_os = "macos")]
 use std::sync::OnceLock;
+#[cfg(target_os = "macos")]
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "macos")]
 const NETWORKSETUP: &str = "/usr/sbin/networksetup";
+#[cfg(target_os = "macos")]
 const NS_TIMEOUT: Duration = Duration::from_secs(5);
 
+#[cfg(target_os = "macos")]
 fn run_ns(args: &[&str]) -> Result<(), String> {
     let mut child = Command::new(NETWORKSETUP)
         .args(args)
@@ -58,7 +59,7 @@ fn run_ns(args: &[&str]) -> Result<(), String> {
     }
 }
 
-/// macOSgetNetworkServices: skip header + disabled (*).
+#[cfg(target_os = "macos")]
 pub fn list_network_services() -> Vec<String> {
     let out = Command::new(NETWORKSETUP)
         .args(["-listallnetworkservices"])
@@ -70,7 +71,7 @@ pub fn list_network_services() -> Vec<String> {
     let mut services = Vec::new();
     for (i, line) in s.lines().enumerate() {
         if i == 0 {
-            continue; // "An asterisk (*) denotes..."
+            continue;
         }
         let t = line.trim();
         if t.is_empty() || t.contains('*') {
@@ -84,7 +85,7 @@ pub fn list_network_services() -> Vec<String> {
     services
 }
 
-/// VPN / bridge / phone-tether services: set-on is wasted; still clear on off.
+#[cfg(target_os = "macos")]
 fn is_secondary_service(name: &str) -> bool {
     let n = name.to_ascii_lowercase();
     n.contains("thunderbolt")
@@ -102,7 +103,7 @@ fn is_secondary_service(name: &str) -> bool {
         || n.contains("virtual")
 }
 
-/// Wi-Fi / Ethernet first; secondaries last. Cached per process — services rarely change mid-session.
+#[cfg(target_os = "macos")]
 fn ordered_services() -> &'static Vec<String> {
     static CACHE: OnceLock<Vec<String>> = OnceLock::new();
     CACHE.get_or_init(|| {
@@ -123,9 +124,9 @@ fn ordered_services() -> &'static Vec<String> {
     })
 }
 
+#[cfg(target_os = "macos")]
 fn apply_one(service: &str, enabled: bool, host: &str, port_s: &str) -> Result<(), String> {
     if !enabled {
-        // ClearSystemProxy
         for args in [
             ["-setautoproxystate", service, "off"],
             ["-setwebproxystate", service, "off"],
@@ -136,7 +137,6 @@ fn apply_one(service: &str, enabled: bool, host: &str, port_s: &str) -> Result<(
         }
         return Ok(());
     }
-    // SetSystemProxy: set + explicit state on
     run_ns(&["-setwebproxy", service, host, port_s])?;
     run_ns(&["-setsecurewebproxy", service, host, port_s])?;
     run_ns(&["-setwebproxystate", service, "on"])?;
@@ -146,15 +146,12 @@ fn apply_one(service: &str, enabled: bool, host: &str, port_s: &str) -> Result<(
     Ok(())
 }
 
-/// SetSystemProxy / ClearSystemProxy (macOS).
-/// Primary service applied synchronously (~0.2s); remaining services in a background thread.
+#[cfg(target_os = "macos")]
 pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
     let services = ordered_services().clone();
     let host = "127.0.0.1";
     let port_s = port.to_string();
 
-    // ON: skip pure secondaries in the hot path (Shadowrocket/Bridge/…)
-    // OFF: clear every service we may have touched earlier
     let hot: Vec<String> = if enabled {
         let real: Vec<String> = services
             .iter()
@@ -211,3 +208,40 @@ pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
     }
 }
 
+/// Windows: HKCU Internet Settings (WinINet) + notify. Covers Edge/Chrome user proxy.
+#[cfg(target_os = "windows")]
+pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
+    let host = "127.0.0.1";
+    let proxy = format!("{host}:{port}");
+    let enable = if enabled { "1" } else { "0" };
+    // Single PowerShell: set registry + InternetSetOption refresh via winhttp/netsh not enough for browsers.
+    let ps = format!(
+        r#"$p='HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'; Set-ItemProperty -Path $p -Name ProxyEnable -Value {enable} -Type DWord; if ({enable} -eq 1) {{ Set-ItemProperty -Path $p -Name ProxyServer -Value '{proxy}' -Type String; Set-ItemProperty -Path $p -Name ProxyOverride -Value 'localhost;127.*;<local>' -Type String }} else {{ Remove-ItemProperty -Path $p -Name ProxyServer -ErrorAction SilentlyContinue }}; Add-Type -Namespace N -Name W -MemberDefinition '[DllImport(\"wininet.dll\")] public static extern bool InternetSetOption(IntPtr h, int o, IntPtr b, int l);'; [void][N.W]::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0); [void][N.W]::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)"#
+    );
+    let out = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("powershell proxy: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        return Err(format!(
+            "windows system proxy failed: {} {}",
+            err.trim(),
+            stdout.trim()
+        ));
+    }
+    if enabled {
+        Ok(format!("system proxy on {proxy} (WinINet HKCU)"))
+    } else {
+        Ok("system proxy off (WinINet HKCU)".into())
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
+    Err(format!(
+        "system proxy not implemented on this OS (enabled={enabled} port={port})"
+    ))
+}

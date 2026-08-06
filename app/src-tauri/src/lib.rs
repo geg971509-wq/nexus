@@ -1,5 +1,6 @@
 pub mod core;
 mod data;
+mod paths;
 mod sys;
 mod sub;
 mod net;
@@ -705,13 +706,38 @@ fn tunnel_is_live() -> bool {
 
 /// Native warning before full teardown (tray / Cmd+Q when webview dialog unavailable).
 fn confirm_disconnect_quit() -> bool {
-    // cancel button → non-zero exit → false
-    let script = r#"display dialog "当前隧道仍在运行（含 Tun / 系统代理）。退出将停止 Core、关闭系统代理并拆除隧道。" with title "Nexus" buttons {"取消", "断开并退出"} default button "断开并退出" cancel button "取消" with icon caution"#;
-    std::process::Command::new("osascript")
-        .args(["-e", script])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    #[cfg(target_os = "macos")]
+    {
+        let script = r#"display dialog "当前隧道仍在运行（含 Tun / 系统代理）。退出将停止 Core、关闭系统代理并拆除隧道。" with title "Nexus" buttons {"取消", "断开并退出"} default button "断开并退出" cancel button "取消" with icon caution"#;
+        return std::process::Command::new("osascript")
+            .args(["-e", script])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // VBScript MsgBox: Yes=6. Avoid PowerShell popup policy quirks.
+        let script = r#"
+WScript.Quit CreateObject("WScript.Shell").Popup("Tunnel still running (Tun / system proxy). Exit will stop Core and clear system proxy.", 0, "Nexus", 49)
+"#;
+        let dir = std::env::temp_dir();
+        let path = dir.join("nexus-quit-confirm.vbs");
+        if std::fs::write(&path, script).is_err() {
+            return true;
+        }
+        let ok = std::process::Command::new("cscript")
+            .args(["//Nologo", &path.to_string_lossy()])
+            .status()
+            .map(|s| s.code() == Some(6))
+            .unwrap_or(true);
+        let _ = std::fs::remove_file(&path);
+        return ok;
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        true
+    }
 }
 
 /// force=true: UI already warned → teardown + exit. force=false: warn if live.
@@ -817,7 +843,8 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app, event| {
             match event {
-                // dock icon click while hidden → show again
+                // dock icon click while hidden → show again (macOS only)
+                #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen {
                     has_visible_windows,
                     ..

@@ -1,18 +1,18 @@
-//! GUI-side session: listen unix socket, spawn NexusCore, accept, libcore calls.
+//! GUI-side session: listen IPC, spawn NexusCore, accept, libcore calls.
 use super::elevate::{ensure_setuid_core, path_has_setuid, privileged_core_path};
 use super::frame::LibcoreClient;
 use super::proto_min::{
-        decode_core_state, decode_error_resp, decode_has_privilege, decode_query_connections,
-        encode_load_config_core_json, encode_load_config_req, ConnRow,
-    };
+    decode_core_state, decode_error_resp, decode_has_privilege, decode_query_connections,
+    encode_load_config_core_json, encode_load_config_req, ConnRow,
+};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use std::os::unix::net::UnixListener;
 
 pub struct CoreSession {
+    /// Path or named-pipe id passed to Core via NEXUS_CORE_SOCKET.
     listener_path: PathBuf,
     child: Option<Child>,
     client: Option<LibcoreClient>,
@@ -21,39 +21,59 @@ pub struct CoreSession {
 impl Drop for CoreSession {
     fn drop(&mut self) {
         let _ = self.stop_core_process();
-        let _ = std::fs::remove_file(&self.listener_path);
+        #[cfg(unix)]
+        {
+            let _ = std::fs::remove_file(&self.listener_path);
+        }
     }
 }
 
 impl CoreSession {
+    /// IPC endpoint name for Core env. Unix = filesystem path; Windows = `\\.\pipe\…`.
     pub fn socket_path() -> PathBuf {
-        let dir = std::env::temp_dir().join("nexus");
-        let _ = std::fs::create_dir_all(&dir);
-        dir.join(format!("nexus-core-{}.sock", std::process::id()))
+        #[cfg(unix)]
+        {
+            let dir = std::env::temp_dir().join("nexus");
+            let _ = std::fs::create_dir_all(&dir);
+            return dir.join(format!("nexus-core-{}.sock", std::process::id()));
+        }
+        #[cfg(windows)]
+        {
+            PathBuf::from(format!(r"\\.\pipe\nexus-core-{}", std::process::id()))
+        }
     }
 
-    /// Bundle / env Core (may be on nosuid volume — not for Tun).
+    fn core_bin_name() -> &'static str {
+        #[cfg(windows)]
+        {
+            "NexusCore.exe"
+        }
+        #[cfg(not(windows))]
+        {
+            "NexusCore"
+        }
+    }
+
+    /// Bundle / env Core (may be on nosuid volume — not for Tun on macOS).
     pub fn resolve_bundle_core() -> PathBuf {
         if let Ok(p) = std::env::var("NEXUS_CORE_BIN") {
             let pb = PathBuf::from(&p);
-            // only absolute existing file — refuse PATH hijack via bare name
             if pb.is_absolute() && pb.is_file() {
                 return pb;
             }
         }
-        // 1) same directory as GUI binary (Nexus.app/Contents/MacOS/NexusCore)
+        let bin = Self::core_bin_name();
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
-                let beside = dir.join("NexusCore");
+                let beside = dir.join(bin);
                 if beside.is_file() {
                     return beside;
                 }
-                // tauri externalBin may suffix target triple
                 if let Ok(rd) = std::fs::read_dir(dir) {
                     for e in rd.flatten() {
                         let n = e.file_name();
                         let s = n.to_string_lossy();
-                        if s == "NexusCore" || s.starts_with("NexusCore-") {
+                        if s == bin || s.starts_with("NexusCore-") || s.starts_with("NexusCore.") {
                             let p = e.path();
                             if p.is_file() {
                                 return p;
@@ -63,22 +83,26 @@ impl CoreSession {
                 }
             }
         }
-        // 2) repo / dev paths
         let candidates = [
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bin/NexusCore"),
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../bin/NexusCore"),
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries/NexusCore"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../bin")
+                .join(bin),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../bin")
+                .join(bin),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("binaries")
+                .join(bin),
         ];
         for c in candidates {
             if c.is_file() {
                 return c;
             }
         }
-        // missing — caller must error; do not spawn from PATH
         PathBuf::from("")
     }
 
-    /// Prefer setuid Application Support copy when present (Tun); else bundle.
+    /// Prefer setuid Application Support copy when present (Tun macOS); else bundle.
     pub fn resolve_core_binary() -> PathBuf {
         let priv_p = privileged_core_path();
         if priv_p.is_file() && path_has_setuid(&priv_p) {
@@ -87,7 +111,6 @@ impl CoreSession {
         Self::resolve_bundle_core()
     }
 
-    /// get_elevated_permissions: setuid copy + password sheet if needed.
     pub fn ensure_privileged_core() -> Result<PathBuf, String> {
         let src = Self::resolve_bundle_core();
         if src.as_os_str().is_empty() || !src.is_file() {
@@ -96,8 +119,6 @@ impl CoreSession {
         ensure_setuid_core(&src)
     }
 
-    /// Core child stdout/stderr. Piped+unread → kernel pipe fills → Core blocks
-    /// on write while mixed still LISTENs (sysproxy "stuck").
     fn core_stdio_sinks() -> (Stdio, Stdio) {
         let log_path = Self::dirs_core_log();
         match std::fs::OpenOptions::new()
@@ -105,107 +126,102 @@ impl CoreSession {
             .append(true)
             .open(&log_path)
         {
-            Ok(f) => {
-                // second handle for stderr (same file)
-                match f.try_clone() {
-                    Ok(f2) => (Stdio::from(f), Stdio::from(f2)),
-                    Err(_) => (Stdio::from(f), Stdio::null()),
-                }
-            }
+            Ok(f) => match f.try_clone() {
+                Ok(f2) => (Stdio::from(f), Stdio::from(f2)),
+                Err(_) => (Stdio::from(f), Stdio::null()),
+            },
             Err(_) => (Stdio::null(), Stdio::null()),
         }
     }
 
     fn dirs_core_log() -> PathBuf {
-        // ~/Library/Logs/Nexus/core.log (macOS); fallback temp
-        if let Some(home) = std::env::var_os("HOME") {
-            let dir = PathBuf::from(home).join("Library/Logs/Nexus");
-            let _ = std::fs::create_dir_all(&dir);
-            return dir.join("core.log");
-        }
-        std::env::temp_dir().join("nexus-core.log")
+        crate::paths::ensure_log_dir().join("core.log")
     }
 
     fn core_workdir() -> PathBuf {
-        if let Some(home) = std::env::var_os("HOME") {
-            let dir = PathBuf::from(home).join("Library/Application Support/Nexus");
-            let _ = std::fs::create_dir_all(&dir);
-            return dir;
-        }
-        std::env::temp_dir()
+        crate::paths::ensure_data_dir()
     }
 
-    /// GUI crash / force-quit leaves NexusCore as ppid=1 with exclusive
-    /// bbolt on cache.db + :2080. Next Start → `initialize cache-file: timeout`.
     /// Kill every other NexusCore before we spawn (keep `except` = our child).
     pub fn kill_stray_cores(except: Option<u32>) {
-        let Ok(out) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
-            return;
-        };
-        if !out.status.success() && out.stdout.is_empty() {
-            return;
+        let _ = except;
+        #[cfg(unix)]
+        {
+            let Ok(out) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
+                return;
+            };
+            if !out.status.success() && out.stdout.is_empty() {
+                return;
+            }
+            let me = std::process::id();
+            for tok in String::from_utf8_lossy(&out.stdout).split_whitespace() {
+                let Ok(pid) = tok.parse::<u32>() else {
+                    continue;
+                };
+                if pid == me || except == Some(pid) {
+                    continue;
+                }
+                let _ = Command::new("kill")
+                    .args(["-TERM", &pid.to_string()])
+                    .status();
+            }
+            std::thread::sleep(Duration::from_millis(250));
+            let Ok(out2) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
+                return;
+            };
+            for tok in String::from_utf8_lossy(&out2.stdout).split_whitespace() {
+                let Ok(pid) = tok.parse::<u32>() else {
+                    continue;
+                };
+                if pid == me || except == Some(pid) {
+                    continue;
+                }
+                let _ = Command::new("kill")
+                    .args(["-KILL", &pid.to_string()])
+                    .status();
+            }
+            std::thread::sleep(Duration::from_millis(100));
         }
-        let me = std::process::id();
-        for tok in String::from_utf8_lossy(&out.stdout).split_whitespace() {
-            let Ok(pid) = tok.parse::<u32>() else { continue };
-            if pid == me {
-                continue;
-            }
-            if except == Some(pid) {
-                continue;
-            }
-            let _ = Command::new("kill")
-                .args(["-TERM", &pid.to_string()])
+        #[cfg(windows)]
+        {
+            let _ = Command::new("taskkill")
+                .args(["/F", "/IM", "NexusCore.exe", "/T"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
                 .status();
+            std::thread::sleep(Duration::from_millis(250));
         }
-        // brief wait so bbolt / :2080 release
-        std::thread::sleep(Duration::from_millis(250));
-        // stubborn leftovers
-        let Ok(out2) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
-            return;
-        };
-        for tok in String::from_utf8_lossy(&out2.stdout).split_whitespace() {
-            let Ok(pid) = tok.parse::<u32>() else { continue };
-            if pid == me || except == Some(pid) {
-                continue;
-            }
-            let _ = Command::new("kill")
-                .args(["-KILL", &pid.to_string()])
-                .status();
-        }
-        std::thread::sleep(Duration::from_millis(100));
     }
 
     pub fn child_pid(&self) -> Option<u32> {
         self.child.as_ref().map(|c| c.id())
     }
 
-    /// Absolute cache.db path (must match generate.rs).
     pub fn cache_db_path() -> PathBuf {
         Self::core_workdir().join("cache.db")
     }
 
+    #[cfg(unix)]
     pub fn start(core_bin: &Path) -> io::Result<Self> {
-        // Drop orphans first — they hold cache.db exclusively (bbolt).
+        use std::os::unix::net::UnixListener;
+
         Self::kill_stray_cores(None);
 
         let path = Self::socket_path();
+        let env_socket = path.to_string_lossy().into_owned();
         let _ = std::fs::remove_file(&path);
         let listener = UnixListener::bind(&path)?;
-        #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
         }
         listener.set_nonblocking(true)?;
 
-        // File sink (not piped): keeps NEXUS_CORE_DEBUG without freezing Core.
-        // cwd under Application Support so relative paths never hit `/` (read-only).
         let (stdout, stderr) = Self::core_stdio_sinks();
         let core_cwd = Self::core_workdir();
         let mut child = Command::new(core_bin)
             .current_dir(&core_cwd)
-            .env("NEXUS_CORE_SOCKET", &path)
+            .env("NEXUS_CORE_SOCKET", &env_socket)
             .env("NEXUS_CORE_DEBUG", "1")
             .stdout(stdout)
             .stderr(stderr)
@@ -240,20 +256,88 @@ impl CoreSession {
         })
     }
 
+    #[cfg(windows)]
+    pub fn start(core_bin: &Path) -> io::Result<Self> {
+        use super::winpipe;
+
+        Self::kill_stray_cores(None);
+
+        let short = format!("nexus-core-{}", std::process::id());
+        let full_pipe = format!(r"\\.\pipe\{short}");
+
+        // Accept thread first so Core's DialPipe can connect immediately after spawn.
+        let (tx, rx) = std::sync::mpsc::channel();
+        let pipe_for_accept = full_pipe.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(winpipe::accept_one(&pipe_for_accept, Duration::from_secs(20)));
+        });
+        // brief settle so CreateNamedPipe is listening before child starts
+        std::thread::sleep(Duration::from_millis(80));
+
+        let (stdout, stderr) = Self::core_stdio_sinks();
+        let core_cwd = Self::core_workdir();
+        let mut child = Command::new(core_bin)
+            .current_dir(&core_cwd)
+            .env("NEXUS_CORE_SOCKET", &full_pipe)
+            .env("NEXUS_CORE_DEBUG", "1")
+            .stdout(stdout)
+            .stderr(stderr)
+            .spawn()?;
+
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let stream = loop {
+            match rx.try_recv() {
+                Ok(Ok(s)) => break s,
+                Ok(Err(e)) => {
+                    let _ = child.kill();
+                    return Err(e);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    if Instant::now() > deadline {
+                        let _ = child.kill();
+                        return Err(io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            "core did not connect to named pipe",
+                        ));
+                    }
+                    if let Ok(Some(status)) = child.try_wait() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::BrokenPipe,
+                            format!("core exited before IPC connect: {status}"),
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    let _ = child.kill();
+                    return Err(io::Error::new(
+                        io::ErrorKind::BrokenPipe,
+                        "accept thread died",
+                    ));
+                }
+            }
+        };
+
+        let client = LibcoreClient::from_stream(stream)?;
+        Ok(Self {
+            listener_path: PathBuf::from(full_pipe),
+            child: Some(child),
+            client: Some(client),
+        })
+    }
+
     pub fn query_state(&mut self) -> Result<(bool, i32), String> {
         let c = self.client.as_mut().ok_or("no client")?;
         let data = c.call("QueryState", &[]).map_err(|e| e.to_string())?;
         Ok(decode_core_state(&data))
     }
 
-    /// Core euid==0 (setuid child). upstream IsPrivileged RPC.
     pub fn is_privileged(&mut self) -> Result<bool, String> {
         let c = self.client.as_mut().ok_or("no client")?;
         let data = c.call("IsPrivileged", &[]).map_err(|e| e.to_string())?;
         Ok(decode_has_privilege(&data))
     }
 
-    /// Kill live unprivileged Core and spawn setuid copy (Tun path).
     pub fn recycle_privileged(&mut self) -> Result<(), String> {
         let bin = Self::ensure_privileged_core()?;
         let _ = self.stop_core_process();
@@ -268,11 +352,13 @@ impl CoreSession {
         Ok(decode_error_resp(&data))
     }
 
-    /// Client::Start(LoadConfigReq) — load sing-box config into running Core process.
-    pub fn start_rpc(&mut self, core_json: &str, profile_id: i32) -> Result<Option<String>, String> {
+    pub fn start_rpc(
+        &mut self,
+        core_json: &str,
+        profile_id: i32,
+    ) -> Result<Option<String>, String> {
         let c = self.client.as_mut().ok_or("no client")?;
         let payload = encode_load_config_req(core_json, Some(profile_id));
-        // Start can take longer than smoke CheckConfig (box create + bind)
         let data = c
             .call_timeout("Start", &payload, std::time::Duration::from_secs(60))
             .map_err(|e| e.to_string())?;
@@ -285,7 +371,6 @@ impl CoreSession {
         Ok(decode_error_resp(&data))
     }
 
-    /// QueryConnections — live traffic rows for the connection table.
     pub fn query_connections(&mut self) -> Result<Vec<ConnRow>, String> {
         let c = self.client.as_mut().ok_or("no client")?;
         let data = c.call("QueryConnections", &[]).map_err(|e| e.to_string())?;
@@ -300,26 +385,43 @@ impl CoreSession {
             let _ = child.kill();
             let _ = child.wait();
         }
-        let _ = std::fs::remove_file(&self.listener_path);
+        #[cfg(unix)]
+        {
+            let _ = std::fs::remove_file(&self.listener_path);
+        }
         Ok(())
     }
 
-    /// True if any NexusCore process is still alive (incl. orphan after GUI quit).
     pub fn core_process_alive() -> bool {
-        let Ok(out) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
-            return false;
-        };
-        if out.stdout.is_empty() {
-            return false;
+        #[cfg(unix)]
+        {
+            let Ok(out) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
+                return false;
+            };
+            if out.stdout.is_empty() {
+                return false;
+            }
+            let me = std::process::id();
+            return String::from_utf8_lossy(&out.stdout)
+                .split_whitespace()
+                .filter_map(|t| t.parse::<u32>().ok())
+                .any(|pid| pid != me);
         }
-        let me = std::process::id();
-        String::from_utf8_lossy(&out.stdout)
-            .split_whitespace()
-            .filter_map(|t| t.parse::<u32>().ok())
-            .any(|pid| pid != me)
+        #[cfg(windows)]
+        {
+            let Ok(out) = Command::new("tasklist")
+                .args(["/FI", "IMAGENAME eq NexusCore.exe", "/NH"])
+                .output()
+            else {
+                return false;
+            };
+            let s = String::from_utf8_lossy(&out.stdout).to_ascii_lowercase();
+            return s.contains("nexuscore.exe");
+        }
+        #[allow(unreachable_code)]
+        false
     }
 
-    /// Mixed inbound still accepting (tunnel Start left it up even if GUI SESSION died).
     pub fn mixed_port_open(port: u16) -> bool {
         use std::net::{SocketAddr, TcpStream};
         let addr = SocketAddr::from(([127, 0, 0, 1], port));

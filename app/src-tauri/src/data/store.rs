@@ -62,9 +62,5 @@ impl Store {
 }
 
 fn dirs_next_path() -> PathBuf {
-    // ~/Library/Application Support/Nexus on macOS
-    if let Some(home) = std::env::var_os("HOME") {
-        return PathBuf::from(home).join("Library/Application Support/Nexus");
-    }
-    std::env::temp_dir().join("Nexus")
+    crate::paths::ensure_data_dir()
 }

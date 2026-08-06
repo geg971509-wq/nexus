@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Nexus macOS app build — always full rebuild: NexusCore (Go) + Tauri 2 shell
+# Nexus dual product build: macOS arm64 (.app) + Windows x86_64 (exe package)
+# Always full rebuild. No flags.
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -8,7 +9,9 @@ TAURI_DIR="$APP_DIR/src-tauri"
 CORE_SRC="$ROOT/core/server"
 BIN_DIR="$ROOT/bin"
 CORE_OUT="$BIN_DIR/NexusCore"
+CORE_WIN_OUT="$BIN_DIR/NexusCore-windows-x86_64.exe"
 BINARIES_DIR="$TAURI_DIR/binaries"
+WIN_DIST="$BIN_DIR/windows-x86_64"
 
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-always}"
@@ -33,13 +36,13 @@ target_triple() {
   os="$(uname -s)"
   case "$os" in
     Darwin) echo "${arch}-apple-darwin" ;;
-    *) die "this build.sh is macOS-only (got $os)" ;;
+    *) die "host build.sh is macOS-only (got $os); use Windows host for native win shell" ;;
   esac
 }
 
 [[ $# -eq 0 ]] || die "usage: ./build.sh  (no flags — always full release rebuild)"
 
-[[ "$(uname -s)" == "Darwin" ]] || die "macOS only"
+[[ "$(uname -s)" == "Darwin" ]] || die "macOS only host for dual product build"
 need go
 need cargo
 need npm
@@ -50,46 +53,50 @@ fi
 
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
 TRIPLE="$(target_triple)"
-log "root=$ROOT triple=$TRIPLE (full release rebuild)"
+log "root=$ROOT triple=$TRIPLE (full dual release rebuild)"
 
 # Feature tags required in NexusCore (stubs if missing)
-CORE_TAGS="${NEXUS_CORE_TAGS:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,badlinkname,tfogo_checklinkname0}"
+# Windows: with_purego + with_naive_outbound like Throne build_go.sh (CGO off)
+CORE_TAGS_MAC="${NEXUS_CORE_TAGS:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,badlinkname,tfogo_checklinkname0}"
+CORE_TAGS_WIN="${NEXUS_CORE_TAGS_WIN:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0}"
 CORE_REQUIRED_TAGS=(with_clash_api with_gvisor with_quic with_wireguard with_utls with_dhcp with_tailscale with_naive_outbound badlinkname tfogo_checklinkname0)
-mkdir -p "$BIN_DIR" "$BINARIES_DIR"
+mkdir -p "$BIN_DIR" "$BINARIES_DIR" "$WIN_DIST"
 
 verify_core_binary() {
   local bin="$1"
-  [[ -f "$bin" && -x "$bin" ]] || die "NexusCore not executable: $bin"
+  local label="${2:-NexusCore}"
+  [[ -f "$bin" ]] || die "$label missing: $bin"
+  # Windows .exe may not be +x on macOS host
   local sz
   sz="$(stat -f%z "$bin" 2>/dev/null || stat -c%s "$bin")"
   if [[ "$sz" -lt 50000000 ]]; then
-    die "NexusCore too small (${sz} bytes) — sing-box feature tags likely missing."
+    die "$label too small (${sz} bytes) — sing-box feature tags likely missing."
   fi
   local meta
   meta="$(go version -m "$bin" 2>/dev/null || true)"
   [[ -n "$meta" ]] || die "go version -m failed on $bin (not a Go binary?)"
-  echo "$meta" | grep -q 'github.com/sagernet/sing-box' || die "NexusCore missing module: sing-box"
-  echo "$meta" | grep -q 'github.com/xtls/xray-core' || die "NexusCore missing module: xray-core"
-  echo "$meta" | grep -q 'github.com/sagernet/sing-tun' || die "NexusCore missing module: sing-tun"
-  echo "$meta" | grep -qE 'gvisor|github.com/sagernet/gvisor' || die "NexusCore missing gvisor (with_gvisor tag?)"
+  echo "$meta" | grep -q 'github.com/sagernet/sing-box' || die "$label missing module: sing-box"
+  echo "$meta" | grep -q 'github.com/xtls/xray-core' || die "$label missing module: xray-core"
+  echo "$meta" | grep -q 'github.com/sagernet/sing-tun' || die "$label missing module: sing-tun"
+  echo "$meta" | grep -qE 'gvisor|github.com/sagernet/gvisor' || die "$label missing gvisor (with_gvisor tag?)"
   local tagline
   tagline="$(echo "$meta" | grep -E '^\s*build\s+-tags=' | head -1 || true)"
-  [[ -n "$tagline" ]] || die "NexusCore has no build -tags= metadata"
+  [[ -n "$tagline" ]] || die "$label has no build -tags= metadata"
   local t
   for t in "${CORE_REQUIRED_TAGS[@]}"; do
-    echo "$tagline" | grep -q "$t" || die "NexusCore missing required -tag: $t (got: $tagline)"
+    echo "$tagline" | grep -q "$t" || die "$label missing required -tag: $t (got: $tagline)"
   done
-  ok "NexusCore verified · $(numfmt --to=iec "$sz" 2>/dev/null || echo "${sz}B") · tags+sing-box+xray+sing-tun linked"
+  ok "$label verified · $(numfmt --to=iec "$sz" 2>/dev/null || echo "${sz}B") · tags+sing-box+xray+sing-tun"
 }
 
-# --- 1) NexusCore ---
 [[ -d "$CORE_SRC" ]] || die "core source missing: $CORE_SRC"
 [[ -f "$CORE_SRC/go.mod" ]] || die "missing $CORE_SRC/go.mod"
 [[ -d "$CORE_SRC/third_party/sing-tun" ]] || die "missing local replace path: $CORE_SRC/third_party/sing-tun"
 [[ -f "$CORE_SRC/third_party/sing-tun/go.mod" ]] || die "incomplete sing-tun vendored tree"
 [[ -f "$CORE_SRC/gen/libcore.pb.go" ]] || die "missing $CORE_SRC/gen/libcore.pb.go (pre-generated protobuf)"
 
-log "building NexusCore (go · tags=$CORE_TAGS)…"
+# --- 1a) NexusCore macOS host ---
+log "building NexusCore macOS (go · tags=$CORE_TAGS_MAC)…"
 (
   cd "$CORE_SRC"
   go mod download
@@ -103,32 +110,65 @@ log "building NexusCore (go · tags=$CORE_TAGS)…"
   log "wireguard: $(go list -m -f '{{.Path}}{{if .Replace}} => {{.Replace.Path}} {{.Replace.Version}}{{end}}' github.com/sagernet/wireguard-go 2>/dev/null || echo 'via sing-box')"
 
   export CGO_ENABLED="${CGO_ENABLED:-1}"
-  if [[ "$(uname -s)" == "Darwin" ]]; then
-    SDKROOT="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
-    CLANG="$(xcrun --sdk macosx --find clang 2>/dev/null || true)"
-    [[ -n "$CLANG" ]] && export CC="$CLANG"
-    if [[ -n "$SDKROOT" ]]; then
-      export CGO_CFLAGS="${CGO_CFLAGS:+$CGO_CFLAGS }-isysroot $SDKROOT -mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}"
-      export CGO_LDFLAGS="${CGO_LDFLAGS:--weak_framework UniformTypeIdentifiers} -isysroot $SDKROOT -mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}"
-    else
-      export CGO_LDFLAGS="${CGO_LDFLAGS:--weak_framework UniformTypeIdentifiers}"
-    fi
+  SDKROOT="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
+  CLANG="$(xcrun --sdk macosx --find clang 2>/dev/null || true)"
+  [[ -n "$CLANG" ]] && export CC="$CLANG"
+  if [[ -n "$SDKROOT" ]]; then
+    export CGO_CFLAGS="${CGO_CFLAGS:+$CGO_CFLAGS }-isysroot $SDKROOT -mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}"
+    export CGO_LDFLAGS="${CGO_LDFLAGS:--weak_framework UniformTypeIdentifiers} -isysroot $SDKROOT -mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}"
+  else
+    export CGO_LDFLAGS="${CGO_LDFLAGS:--weak_framework UniformTypeIdentifiers}"
   fi
 
   go build -trimpath \
-    -tags "$CORE_TAGS" \
+    -tags "$CORE_TAGS_MAC" \
     -ldflags "-s -w -X 'github.com/sagernet/sing-box/constant.Version=${VERSION_SINGBOX}' -X 'internal/godebug.defaultGODEBUG=multipathtcp=0' -checklinkname=0" \
     -o "$CORE_OUT" \
     .
 )
 ok "NexusCore → $CORE_OUT"
-verify_core_binary "$CORE_OUT"
+verify_core_binary "$CORE_OUT" "NexusCore(mac)"
 chmod +x "$CORE_OUT"
 
 STAGED="$BINARIES_DIR/NexusCore-${TRIPLE}"
 cp -f "$CORE_OUT" "$STAGED"
 chmod +x "$STAGED"
 ok "staged $STAGED"
+
+# --- 1b) NexusCore Windows amd64 (cross from mac; CGO=0 like Throne) ---
+log "building NexusCore windows/amd64 (go · tags=$CORE_TAGS_WIN)…"
+(
+  cd "$CORE_SRC"
+  VERSION_SINGBOX="$(go list -m -f '{{.Version}}' github.com/sagernet/sing-box)"
+  export CGO_ENABLED=0
+  export GOOS=windows
+  export GOARCH=amd64
+  # clear mac CGO env
+  unset CC CGO_CFLAGS CGO_LDFLAGS || true
+  go build -trimpath \
+    -tags "$CORE_TAGS_WIN" \
+    -ldflags "-s -w -X 'github.com/sagernet/sing-box/constant.Version=${VERSION_SINGBOX}' -X 'internal/godebug.defaultGODEBUG=multipathtcp=0' -checklinkname=0" \
+    -o "$CORE_WIN_OUT" \
+    .
+)
+ok "NexusCore windows → $CORE_WIN_OUT"
+verify_core_binary "$CORE_WIN_OUT" "NexusCore(win)"
+
+# stage for tauri externalBin on windows target name
+cp -f "$CORE_WIN_OUT" "$BINARIES_DIR/NexusCore-x86_64-pc-windows-msvc.exe"
+cp -f "$CORE_WIN_OUT" "$BINARIES_DIR/NexusCore-x86_64-pc-windows-gnu.exe"
+# cronet dll for naive (Throne does this)
+if command -v curl >/dev/null 2>&1; then
+  log "fetching libcronet.dll (windows amd64)…"
+  if curl -fLso "$WIN_DIST/libcronet.dll" \
+    "https://github.com/SagerNet/cronet-go/releases/latest/download/libcronet-windows-amd64.dll"; then
+    ok "libcronet.dll → $WIN_DIST/libcronet.dll"
+  else
+    err "libcronet.dll download failed (naive outbound may need it at runtime)"
+  fi
+fi
+cp -f "$CORE_WIN_OUT" "$WIN_DIST/NexusCore.exe"
+ok "windows core package seed → $WIN_DIST"
 
 # --- 2) frontend deps ---
 log "npm install…"
@@ -159,13 +199,16 @@ cat > "$UI_CONF_OVERRIDE" <<EOF
 {
   "build": {
     "frontendDist": "./ui-release-dist"
+  },
+  "bundle": {
+    "targets": ["app"]
   }
 }
 EOF
 ok "UI release staging · $UI_STAGE"
 
-# --- 3) tauri release build ---
-log "tauri build (release)…"
+# --- 3) tauri release build (mac host .app) ---
+log "tauri build (release · macOS app)…"
 (
   cd "$APP_DIR"
   export NEXUS_CORE_BIN="$CORE_OUT"
@@ -205,9 +248,51 @@ html_count="$(find "$DEST_APP" -name '*.html' 2>/dev/null | wc -l | tr -d ' ')"
 [[ "$html_count" -le 1 ]] || die "release app has unexpected HTML count=$html_count"
 ok "bundle UI clean · html_count=$html_count"
 
+# --- 5) Windows shell via remote host (Tauri GUI needs native Windows toolchain) ---
+WIN_HOST="${NEXUS_WIN_HOST:-}"
+WIN_USER="${NEXUS_WIN_USER:-}"
+WIN_PASS_FILE="${NEXUS_WIN_PASS_FILE:-/tmp/nexus-win-ssh.pass}"
+SSH_BASE=(sshpass -f "$WIN_PASS_FILE" ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no)
+SCP_BASE=(sshpass -f "$WIN_PASS_FILE" scp -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no)
+if [[ -f "$WIN_PASS_FILE" ]] && command -v sshpass >/dev/null 2>&1; then
+  log "Windows host $WIN_USER@$WIN_HOST — sync + remote tauri build…"
+  REMOTE_DIR="C:/Users/${WIN_USER}/NexusBuild"
+  # Pack only product sources (avoid exclude bin eating app/src-tauri/src/bin)
+  PACK=/tmp/nexus-win-src.tgz
+  tar -C "$ROOT" -czf "$PACK" \
+    app/package.json app/package-lock.json app/ui \
+    app/src-tauri/src app/src-tauri/Cargo.toml app/src-tauri/Cargo.lock \
+    app/src-tauri/tauri.conf.json app/src-tauri/build.rs \
+    app/src-tauri/capabilities app/src-tauri/permissions app/src-tauri/icons \
+    script/build_windows_remote.ps1 script/install_rust_windows.ps1 \
+    2>/dev/null || tar -C "$ROOT" -czf "$PACK" app script
+  "${SCP_BASE[@]}" "$PACK" "${WIN_USER}@${WIN_HOST}:C:/Users/${WIN_USER}/nexus-win-src.tgz"
+  "${SSH_BASE[@]}" "${WIN_USER}@${WIN_HOST}" \
+    "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path '$REMOTE_DIR' | Out-Null; tar -xzf C:/Users/${WIN_USER}/nexus-win-src.tgz -C '$REMOTE_DIR'\""
+  # ship prebuilt Core
+  "${SSH_BASE[@]}" "${WIN_USER}@${WIN_HOST}" \
+    "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path '$REMOTE_DIR/bin' | Out-Null\""
+  "${SCP_BASE[@]}" "$CORE_WIN_OUT" \
+    "${WIN_USER}@${WIN_HOST}:${REMOTE_DIR}/bin/NexusCore.exe"
+  if ! "${SSH_BASE[@]}" "${WIN_USER}@${WIN_HOST}" \
+    "powershell -NoProfile -ExecutionPolicy Bypass -File $REMOTE_DIR/script/build_windows_remote.ps1 -NexusRoot $REMOTE_DIR"; then
+    err "remote Windows shell build failed — Core package still at $WIN_DIST"
+  else
+    "${SCP_BASE[@]}" \
+      "${WIN_USER}@${WIN_HOST}:${REMOTE_DIR}/app/src-tauri/target/release/nexus.exe" \
+      "$WIN_DIST/nexus.exe" && ok "pulled nexus.exe"
+    "${SCP_BASE[@]}" \
+      "${WIN_USER}@${WIN_HOST}:${REMOTE_DIR}/app/src-tauri/target/release/bundle/nsis/Nexus_0.2.0_x64-setup.exe" \
+      "$WIN_DIST/Nexus_0.2.0_x64-setup.exe" 2>/dev/null && ok "pulled nsis" || true
+  fi
+else
+  log "skip remote Windows shell (need sshpass + $WIN_PASS_FILE); Core-only package at $WIN_DIST"
+fi
+
 echo
 ok "build complete"
-echo "  app:  $DEST_APP"
-echo "  also: $APP_PATH"
-echo "  core: $CORE_OUT"
-echo "  run:  open \"$DEST_APP\""
+echo "  mac app:  $DEST_APP"
+echo "  mac core: $CORE_OUT"
+echo "  win core: $CORE_WIN_OUT"
+echo "  win dist: $WIN_DIST"
+echo "  run mac:  open \"$DEST_APP\""

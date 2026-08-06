@@ -1,6 +1,5 @@
 //! Pure generate: outbound + flags → sing-box JSON.
 use serde_json::{json, Map, Value};
-use std::path::PathBuf;
 
 /// Generate-time node handle (not persisted; catalog is store truth).
 pub struct GenNode {
@@ -236,13 +235,8 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
 }
 
 fn cache_file_path() -> String {
-    if let Some(home) = std::env::var_os("HOME") {
-        let dir = PathBuf::from(home).join("Library/Application Support/Nexus");
-        let _ = std::fs::create_dir_all(&dir);
-        return dir.join("cache.db").to_string_lossy().into_owned();
-    }
-    std::env::temp_dir()
-        .join("nexus-cache.db")
+    crate::paths::ensure_data_dir()
+        .join("cache.db")
         .to_string_lossy()
         .into_owned()
 }
