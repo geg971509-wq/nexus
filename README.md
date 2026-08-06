@@ -28,11 +28,10 @@ macOS VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box + xr
 
 ```bash
 cd .
-./build.sh          # release → bin/Nexus.app + bin/NexusCore
-./build.sh --debug  # debug profile
-./build.sh --open   # open when done
-./build.sh --skip-core --skip-npm  # faster rebuild when core/deps ready
+./build.sh   # always full rebuild → bin/Nexus.app + bin/NexusCore
 ```
+
+No flags. Always rebuilds NexusCore, runs `npm install`, and packages a release `.app`.
 
 Requires: macOS, Xcode CLT, `go`, `cargo`/`rustc`, `npm`.
 
@@ -44,11 +43,8 @@ This build path produces an **unsigned** local app (no Developer ID / notarizati
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
-./build.sh --skip-core   # if bin/NexusCore already exists
-cd app/src-tauri
-export NEXUS_CORE_BIN=./bin/NexusCore
-cargo run --bin core_smoke
-cd .. && npm run tauri dev
+./build.sh   # full release build when you need a fresh Core + .app
+cd app && npm run tauri dev
 ```
 
 ## Capabilities (0.2.0)

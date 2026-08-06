@@ -31,7 +31,8 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/service"
 	"github.com/xtls/xray-core/core"
-	xthrone "github.com/xtls/xray-core/upstream"
+	// Package path is still `throne` in the throneproj/xray-core fork (not product branding).
+	xthrone "github.com/xtls/xray-core/throne"
 	xinternet "github.com/xtls/xray-core/transport/internet"
 )
 
