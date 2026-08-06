@@ -315,6 +315,102 @@ fn read_len_str(data: &[u8], i: usize) -> Option<(String, usize)> {
     Some((String::from_utf8_lossy(&data[ni..end]).into_owned(), end))
 }
 
+/// QueryStatsResp: ups=1 / downs=2 map<string,int64> (protobuf map entries).
+/// Returns cumulative outbound traffic for tag `proxy` (session tunnel).
+pub fn decode_query_stats_proxy(data: &[u8]) -> (i64, i64) {
+    let mut ups = std::collections::HashMap::<String, i64>::new();
+    let mut downs = std::collections::HashMap::<String, i64>::new();
+    let mut i = 0;
+    while i < data.len() {
+        let (key, ni) = read_varint(data, i);
+        i = ni;
+        let field = (key >> 3) as u32;
+        let wt = (key & 7) as u8;
+        match (field, wt) {
+            (1, 2) | (2, 2) => {
+                let (len, ni) = read_varint(data, i);
+                i = ni;
+                let end = i + len as usize;
+                if end > data.len() {
+                    break;
+                }
+                if let Some((k, v)) = decode_map_str_i64(&data[i..end]) {
+                    if field == 1 {
+                        ups.insert(k, v);
+                    } else {
+                        downs.insert(k, v);
+                    }
+                }
+                i = end;
+            }
+            (_, 0) => {
+                let (_, ni) = read_varint(data, i);
+                i = ni;
+            }
+            (_, 1) => i += 8,
+            (_, 2) => {
+                let (len, ni) = read_varint(data, i);
+                i = ni + len as usize;
+            }
+            (_, 5) => i += 4,
+            _ => break,
+        }
+    }
+    // Prefer explicit proxy tag; else sum non-direct outbounds (chain / rename edge cases).
+    let pick = |m: &std::collections::HashMap<String, i64>| -> i64 {
+        if let Some(v) = m.get("proxy") {
+            return *v;
+        }
+        m.iter()
+            .filter(|(k, _)| k.as_str() != "direct" && !k.starts_with("dns-"))
+            .map(|(_, v)| *v)
+            .sum()
+    };
+    (pick(&ups), pick(&downs))
+}
+
+fn decode_map_str_i64(data: &[u8]) -> Option<(String, i64)> {
+    let mut key = String::new();
+    let mut val: i64 = 0;
+    let mut has_key = false;
+    let mut i = 0;
+    while i < data.len() {
+        let (tag, ni) = read_varint(data, i);
+        i = ni;
+        let field = (tag >> 3) as u32;
+        let wt = (tag & 7) as u8;
+        match (field, wt) {
+            (1, 2) => {
+                let (s, ni) = read_len_str(data, i)?;
+                key = s;
+                has_key = true;
+                i = ni;
+            }
+            (2, 0) => {
+                let (v, ni) = read_varint(data, i);
+                val = v as i64;
+                i = ni;
+            }
+            (_, 0) => {
+                let (_, ni) = read_varint(data, i);
+                i = ni;
+            }
+            (_, 1) => i += 8,
+            (_, 2) => {
+                let (len, ni) = read_varint(data, i);
+                i = ni + len as usize;
+            }
+            (_, 5) => i += 4,
+            _ => break,
+        }
+    }
+    if has_key {
+        Some((key, val))
+    } else {
+        None
+    }
+}
+
 fn write_varint(out: &mut Vec<u8>, mut v: u64) {
     loop {
         let mut b = (v & 0x7f) as u8;
@@ -424,5 +520,35 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, "c2");
         assert_eq!(rows[0].process, "curl");
+    }
+
+    fn map_entry(k: &str, v: i64) -> Vec<u8> {
+        let mut e = Vec::new();
+        e.push(0x0a); // key field 1
+        write_varint(&mut e, k.len() as u64);
+        e.extend_from_slice(k.as_bytes());
+        e.push(0x10); // value field 2
+        write_varint(&mut e, v as u64);
+        e
+    }
+
+    #[test]
+    fn decode_query_stats_proxy_tag() {
+        let mut resp = Vec::new();
+        // ups: proxy=1000, direct=9
+        for (k, v) in [("proxy", 1000i64), ("direct", 9)] {
+            let e = map_entry(k, v);
+            resp.push(0x0a);
+            write_varint(&mut resp, e.len() as u64);
+            resp.extend_from_slice(&e);
+        }
+        // downs: proxy=2000
+        let e = map_entry("proxy", 2000);
+        resp.push(0x12);
+        write_varint(&mut resp, e.len() as u64);
+        resp.extend_from_slice(&e);
+        let (u, d) = decode_query_stats_proxy(&resp);
+        assert_eq!(u, 1000);
+        assert_eq!(d, 2000);
     }
 }

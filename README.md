@@ -1,8 +1,6 @@
 # Nexus
 
-macOS VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box + xray) + framed IPC. Shell: **Tauri 2 + Rust**.
-
-## Identity
+Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box + xray) + framed IPC. Shell: **Tauri 2 + Rust**.
 
 | Item | Value |
 |------|--------|
@@ -10,52 +8,87 @@ macOS VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box + xr
 | Version | 0.2.0 |
 | Bundle ID | `app.nexus.desktop` |
 | Deeplink | `nexus://` |
-| Data dir | `~/Library/Application Support/Nexus` |
+| Core binary | `NexusCore` (framed IPC) |
 | Socket env | `NEXUS_CORE_SOCKET` / `NEXUS_CORE_DEBUG` |
-| Core binary | `NexusCore` (libcore framed IPC) |
+
+## Platforms
+
+| Target | Arch | Shell / install | Core |
+|--------|------|-----------------|------|
+| macOS | arm64 | `.app` (unsigned internal) | `NexusCore` (CGO) |
+| Windows | x86_64 | `nexus.exe` + NSIS setup | `NexusCore.exe` (purego cross) |
+
+### Data directories
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Nexus` |
+| Windows | `%APPDATA%\app.nexus.desktop` (Tauri) / product data under the same family |
+
+### Windows notes
+
+- **Admin required.** The Windows shell embeds `requireAdministrator` so Tun/wintun and system proxy work without a second elevate path. UAC once at launch.
+- GUI child processes use `CREATE_NO_WINDOW` (no black console flash): Core, taskkill/tasklist, curl (subscription), cscript.
+- Packing from macOS must not ship AppleDouble (`._*`) / `.DS_Store` into the Windows tree (breaks `tauri build` permission UTF-8 scan).
 
 ## Layout
 
-- `app/` — Tauri 2 (`ui/index.html` is the UI)
-- `app/src-tauri/src/core/` — framed IPC client + session spawn
+- `app/` — Tauri 2 (`ui/index.html` is the only product UI)
+- `app/src-tauri/src/core/` — framed IPC + session spawn (unix socket / Windows named pipe)
 - `app/src-tauri/src/data/` — JSON store + pure generate
-- `app/src-tauri/src/sys.rs` — system proxy
-- `core/server/` — Go core source (`module NexusCore`)
-- `bin/NexusCore` · `bin/Nexus.app` — build outputs (gitignored)
-- `docs/core-dependencies.md` — Core dependency pins
+- `app/src-tauri/src/sys.rs` — system proxy (macOS networksetup / Windows WinINet registry)
+- `app/src-tauri/src/winhide.rs` — Windows no-console spawn helper
+- `app/src-tauri/windows/app.manifest` — Windows elevation + DPI
+- `core/server/` — Go core (`module NexusCore`)
+- `bin/` — build outputs (gitignored)
+- `docs/core-dependencies.md` — Core dependency pins (external fork module paths are not product branding)
 
-## Build (local .app)
+## Build
+
+### Full dual rebuild (macOS host)
 
 ```bash
 cd .
-./build.sh   # always full rebuild → bin/Nexus.app + bin/NexusCore
+./build.sh   # no flags — always full rebuild
 ```
 
-No flags. Always rebuilds NexusCore, runs `npm install`, and packages a release `.app`.
+Produces:
+
+- `bin/NexusCore`, staged Tauri externalBin, `bin/Nexus.app`
+- `bin/NexusCore-windows-x86_64.exe` (+ seed under `bin/windows-x86_64/`)
 
 Requires: macOS, Xcode CLT, `go`, `cargo`/`rustc`, `npm`.
 
-### Distribution note (unsigned)
+### Windows shell / NSIS (on a Windows machine)
 
-This build path produces an **unsigned** local app (no Developer ID / notarization). Fine for your machine and internal use. Gatekeeper will block copies to other Macs until you codesign + notarize with your Apple credentials (not wired in `build.sh` yet).
+1. Place sources + prebuilt `NexusCore.exe` under a build root (e.g. `NexusBuild`).
+2. Run `script/build_windows_remote.ps1 -NexusRoot <root>` (or your local equivalent).
+3. Artifacts: `app/src-tauri/target/release/nexus.exe` and NSIS under Tauri bundle output.
+
+Rust + MSVC + npm required on Windows. Mac cannot fully cross the Tauri GUI.
+
+### Distribution (unsigned internal)
+
+This path produces **unsigned** local/internal builds (no Apple notarization, no Windows EV/SmartScreen reputation). Fine for your machines. Gatekeeper / SmartScreen will warn on other hosts until you sign with your own credentials (not wired in `build.sh`).
 
 ## Dev
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
-./build.sh   # full release build when you need a fresh Core + .app
+./build.sh          # when you need a fresh Core + mac .app
 cd app && npm run tauri dev
 ```
 
 ## Capabilities (0.2.0)
 
-- Connect: UI selected node → generate → Core `Start` (share link or outbound JSON)
-- Tun chip + system proxy; exit always clears OS proxy on `:2080` and stops Core
-- Catalog (groups/nodes) in `store.json` via `catalog_get` / `catalog_put`
-- Node traffic column from `QueryConnections` aggregate while connected
+- Connect: selected node → generate → Core `Start` (share link or outbound JSON)
+- Tun chip + system proxy; exit clears OS proxy on `:2080` and stops Core
+- Catalog (groups/nodes) in store via `catalog_get` / `catalog_put`
+- Node **流量** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only 重置流量 zeros)
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled 连通 (not proxy path test)
 - Advanced routing/DNS settings hidden until generate is wired to them
+- Windows: elevated shell, no console flash on helper spawns
 
 ## Status
 
-Product shell is operational for macOS local use. Not a notarized App Store / public download build.
+Operational for **macOS arm64** and **Windows x86_64** internal use. Not a notarized App Store / public-download build.

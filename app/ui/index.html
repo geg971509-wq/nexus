@@ -1996,14 +1996,13 @@
               </div>
               <div class="menu-sep"></div>
               <button class="menu-item" data-act="toggle-autostart" role="menuitem"><span class="check"></span><span class="grow" title="登录系统后自动打开 Nexus">随系统启动</span></button>
-              <button class="menu-item checked" data-act="toggle-remember" role="menuitem"><span class="check">✓</span><span class="grow" title="示意：未接线，不会在启动时恢复选中配置">记住配置档</span></button>
+              <button class="menu-item checked" data-act="toggle-remember" role="menuitem"><span class="check">✓</span><span class="grow" title="未接线：当前不会在启动时恢复选中配置">记住配置档</span></button>
               <button class="menu-item checked" data-act="toggle-lan" role="menuitem"><span class="check">✓</span><span class="grow" title="其它设备可连本机入站端口">允许局域网连接</span></button>
               <div class="menu-sep"></div>
               <button class="menu-item" data-act="manage-groups" role="menuitem"><span class="grow" title="新建、重命名、删除订阅分组">管理分组…</span></button>
               <button class="menu-item" data-act="runtime-stats" role="menuitem"><span class="grow" title="核心与连接运行摘要">运行状态…</span></button>
-              <button class="menu-item" data-act="export-config" role="menuitem"><span class="grow" title="导出当前 Sing-box 配置（示意）">导出配置…</span></button>
+              <button class="menu-item" data-act="export-config" role="menuitem"><span class="grow" title="导出当前节点的 Core 配置">导出配置…</span></button>
               <button class="menu-item" data-act="hide" role="menuitem"><span class="grow" title="隐藏到菜单栏，不退出">隐藏窗口</span></button>
-              <button class="menu-item" data-act="tray-preview" role="menuitem"><span class="grow" title="预览托盘菜单示意">托盘菜单预览</span></button>
               <button class="menu-item" data-act="restart-core" role="menuitem"><span class="grow" title="重新加载代理核心进程">重启核心</span></button>
               <button class="menu-item" data-act="quit" role="menuitem"><span class="grow" title="退出 Nexus">退出</span></button>
             </div>
@@ -2339,7 +2338,7 @@
                   </div>
                   <div class="set-section" data-i18n="sec.b0fae043">规则</div>
                   <div class="set-row" style="display:block;padding-bottom:12px">
-                    <span class="set-hint" style="display:block;margin-bottom:8px" data-i18n="hint.ruleTable">轻量示意：域名匹配 → 出站；完整规则 DSL 在 Qt 实现</span>
+                    <span class="set-hint" style="display:block;margin-bottom:8px" data-i18n="hint.ruleTable">域名匹配 → 出站（完整规则引擎未接线时仅作预览）</span>
                     <table class="rule-table" id="routeRuleTable">
                       <thead><tr><th data-i18n="th.match">匹配</th><th data-i18n="th.outbound">出站</th><th data-i18n="th.enable">启用</th></tr></thead>
                       <tbody>
@@ -2597,7 +2596,7 @@
                   <div class="set-row">
                     <div class="set-label" data-i18n="label.11d439ac">排除故障</div>
                     <div class="set-right">
-                      <span class="set-hint" data-i18n="hint.a1daa533">重置 Tun 相关设置并输出诊断信息（示意）</span>
+                      <span class="set-hint" data-i18n="hint.a1daa533">重置 Tun 相关设置并输出诊断信息</span>
                       <div class="set-ctrl inline"><button type="button" class="btn-mini" id="tunTroubleshoot">排除故障</button></div>
                     </div>
                   </div>
@@ -2891,15 +2890,6 @@
     </div>
   </div>
 
-  <div class="tray-float" id="trayFloat" role="menu" aria-label="托盘菜单示意">
-    <div class="tray-title">托盘菜单（示意）</div>
-    <button class="menu-item" data-tray="show" role="menuitem"><span class="grow">显示窗口</span></button>
-    <button class="menu-item" data-tray="toggle" role="menuitem"><span class="check"></span><span class="grow">连接</span></button>
-    <button class="menu-item" data-tray="sysproxy" role="menuitem"><span class="check"></span><span class="grow">系统代理</span></button>
-    <button class="menu-item" data-tray="tun" role="menuitem"><span class="check"></span><span class="grow">虚拟网卡</span></button>
-    <div class="menu-sep"></div>
-    <button class="menu-item" data-tray="quit" role="menuitem"><span class="grow">退出</span></button>
-  </div>
 <script>
   const powerBtn = document.getElementById('powerBtn');
   const statusDot = document.getElementById('statusDot');
@@ -3062,9 +3052,10 @@
     pb.classList.toggle('on', on);
     pb.setAttribute('aria-pressed', String(on));
     statusDot.classList.toggle('on', on);
-    // traffic from Core stream — never invent 12.4 KB
+    // traffic: never invent; disconnect keeps per-node totals (only 重置流量 zeros)
     if (!on) {
-      if (sbProxy) sbProxy.textContent = '—';
+      if (typeof refreshSbProxyFromNodes === 'function') refreshSbProxyFromNodes();
+      else if (sbProxy) sbProxy.textContent = '—';
       const sbDirect = document.getElementById('sbDirect');
       if (sbDirect) sbDirect.textContent = '—';
       statsStarted = null;
@@ -3077,6 +3068,7 @@
         connectedName = selectedName;
         connectedLat = (selectedLat && selectedLat !== '—' && selectedLat !== '…') ? selectedLat : '—';
       }
+      if (typeof refreshSbProxyFromNodes === 'function') refreshSbProxyFromNodes();
     }
     refreshHeroStatus();
     refreshConnectedRow();
@@ -3168,8 +3160,7 @@
           system_proxy: !!document.getElementById('sysToggle')?.checked,
         }, payload));
         if (!r || r.offline) {
-          setConnected(true); // pins connectedName = selectedName
-          log('OK', 'ok', `预览模式 · 未启动 Core · ${connectedName || selectedName}`);
+          log('CORE', 'warn', '后端未就绪，无法启动隧道');
           return;
         }
         if (!r.ok) { log('CORE', 'warn', `Start 失败: ${r.error}`); return; }
@@ -3452,24 +3443,40 @@
         'resolve-ip': () => { resolveSelectedIps(); },
         'clear-test': () => { clearTestResults(); },
         'reset-traffic': () => {
-          // on_menu_reset_traffic: selected profiles only
+          // on_menu_reset_traffic: selected profiles only (explicit zero — switch must not)
           const rows = selectedRows();
           const targets = rows.length ? rows : [...nodeTable.querySelectorAll('tr')];
           const names = new Set(targets.map(r => r.dataset.name));
           targets.forEach(r => {
             const el = r.querySelector('.flow');
-            if (el) { el.textContent = '—'; el.classList.add('muted'); el.classList.remove('flow'); el.classList.add('flow', 'muted'); }
+            if (el) {
+              el.textContent = '—';
+              el.classList.remove('flow');
+              el.classList.add('flow', 'muted');
+            }
           });
-          const gid = currentGid();
-          const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
-          if (prof?.nodes) prof.nodes.forEach(n => { if (names.has(n.name)) n.flow = null; });
+          if (typeof SUB_PROFILES !== 'undefined') {
+            for (const id of Object.keys(SUB_PROFILES || {})) {
+              const nodes = SUB_PROFILES[id]?.nodes;
+              if (!Array.isArray(nodes)) continue;
+              nodes.forEach(n => {
+                if (!names.has(n.name)) return;
+                n.flow = null;
+                n.flowUp = 0;
+                n.flowDown = 0;
+              });
+            }
+          }
+          // re-baseline Core so next poll doesn't re-add pre-reset session bytes
+          _coreBaseUp = null;
+          _coreBaseDown = null;
           if (!rows.length) {
-            sbProxy.textContent = connected ? '0 B' : '—';
+            if (sbProxy) sbProxy.textContent = connected ? '0 B' : '—';
             const sbDirect = document.getElementById('sbDirect');
             if (sbDirect) sbDirect.textContent = '—';
+          } else if (typeof refreshSbProxyFromNodes === 'function') {
+            refreshSbProxyFromNodes();
           }
-          if (typeof _flowUpMax !== 'undefined') { _flowUpMax = 0; _flowDownMax = 0; }
-          if (typeof _flowUpMax !== 'undefined') { _flowUpMax = 0; _flowDownMax = 0; }
           log('SYS', 'info', '已重置流量 · ' + targets.length + ' 个节点');
         },
         edit: () => openEditDialog(one),
@@ -4455,11 +4462,28 @@
             if (!next.length) {
               throw new Error('订阅内容无可解析节点（请检查链接或格式）');
             }
-            const beforeKeys = new Set((prof.nodes || []).map(n => (n.addr || '') + '|' + (n.name || '')));
+            const beforeNodes = prof.nodes || [];
+            const beforeKeys = new Set(beforeNodes.map(n => (n.addr || '') + '|' + (n.name || '')));
             const nextKeys = new Set(next.map(n => (n.addr || '') + '|' + (n.name || '')));
             let addR = 0, delR = 0;
             for (const k of nextKeys) if (!beforeKeys.has(k)) addR++;
             for (const k of beforeKeys) if (!nextKeys.has(k)) delR++;
+            // keep per-node cumulative traffic across sub refresh (match name, then addr)
+            const byName = new Map();
+            const byAddr = new Map();
+            for (const o of beforeNodes) {
+              if (o && o.name) byName.set(o.name, o);
+              if (o && o.addr) byAddr.set(o.addr, o);
+            }
+            for (const n of next) {
+              const prev = byName.get(n.name) || byAddr.get(n.addr);
+              if (!prev) continue;
+              if (prev.flowUp || prev.flowDown || prev.flow) {
+                n.flowUp = Math.max(0, Number(prev.flowUp) || 0);
+                n.flowDown = Math.max(0, Number(prev.flowDown) || 0);
+                n.flow = prev.flow || null;
+              }
+            }
             prof.nodes = next;
             prof.label = g.name;
             try {
@@ -4958,6 +4982,8 @@
           addr: n.addr,
           lat: n.lat == null ? null : n.lat,
           flow: n.flow == null ? null : n.flow,
+          flowUp: Math.max(0, Number(n.flowUp) || 0) || undefined,
+          flowDown: Math.max(0, Number(n.flowDown) || 0) || undefined,
           // keep connect material
           link: n.link || undefined,
           outbound: n.outbound || undefined,
@@ -5024,7 +5050,25 @@
           addr: n.addr || '',
           lat: (n.lat == null || n.lat === '') ? null : n.lat,
           flow: n.flow == null ? null : n.flow,
+          flowUp: Math.max(0, Number(n.flowUp) || 0),
+          flowDown: Math.max(0, Number(n.flowDown) || 0),
         };
+        // recover numeric totals from legacy display string if needed
+        if ((!o.flowUp && !o.flowDown) && o.flow && typeof o.flow === 'string') {
+          const parts = o.flow.split('·').map(s => s.trim());
+          const parseOne = (s) => {
+            const m = String(s || '').match(/([\d.]+)\s*([KMG]?B)/i);
+            if (!m) return 0;
+            let v = parseFloat(m[1]);
+            const u = m[2].toUpperCase();
+            if (u.startsWith('K')) v *= 1024;
+            else if (u.startsWith('M')) v *= 1024 * 1024;
+            else if (u.startsWith('G')) v *= 1024 * 1024 * 1024;
+            return Math.max(0, v) || 0;
+          };
+          o.flowUp = parseOne(parts[0]);
+          o.flowDown = parseOne(parts[1]);
+        }
         if (n.link) o.link = n.link;
         if (n.outbound) o.outbound = repairStoredOutbound(n.outbound);
         return o;
@@ -5454,39 +5498,90 @@
     }).join('');
     if (connSortKey) sortConnTable(connSortKey, connSortDir);
   }
-  /** Monotonic session totals for connected node flow column (bytes). */
-  let _flowUpMax = 0, _flowDownMax = 0;
+  /**
+   * Per-node cumulative traffic. Core QueryStats resets on every Stop/Start
+   * (node switch, Tun re-Start), so UI keeps node totals and only adds Core deltas.
+   * Explicit 重置流量 is the only zero path.
+   */
+  let _coreBaseUp = null, _coreBaseDown = null;
+  function findNodeByConnectedName(name) {
+    if (!name || typeof SUB_PROFILES === 'undefined') return null;
+    for (const id of Object.keys(SUB_PROFILES || {})) {
+      const nodes = SUB_PROFILES[id]?.nodes;
+      if (!Array.isArray(nodes)) continue;
+      const n = nodes.find(x => x && x.name === name);
+      if (n) return n;
+    }
+    return null;
+  }
+  function paintNodeFlowCell(name, flowStr) {
+    if (!name || !nodeTable || !flowStr) return;
+    const row = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === name);
+    if (!row) return;
+    const el = row.querySelector('td.flow, .flow');
+    if (!el) return;
+    el.classList.remove('muted');
+    el.classList.add('flow');
+    const parts = flowStr.split('·').map(s => s.trim());
+    const u = parts[0] || '';
+    const d = parts[1] || '';
+    el.innerHTML = `<span class="up">${u}</span>` + (d ? ` · <span class="down">${d}</span>` : '');
+  }
+  function sumAllNodeFlowBytes() {
+    let total = 0;
+    if (typeof SUB_PROFILES === 'undefined') return 0;
+    for (const id of Object.keys(SUB_PROFILES || {})) {
+      const nodes = SUB_PROFILES[id]?.nodes;
+      if (!Array.isArray(nodes)) continue;
+      for (const n of nodes) {
+        total += Math.max(0, Number(n.flowUp) || 0) + Math.max(0, Number(n.flowDown) || 0);
+      }
+    }
+    return total;
+  }
+  function refreshSbProxyFromNodes() {
+    if (!sbProxy) return;
+    if (!connected && sumAllNodeFlowBytes() === 0) {
+      sbProxy.textContent = '—';
+      return;
+    }
+    sbProxy.textContent = fmtBytes(sumAllNodeFlowBytes());
+  }
   function applyNodeFlow(up, down) {
     up = Math.max(0, Number(up) || 0);
     down = Math.max(0, Number(down) || 0);
-    // monotonic — closed-window shrink must not drop the cell
-    if (up < _flowUpMax) up = _flowUpMax; else _flowUpMax = up;
-    if (down < _flowDownMax) down = _flowDownMax; else _flowDownMax = down;
-    const flowStr = `${fmtBytes(up)}↑ · ${fmtBytes(down)}↓`;
+    // First sample after connect / explicit reset: baseline only (no double-count).
+    if (_coreBaseUp == null || _coreBaseDown == null) {
+      _coreBaseUp = up;
+      _coreBaseDown = down;
+      refreshSbProxyFromNodes();
+      return;
+    }
+    // Core box recreated → counters restart lower; re-baseline, don't invent a drop.
+    if (up < _coreBaseUp || down < _coreBaseDown) {
+      _coreBaseUp = up;
+      _coreBaseDown = down;
+      refreshSbProxyFromNodes();
+      return;
+    }
+    const dUp = up - _coreBaseUp;
+    const dDown = down - _coreBaseDown;
+    _coreBaseUp = up;
+    _coreBaseDown = down;
+    if (dUp === 0 && dDown === 0) {
+      refreshSbProxyFromNodes();
+      return;
+    }
     const name = connectedName || '';
-    if (name && typeof SUB_PROFILES !== 'undefined') {
-      for (const id of Object.keys(SUB_PROFILES || {})) {
-        const nodes = SUB_PROFILES[id]?.nodes;
-        if (!Array.isArray(nodes)) continue;
-        const n = nodes.find(x => x && x.name === name);
-        if (n) n.flow = flowStr;
-      }
+    const n = findNodeByConnectedName(name);
+    if (n) {
+      n.flowUp = Math.max(0, Number(n.flowUp) || 0) + dUp;
+      n.flowDown = Math.max(0, Number(n.flowDown) || 0) + dDown;
+      n.flow = `${fmtBytes(n.flowUp)}↑ · ${fmtBytes(n.flowDown)}↓`;
+      paintNodeFlowCell(name, n.flow);
+      if (typeof saveCatalog === 'function') saveCatalog(false);
     }
-    if (name && nodeTable) {
-      const row = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === name);
-      if (row) {
-        const el = row.querySelector('td.flow, .flow');
-        if (el) {
-          el.classList.remove('muted');
-          el.classList.add('flow');
-          const parts = flowStr.split('·').map(s => s.trim());
-          const u = parts[0] || '';
-          const d = parts[1] || '';
-          el.innerHTML = `<span class="up">${u}</span>` + (d ? ` · <span class="down">${d}</span>` : '');
-        }
-      }
-    }
-    if (sbProxy) sbProxy.textContent = fmtBytes(up + down);
+    refreshSbProxyFromNodes();
   }
   async function refreshConnections() {
     if (!connected) {
@@ -5503,18 +5598,21 @@
         if (open && onConn) renderConnections(list);
         const st = document.getElementById('stConn');
         if (st) st.textContent = String(r.data.count ?? list.length);
-        let up = 0, down = 0;
-        for (const c of list) {
-          up += Number(c.upload) || 0;
-          down += Number(c.download) || 0;
-        }
-        applyNodeFlow(up, down);
       }
+      // Node 流量: Core QueryStats deltas → per-node cumulative (survives switch).
+      try {
+        const st = await nexusInvoke('query_stats');
+        if (st && st.ok && st.data) {
+          applyNodeFlow(st.data.upload, st.data.download);
+        }
+      } catch (_) { /* QueryStats optional if core mid-stop */ }
     } catch (_) { /* offline / core down */ }
   }
   function startConnPoll() {
     stopConnPoll();
-    _flowUpMax = 0; _flowDownMax = 0;
+    // Re-baseline Core only — never wipe per-node totals on switch/reconnect.
+    _coreBaseUp = null;
+    _coreBaseDown = null;
     refreshConnections();
     connPollTimer = setInterval(() => {
       if (!connected) { stopConnPoll(); return; }
@@ -5908,83 +6006,8 @@
   // clear placeholder on focus/input handled by existing field helpers; ensure sync when opening 订阅 panel
   const _showViewSub = typeof showView === 'function' ? null : null;
 
-  // ——— tray float: mirror home chips / store (same paths as settings) ———
-  const trayFloat = document.getElementById('trayFloat');
-  function closeTrayFloat() {
-    trayFloat?.classList.remove('open');
-  }
-  function refreshTrayMenu() {
-    if (!trayFloat) return;
-    const sysOn = !!document.getElementById('sysToggle')?.checked;
-    const tunOn = !!document.getElementById('tunToggle')?.checked;
-    trayFloat.querySelectorAll('[data-tray]').forEach(btn => {
-      const act = btn.dataset.tray;
-      let checked = null;
-      if (act === 'sysproxy') checked = sysOn;
-      else if (act === 'tun') checked = tunOn;
-      else if (act === 'toggle') checked = !!connected;
-      if (checked == null) {
-        btn.classList.remove('checked');
-        const ch = btn.querySelector('.check');
-        if (ch) ch.textContent = '';
-        return;
-      }
-      btn.classList.toggle('checked', checked);
-      let ch = btn.querySelector('.check');
-      if (!ch) {
-        ch = document.createElement('span');
-        ch.className = 'check';
-        btn.insertBefore(ch, btn.firstChild);
-      }
-      ch.textContent = checked ? '✓' : '';
-      if (act === 'toggle') {
-        const g = btn.querySelector('.grow');
-        if (g) g.textContent = connected ? '断开' : '连接';
-      }
-    });
-  }
-  function openTrayFloat() {
-    closeMenus();
-    refreshTrayMenu();
-    trayFloat?.classList.add('open');
-  }
-  document.querySelectorAll('#trayFloat [data-tray]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const act = btn.dataset.tray;
-      closeTrayFloat();
-      if (act === 'show') log('SYS', 'info', '显示主窗口');
-      else if (act === 'toggle') powerBtn.click();
-      else if (act === 'sysproxy') {
-        // same path as menu proxy-on/off + chip
-        const t = document.getElementById('sysToggle');
-        if (!t) return;
-        const next = !t.checked;
-        t.checked = next;
-        document.getElementById('sysChip')?.classList.toggle('on', next);
-        if (typeof nexusInvoke === 'function') {
-          nexusInvoke('set_system_proxy_cmd', { enabled: next }).then(r => {
-            if (r.ok) log('SYS', 'info', String(r.data || (next ? '已开启系统代理' : '已关闭系统代理')));
-            else if (!r.offline && r.error) log('SYS', 'warn', `系统代理: ${r.error}`);
-            refreshTrayMenu();
-          });
-        } else {
-          t.dispatchEvent(new Event('change'));
-          refreshTrayMenu();
-        }
-      } else if (act === 'tun') {
-        const next = !isTunOn();
-        if (typeof applyTun === 'function') applyTun(next);
-        else {
-          const t = document.getElementById('tunToggle');
-          if (t) { t.checked = next; t.dispatchEvent(new Event('change')); }
-        }
-        refreshTrayMenu();
-      } else if (act === 'quit') handleMenuAct('quit');
-    });
-  });
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#trayFloat') && !e.target.closest('[data-act="tray-preview"]')) closeTrayFloat();
-  });
+  // Real OS tray is owned by the Tauri shell — no in-page tray mock.
+  function refreshTrayMenu() { /* shell tray refreshes from store/session */ }
 
   const dock = document.getElementById('dock');
   const dockToggle = document.getElementById('dockToggle');
@@ -6420,7 +6443,7 @@
       'hint.91337c1a': '每行一条，如 domain:example.com 或 geoip:cn',
       'hint.940fbe3c': '当前顶栏分组的订阅 URL；粘贴后点应用',
       'hint.97fee25f': '越详细越占空间；排错可临时开 debug',
-      'hint.a1daa533': '重置 Tun 相关设置并输出诊断信息（示意）',
+      'hint.a1daa533': '重置 Tun 相关设置并输出诊断信息',
       'hint.autoConnect': '未实现：不会在启动时自动连接上次节点',
       'hint.b0a3a450': 'gvisor 用户态栈更稳；system 性能更好',
       'hint.b565e862': '规则按列表分流；全局全走代理；直连不代理',
@@ -6453,7 +6476,7 @@
       'hint.remoteDns': '代理流量使用的 DNS（可填 DoH）',
       'hint.routeProfile': '完整规则：全局代理优先；大陆直连：国内域名/IP 走直连',
       'hint.ruleMirror': '拉取 GeoIP/域名规则时的 CDN 源；访问 GitHub 慢可换 jsDelivr',
-      'hint.ruleTable': '轻量示意：域名匹配 → 出站；完整规则 DSL 在 Qt 实现',
+      'hint.ruleTable': '域名匹配 → 出站（完整规则引擎未接线时仅作预览）',
       'hint.ruleTimeout': '路由判定最长等待；0 为不限制',
       'hint.sniff': '从流量中识别真实域名与协议，改善分流',
       'hint.sniffOverride': '用嗅探到的域名改写连接目标',
@@ -6476,7 +6499,7 @@
       'log.saved': '设置已保存',
       'log.theme': '界面主题：{theme}',
       'log.tunReset': '已恢复默认 Tun 地址',
-      'log.tunTrouble': 'Tun 排除故障：重置路由表并输出诊断（示意）',
+      'log.tunTrouble': 'Tun 排除故障：重置路由表并输出诊断',
       'lang.English': 'English',
       'lang.Русский': 'Русский',
       'lang.简体中文': '简体中文',
@@ -6631,7 +6654,7 @@
       'hint.91337c1a': 'One rule per line, e.g. domain:example.com or geoip:cn',
       'hint.940fbe3c': 'Subscription URL for the current top-bar group; paste then Apply',
       'hint.97fee25f': 'More detail uses more space; use debug temporarily when troubleshooting',
-      'hint.a1daa533': 'Reset Tun-related settings and dump diagnostics (demo)',
+      'hint.a1daa533': 'Reset Tun-related settings and dump diagnostics',
       'hint.autoConnect': 'Not implemented: will not auto-connect last node on launch',
       'hint.b0a3a450': 'gvisor user-space stack is stabler; system is faster',
       'hint.b565e862': 'Rule: match list; Global: all proxy; Direct: no proxy',
@@ -6664,7 +6687,7 @@
       'hint.remoteDns': 'DNS for proxied traffic (DoH allowed)',
       'hint.routeProfile': 'Full rules: proxy-first; China direct: CN domains/IPs go direct',
       'hint.ruleMirror': 'CDN for GeoIP/domain rules; use jsDelivr if GitHub is slow',
-      'hint.ruleTable': 'Lightweight demo: domain → outbound; full DSL is in Qt',
+      'hint.ruleTable': 'Domain match → outbound (preview until full routing is wired)',
       'hint.ruleTimeout': 'Max wait for routing decision; 0 = unlimited',
       'hint.sniff': 'Detect real domain/protocol from traffic for better routing',
       'hint.sniffOverride': 'Rewrite destination with sniffed domain',
@@ -6687,7 +6710,7 @@
       'log.saved': 'Settings saved',
       'log.theme': 'UI theme: {theme}',
       'log.tunReset': 'Tun addresses reset to defaults',
-      'log.tunTrouble': 'Tun troubleshoot: reset routes & dump diagnostics (demo)',
+      'log.tunTrouble': 'Tun troubleshoot: reset routes & dump diagnostics',
       'lang.English': 'English',
       'lang.Русский': 'Russian',
       'lang.简体中文': 'Simplified Chinese',
@@ -6842,7 +6865,7 @@
       'hint.91337c1a': 'По одной строке: domain:example.com или geoip:cn',
       'hint.940fbe3c': 'URL подписки текущей группы; вставьте и нажмите «Применить»',
       'hint.97fee25f': 'Подробнее — больше места; debug только для разбора',
-      'hint.a1daa533': 'Сбросить настройки Tun и вывести диагностику (демо)',
+      'hint.a1daa533': 'Сбросить настройки Tun и вывести диагностику',
       'hint.autoConnect': 'Не реализовано: не подключает последний узел при запуске',
       'hint.b0a3a450': 'gvisor стабильнее; system быстрее',
       'hint.b565e862': 'Правила: по списку; Глобальный: весь прокси; Прямой: без прокси',
@@ -6875,7 +6898,7 @@
       'hint.remoteDns': 'DNS для прокси (можно DoH)',
       'hint.routeProfile': 'Полные правила: прокси; Китай напрямую: CN → direct',
       'hint.ruleMirror': 'CDN для GeoIP/доменов; jsDelivr при медленном GitHub',
-      'hint.ruleTable': 'Демо: домен → исходящий; полный DSL в Qt',
+      'hint.ruleTable': 'Домен → исходящий (предпросмотр, пока маршрутизация не подключена)',
       'hint.ruleTimeout': 'Макс. ожидание решения; 0 — без лимита',
       'hint.sniff': 'Определять домен/протокол из трафика',
       'hint.sniffOverride': 'Подменять цель sniffer-доменом',
@@ -6898,7 +6921,7 @@
       'log.saved': 'Настройки сохранены',
       'log.theme': 'Тема интерфейса: {theme}',
       'log.tunReset': 'Адреса Tun сброшены',
-      'log.tunTrouble': 'Диагностика Tun: сброс маршрутов (демо)',
+      'log.tunTrouble': 'Диагностика Tun: сброс маршрутов',
       'lang.English': 'English',
       'lang.Русский': 'Русский',
       'lang.简体中文': 'Упрощ. китайский',
@@ -7053,7 +7076,7 @@
       'hint.91337c1a': '每行一條，如 domain:example.com 或 geoip:cn',
       'hint.940fbe3c': '目前頂欄分組的訂閱 URL；貼上後點套用',
       'hint.97fee25f': '越詳細越占空間；排錯可暫時開 debug',
-      'hint.a1daa533': '重設 Tun 相關設定並輸出診斷資訊（示意）',
+      'hint.a1daa533': '重設 Tun 相關設定並輸出診斷資訊',
       'hint.autoConnect': '未實作：不會在啟動時自動連線上次節點',
       'hint.b0a3a450': 'gvisor 使用者態堆疊更穩；system 效能更好',
       'hint.b565e862': '規則按列表分流；全域全走代理；直連不代理',
@@ -7086,7 +7109,7 @@
       'hint.remoteDns': '代理流量使用的 DNS（可填 DoH）',
       'hint.routeProfile': '完整規則：全域代理優先；大陸直連：國內網域/IP 走直連',
       'hint.ruleMirror': '拉取 GeoIP/網域規則時的 CDN 源；存取 GitHub 慢可換 jsDelivr',
-      'hint.ruleTable': '輕量示意：網域匹配 → 出站；完整規則 DSL 在 Qt 實作',
+      'hint.ruleTable': '網域匹配 → 出站（完整規則引擎未接線時僅作預覽）',
       'hint.ruleTimeout': '路由判定最長等待；0 為不限制',
       'hint.sniff': '從流量中識別真實網域與協定，改善分流',
       'hint.sniffOverride': '用嗅探到的網域改寫連線目標',
@@ -7109,7 +7132,7 @@
       'log.saved': '設定已儲存',
       'log.theme': '介面主題：{theme}',
       'log.tunReset': '已恢復預設 Tun 位址',
-      'log.tunTrouble': 'Tun 排除故障：重設路由並輸出診斷（示意）',
+      'log.tunTrouble': 'Tun 排除故障：重設路由並輸出診斷',
       'lang.English': 'English',
       'lang.Русский': '俄語',
       'lang.简体中文': '簡體中文',
@@ -7631,8 +7654,7 @@
     if (typeof closeCtxMenu === 'function') closeCtxMenu();
     if (typeof closeLogCtxMenu === 'function') closeLogCtxMenu();
     if (typeof closeConnCtxMenu === 'function') closeConnCtxMenu();
-    if (typeof closeTrayFloat === 'function') closeTrayFloat();
-  }
+      }
   function bindMenu(btnId, menuId) {
     const btn = document.getElementById(btnId);
     const menu = document.getElementById(menuId);
@@ -7839,7 +7861,6 @@
       'manage-groups': () => openGroupsDialog(),
       'runtime-stats': () => openStatsDialog(),
       'export-config': () => openExportDialog(),
-      'tray-preview': () => openTrayFloat(),
     };
     (map[act] || (() => log('SYS', 'info', act)))();
   }
@@ -7870,11 +7891,6 @@
         return;
       }
     }
-    if (trayFloat?.classList.contains('open')) {
-      closeTrayFloat();
-      e.preventDefault();
-      return;
-    }
     if (typeof closeMenus === 'function') closeMenus();
   });
 
@@ -7897,7 +7913,7 @@
     } catch (_) {}
     const id = await nexusInvoke('app_identity');
     if (id.ok) log('SYS', 'info', `后端 ${id.data?.identifier || 'Nexus'} · ${id.data?.phase || ''}`);
-    else log('SYS', 'info', '浏览器预览模式（无 Tauri 后端）');
+    else log('SYS', 'warn', '后端未连接');
     const st = await nexusInvoke('store_snapshot');
     if (st.ok) {
       const d = st.data || {};
@@ -8030,6 +8046,9 @@
           return;
         }
         if (cr.data?.started) {
+          // Core box recreated — re-baseline QueryStats; keep per-node totals.
+          _coreBaseUp = null;
+          _coreBaseDown = null;
           log('OK', 'ok', on ? 'Tun 隧道已应用' : '已切回系统代理模式');
           if (cr.data?.proxy_note) log('SYS', 'info', cr.data.proxy_note);
         }

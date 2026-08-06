@@ -68,6 +68,8 @@ fn parse_target(host: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
 }
 
 /// True for utun / loopback / Apple peer / virtual faces we must not bind for direct probe.
+/// macOS physical bind only; kept under `test` so unit tests still run on other hosts.
+#[cfg(any(target_os = "macos", test))]
 fn is_virtual_ifname(name: &str) -> bool {
     let n = name.to_ascii_lowercase();
     n == "lo0"
@@ -89,6 +91,7 @@ fn is_virtual_ifname(name: &str) -> bool {
 }
 
 /// Default-route interface name (`route -n get default`), if any.
+#[cfg(target_os = "macos")]
 fn default_route_ifname() -> Option<String> {
     let out = std::process::Command::new("/sbin/route")
         .args(["-n", "get", "default"])
@@ -119,11 +122,6 @@ fn if_nametoindex(name: &str) -> Option<u32> {
     } else {
         Some(idx)
     }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn if_nametoindex(_name: &str) -> Option<u32> {
-    None
 }
 
 /// Physical NIC ifindex for direct dial under Tun.

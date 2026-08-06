@@ -5,6 +5,7 @@ mod sys;
 mod sub;
 mod net;
 mod tray_spin;
+mod winhide;
 
 use core::session::{CoreSession, SESSION};
 
@@ -532,6 +533,24 @@ async fn query_connections() -> Result<serde_json::Value, String> {
     .map_err(|e| format!("query_connections join: {e}"))?
 }
 
+/// Cumulative proxy outbound traffic (Core QueryStats / TrafficManager).
+/// Use this for the node 流量 column — connection-window sums freeze when conns close.
+#[tauri::command]
+async fn query_stats() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        use core::session::SESSION;
+        let mut g = SESSION.lock().map_err(|e| e.to_string())?;
+        let s = g.as_mut().ok_or("core not started")?;
+        let (upload, download) = s.query_stats_proxy()?;
+        Ok(serde_json::json!({
+            "upload": upload,
+            "download": download,
+        }))
+    })
+    .await
+    .map_err(|e| format!("query_stats join: {e}"))?
+}
+
 /// Stop RPC only — keep Core process for next Start.
 #[tauri::command]
 async fn disconnect_selected() -> Result<serde_json::Value, String> {
@@ -717,7 +736,7 @@ fn confirm_disconnect_quit() -> bool {
     }
     #[cfg(target_os = "windows")]
     {
-        // VBScript MsgBox: Yes=6. Avoid PowerShell popup policy quirks.
+        // VBScript MsgBox: Yes=6. CREATE_NO_WINDOW so cscript itself doesn't flash a console.
         let script = r#"
 WScript.Quit CreateObject("WScript.Shell").Popup("Tunnel still running (Tun / system proxy). Exit will stop Core and clear system proxy.", 0, "Nexus", 49)
 "#;
@@ -726,7 +745,9 @@ WScript.Quit CreateObject("WScript.Shell").Popup("Tunnel still running (Tun / sy
         if std::fs::write(&path, script).is_err() {
             return true;
         }
-        let ok = std::process::Command::new("cscript")
+        let mut cmd = std::process::Command::new("cscript");
+        crate::winhide::apply(&mut cmd);
+        let ok = cmd
             .args(["//Nologo", &path.to_string_lossy()])
             .status()
             .map(|s| s.code() == Some(6))
@@ -786,6 +807,7 @@ pub fn run() {
             connect_selected,
             disconnect_selected,
             query_connections,
+            query_stats,
             sub_fetch,
             net_tcp_probe,
             net_tcp_probe_stop,

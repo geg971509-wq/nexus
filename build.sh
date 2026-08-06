@@ -56,7 +56,7 @@ TRIPLE="$(target_triple)"
 log "root=$ROOT triple=$TRIPLE (full dual release rebuild)"
 
 # Feature tags required in NexusCore (stubs if missing)
-# Windows: with_purego + with_naive_outbound like Throne build_go.sh (CGO off)
+# Windows Core: with_purego + with_naive_outbound (CGO off cross-build)
 CORE_TAGS_MAC="${NEXUS_CORE_TAGS:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,badlinkname,tfogo_checklinkname0}"
 CORE_TAGS_WIN="${NEXUS_CORE_TAGS_WIN:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0}"
 CORE_REQUIRED_TAGS=(with_clash_api with_gvisor with_quic with_wireguard with_utls with_dhcp with_tailscale with_naive_outbound badlinkname tfogo_checklinkname0)
@@ -135,7 +135,7 @@ cp -f "$CORE_OUT" "$STAGED"
 chmod +x "$STAGED"
 ok "staged $STAGED"
 
-# --- 1b) NexusCore Windows amd64 (cross from mac; CGO=0 like Throne) ---
+# --- 1b) NexusCore Windows amd64 (cross from mac; CGO=0) ---
 log "building NexusCore windows/amd64 (go · tags=$CORE_TAGS_WIN)…"
 (
   cd "$CORE_SRC"
@@ -157,7 +157,7 @@ verify_core_binary "$CORE_WIN_OUT" "NexusCore(win)"
 # stage for tauri externalBin on windows target name
 cp -f "$CORE_WIN_OUT" "$BINARIES_DIR/NexusCore-x86_64-pc-windows-msvc.exe"
 cp -f "$CORE_WIN_OUT" "$BINARIES_DIR/NexusCore-x86_64-pc-windows-gnu.exe"
-# cronet dll for naive (Throne does this)
+# cronet dll for naive outbound on Windows
 if command -v curl >/dev/null 2>&1; then
   log "fetching libcronet.dll (windows amd64)…"
   if curl -fLso "$WIN_DIST/libcronet.dll" \
@@ -257,18 +257,20 @@ SCP_BASE=(sshpass -f "$WIN_PASS_FILE" scp -o StrictHostKeyChecking=no -o Preferr
 if [[ -f "$WIN_PASS_FILE" ]] && command -v sshpass >/dev/null 2>&1; then
   log "Windows host $WIN_USER@$WIN_HOST — sync + remote tauri build…"
   REMOTE_DIR="C:/Users/${WIN_USER}/NexusBuild"
-  # Pack only product sources (avoid exclude bin eating app/src-tauri/src/bin)
+  # Pack only product sources (avoid exclude bin eating app/src-tauri/src/bin).
+  # Exclude macOS AppleDouble (._*) / .DS_Store / .omc — Windows tauri-build reads
+  # every file under permissions/ and dies on non-UTF-8 `._nexus.toml`.
   PACK=/tmp/nexus-win-src.tgz
-  tar -C "$ROOT" -czf "$PACK" \
+  COPYFILE_DISABLE=1 tar -C "$ROOT" -czf "$PACK" \
+    --exclude='._*' --exclude='.DS_Store' --exclude='.omc' --exclude='**/.omc/**' \
     app/package.json app/package-lock.json app/ui \
     app/src-tauri/src app/src-tauri/Cargo.toml app/src-tauri/Cargo.lock \
     app/src-tauri/tauri.conf.json app/src-tauri/build.rs \
     app/src-tauri/capabilities app/src-tauri/permissions app/src-tauri/icons \
-    script/build_windows_remote.ps1 script/install_rust_windows.ps1 \
-    2>/dev/null || tar -C "$ROOT" -czf "$PACK" app script
+    script/build_windows_remote.ps1 script/install_rust_windows.ps1
   "${SCP_BASE[@]}" "$PACK" "${WIN_USER}@${WIN_HOST}:C:/Users/${WIN_USER}/nexus-win-src.tgz"
   "${SSH_BASE[@]}" "${WIN_USER}@${WIN_HOST}" \
-    "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path '$REMOTE_DIR' | Out-Null; tar -xzf C:/Users/${WIN_USER}/nexus-win-src.tgz -C '$REMOTE_DIR'\""
+    "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path '$REMOTE_DIR' | Out-Null; tar -xzf C:/Users/${WIN_USER}/nexus-win-src.tgz -C '$REMOTE_DIR'; Get-ChildItem -Path '$REMOTE_DIR' -Recurse -Force -Filter '._*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue; Get-ChildItem -Path '$REMOTE_DIR' -Recurse -Force -Filter '.DS_Store' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue\""
   # ship prebuilt Core
   "${SSH_BASE[@]}" "${WIN_USER}@${WIN_HOST}" \
     "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path '$REMOTE_DIR/bin' | Out-Null\""

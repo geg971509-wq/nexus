@@ -20,6 +20,11 @@ if (-not (Test-Path $NexusRoot)) { throw "NexusRoot missing: $NexusRoot" }
 Ensure-Rust
 Write-Host ("cargo: " + (cargo -V))
 
+# macOS AppleDouble / Finder junk breaks tauri-build permission scan (non-UTF-8).
+Get-ChildItem -Path $NexusRoot -Recurse -Force -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -like '._*' -or $_.Name -eq '.DS_Store' } |
+  Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+
 $bin = Join-Path $NexusRoot "bin"
 $binaries = Join-Path $NexusRoot "app\src-tauri\binaries"
 New-Item -ItemType Directory -Force -Path $bin, $binaries | Out-Null

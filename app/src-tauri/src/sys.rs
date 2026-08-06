@@ -1,5 +1,6 @@
 //! System proxy: macOS networksetup; Windows WinINet Internet Settings (HKCU).
 
+#[cfg(target_os = "macos")]
 use std::process::{Command, Stdio};
 #[cfg(target_os = "macos")]
 use std::sync::OnceLock;
@@ -208,35 +209,117 @@ pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
     }
 }
 
-/// Windows: HKCU Internet Settings (WinINet) + notify. Covers Edge/Chrome user proxy.
+/// Windows: HKCU Internet Settings (WinINet) + notify — no PowerShell (avoids console flash).
 #[cfg(target_os = "windows")]
 pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
+    use std::ptr;
+    use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
+    use windows_sys::Win32::Networking::WinInet::{
+        InternetSetOptionW, INTERNET_OPTION_REFRESH, INTERNET_OPTION_SETTINGS_CHANGED,
+    };
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER,
+        KEY_SET_VALUE, REG_DWORD, REG_SZ,
+    };
+
     let host = "127.0.0.1";
     let proxy = format!("{host}:{port}");
-    let enable = if enabled { "1" } else { "0" };
-    // Single PowerShell: set registry + InternetSetOption refresh via winhttp/netsh not enough for browsers.
-    let ps = format!(
-        r#"$p='HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'; Set-ItemProperty -Path $p -Name ProxyEnable -Value {enable} -Type DWord; if ({enable} -eq 1) {{ Set-ItemProperty -Path $p -Name ProxyServer -Value '{proxy}' -Type String; Set-ItemProperty -Path $p -Name ProxyOverride -Value 'localhost;127.*;<local>' -Type String }} else {{ Remove-ItemProperty -Path $p -Name ProxyServer -ErrorAction SilentlyContinue }}; Add-Type -Namespace N -Name W -MemberDefinition '[DllImport(\"wininet.dll\")] public static extern bool InternetSetOption(IntPtr h, int o, IntPtr b, int l);'; [void][N.W]::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0); [void][N.W]::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)"#
-    );
-    let out = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| format!("powershell proxy: {e}"))?;
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        return Err(format!(
-            "windows system proxy failed: {} {}",
-            err.trim(),
-            stdout.trim()
-        ));
+    let subkey: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\0"
+        .encode_utf16()
+        .collect();
+    let mut hkey: HKEY = ptr::null_mut();
+    let rc = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            subkey.as_ptr(),
+            0,
+            KEY_SET_VALUE,
+            &mut hkey,
+        )
+    };
+    if rc != ERROR_SUCCESS {
+        return Err(format!("RegOpenKeyEx Internet Settings failed: {rc}"));
     }
-    if enabled {
-        Ok(format!("system proxy on {proxy} (WinINet HKCU)"))
-    } else {
-        Ok("system proxy off (WinINet HKCU)".into())
+
+    let set_dword = |name: &str, val: u32| -> Result<(), String> {
+        let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
+        let rc = unsafe {
+            RegSetValueExW(
+                hkey,
+                wide.as_ptr(),
+                0,
+                REG_DWORD,
+                (&val as *const u32) as *const u8,
+                4,
+            )
+        };
+        if rc != ERROR_SUCCESS {
+            return Err(format!("RegSetValueEx {name}: {rc}"));
+        }
+        Ok(())
+    };
+    let set_sz = |name: &str, val: &str| -> Result<(), String> {
+        let wide_name: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
+        let mut wide_val: Vec<u16> = val.encode_utf16().chain(Some(0)).collect();
+        let bytes = (wide_val.len() * 2) as u32;
+        let rc = unsafe {
+            RegSetValueExW(
+                hkey,
+                wide_name.as_ptr(),
+                0,
+                REG_SZ,
+                wide_val.as_mut_ptr() as *const u8,
+                bytes,
+            )
+        };
+        if rc != ERROR_SUCCESS {
+            return Err(format!("RegSetValueEx {name}: {rc}"));
+        }
+        Ok(())
+    };
+    let del_val = |name: &str| {
+        let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
+        let rc = unsafe { RegDeleteValueW(hkey, wide.as_ptr()) };
+        // missing value is fine
+        if rc != ERROR_SUCCESS && rc != ERROR_FILE_NOT_FOUND {
+            // ignore non-fatal delete issues
+        }
+    };
+
+    let result = (|| -> Result<String, String> {
+        if enabled {
+            set_dword("ProxyEnable", 1)?;
+            set_sz("ProxyServer", &proxy)?;
+            set_sz("ProxyOverride", "localhost;127.*;<local>")?;
+        } else {
+            set_dword("ProxyEnable", 0)?;
+            del_val("ProxyServer");
+        }
+        unsafe {
+            let _ = InternetSetOptionW(
+                ptr::null_mut(),
+                INTERNET_OPTION_SETTINGS_CHANGED,
+                ptr::null_mut(),
+                0,
+            );
+            let _ = InternetSetOptionW(
+                ptr::null_mut(),
+                INTERNET_OPTION_REFRESH,
+                ptr::null_mut(),
+                0,
+            );
+        }
+        if enabled {
+            Ok(format!("system proxy on {proxy} (WinINet HKCU)"))
+        } else {
+            Ok("system proxy off (WinINet HKCU)".into())
+        }
+    })();
+
+    unsafe {
+        let _ = RegCloseKey(hkey);
     }
+    result
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]

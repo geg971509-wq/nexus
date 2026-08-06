@@ -3,7 +3,7 @@ use super::elevate::{ensure_setuid_core, path_has_setuid, privileged_core_path};
 use super::frame::LibcoreClient;
 use super::proto_min::{
     decode_core_state, decode_error_resp, decode_has_privilege, decode_query_connections,
-    encode_load_config_core_json, encode_load_config_req, ConnRow,
+    decode_query_stats_proxy, encode_load_config_core_json, encode_load_config_req, ConnRow,
 };
 use std::io;
 use std::path::{Path, PathBuf};
@@ -13,6 +13,8 @@ use std::time::{Duration, Instant};
 
 pub struct CoreSession {
     /// Path or named-pipe id passed to Core via NEXUS_CORE_SOCKET.
+    /// Unix Drop unlinks the sock; Windows only needs it at spawn (pipe is not a file).
+    #[cfg_attr(windows, allow(dead_code))]
     listener_path: PathBuf,
     child: Option<Child>,
     client: Option<LibcoreClient>,
@@ -184,7 +186,9 @@ impl CoreSession {
         }
         #[cfg(windows)]
         {
-            let _ = Command::new("taskkill")
+            let mut cmd = Command::new("taskkill");
+            crate::winhide::apply(&mut cmd);
+            let _ = cmd
                 .args(["/F", "/IM", "NexusCore.exe", "/T"])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -276,7 +280,9 @@ impl CoreSession {
 
         let (stdout, stderr) = Self::core_stdio_sinks();
         let core_cwd = Self::core_workdir();
-        let mut child = Command::new(core_bin)
+        let mut cmd = Command::new(core_bin);
+        crate::winhide::apply(&mut cmd);
+        let mut child = cmd
             .current_dir(&core_cwd)
             .env("NEXUS_CORE_SOCKET", &full_pipe)
             .env("NEXUS_CORE_DEBUG", "1")
@@ -377,6 +383,13 @@ impl CoreSession {
         Ok(decode_query_connections(&data))
     }
 
+    /// Cumulative outbound traffic for tag `proxy` (TrafficManager.TotalOutbound).
+    pub fn query_stats_proxy(&mut self) -> Result<(i64, i64), String> {
+        let c = self.client.as_mut().ok_or("no client")?;
+        let data = c.call("QueryStats", &[]).map_err(|e| e.to_string())?;
+        Ok(decode_query_stats_proxy(&data))
+    }
+
     pub fn stop_core_process(&mut self) -> io::Result<()> {
         if let Some(c) = self.client.take() {
             c.shutdown();
@@ -409,7 +422,9 @@ impl CoreSession {
         }
         #[cfg(windows)]
         {
-            let Ok(out) = Command::new("tasklist")
+            let mut cmd = Command::new("tasklist");
+            crate::winhide::apply(&mut cmd);
+            let Ok(out) = cmd
                 .args(["/FI", "IMAGENAME eq NexusCore.exe", "/NH"])
                 .output()
             else {

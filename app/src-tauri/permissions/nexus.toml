@@ -19,6 +19,7 @@ commands.allow = [
   "connect_selected",
   "disconnect_selected",
   "query_connections",
+  "query_stats",
   "sub_fetch",
   "net_tcp_probe",
   "net_tcp_probe_stop",

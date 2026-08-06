@@ -23,7 +23,10 @@ pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
     }
 
     // Prefer curl: reliable TLS roots on macOS, follows redirects.
-    let out = Command::new("curl")
+    // Windows: curl.exe is a console app — CREATE_NO_WINDOW avoids black flash.
+    let mut cmd = Command::new("curl");
+    crate::winhide::apply(&mut cmd);
+    let out = cmd
         .args([
             "-fsSL",
             "--max-time",
