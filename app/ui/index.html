@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Nexus</title>
-  <link rel="icon" href="assets/nexus-icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="assets/nexus-icon.png" type="image/png" />
   <script>
     /* mark desktop shell ASAP — avoid mock padding flash under native chrome */
     (function () {
@@ -1672,6 +1672,23 @@
     line-height: 1.4;
   }
   html[data-theme="dark"] .qr-box { background: #fff; }
+  /* Full outbound JSON — no inner max-height clip; card scrolls if viewport short */
+  .confirm-card.qr-card {
+    width: min(480px, calc(100vw - 40px));
+    max-height: min(90vh, 900px);
+    overflow: auto;
+  }
+  .qr-link {
+    margin: 0 0 12px;
+    padding: 10px 12px; border-radius: 8px;
+    background: var(--fill); border: 0.5px solid var(--separator);
+    font-family: var(--mono); font-size: 11px; line-height: 1.45;
+    color: var(--secondary); white-space: pre-wrap; word-break: break-word;
+    overflow-wrap: anywhere;
+    text-align: left;
+    max-height: none;
+    overflow: visible;
+  }
   .tray-float {
     position: fixed; right: 18px; bottom: 48px; z-index: 280;
     width: 220px; padding: 6px;
@@ -2734,6 +2751,17 @@
     </div>
   </div>
 
+  <div class="confirm-mask" id="quitMask" role="dialog" aria-modal="true" aria-labelledby="quitTitle" hidden>
+    <div class="confirm-card warn">
+      <h3 id="quitTitle">断开并退出？</h3>
+      <p id="quitMsg">当前隧道仍在运行（含 Tun / 系统代理）。退出将停止 Core、关闭系统代理并拆除隧道。</p>
+      <div class="confirm-actions">
+        <button type="button" class="btn-ghost" id="quitCancel">取消</button>
+        <button type="button" class="btn-primary" id="quitConfirm">断开并退出</button>
+      </div>
+    </div>
+  </div>
+
   </div>
 
   <div class="confirm-mask" id="editMask" role="dialog" aria-modal="true" aria-labelledby="editTitle" hidden>
@@ -2800,11 +2828,11 @@
   </div>
 
   <div class="confirm-mask" id="qrMask" role="dialog" aria-modal="true" aria-labelledby="qrTitle" hidden>
-    <div class="confirm-card">
+    <div class="confirm-card qr-card">
       <h3 id="qrTitle">节点二维码</h3>
       <p id="qrName" style="text-align:center;margin:0 0 4px;font-size:13px;color:var(--secondary)"></p>
       <div class="qr-box" id="qrBox" aria-hidden="true"><span class="qr-empty">生成中…</span></div>
-      <p id="qrLink" style="font-family:var(--mono);font-size:11px;color:var(--tertiary);word-break:break-all;text-align:center"></p>
+      <pre id="qrLink" class="qr-link"></pre>
       <div class="confirm-actions">
         <button type="button" class="btn-ghost" id="qrCopy">复制链接</button>
         <button type="button" class="btn-primary" id="qrClose">关闭</button>
@@ -2900,7 +2928,7 @@
   let sortKey = null;
   let sortDir = 1; // 1 asc, -1 desc
 
-  // Throne AutoSelector: missing/timeout latency always parks at the end in BOTH directions.
+  // AutoSelector: missing/timeout latency always parks at the end in BOTH directions.
   // Returns { known, ms } — only known positive (or 0) ms participate in numeric order.
   function parseLatKey(row) {
     const raw = (row.dataset.lat || row.querySelector('.lat')?.textContent || '').trim();
@@ -2957,7 +2985,7 @@
     rows.sort((a, b) => {
       let cmp = 0;
       if (key === 'lat') {
-        // known ms asc/desc; unknown (—/…/timeout) always last (Throne)
+        // known ms asc/desc; unknown (—/…/timeout) always last (upstream)
         const ka = parseLatKey(a);
         const kb = parseLatKey(b);
         if (ka.known !== kb.known) cmp = ka.known ? -1 : 1;
@@ -3034,7 +3062,7 @@
     pb.classList.toggle('on', on);
     pb.setAttribute('aria-pressed', String(on));
     statusDot.classList.toggle('on', on);
-    // Throne: traffic from Core stream — never invent 12.4 KB
+    // traffic from Core stream — never invent 12.4 KB
     if (!on) {
       if (sbProxy) sbProxy.textContent = '—';
       const sbDirect = document.getElementById('sbDirect');
@@ -3133,7 +3161,7 @@
           }
           return;
         }
-        // Throne: Start uses current spmode_vpn / spmode_system_proxy (chips), not stale disk alone
+        // Start uses current spmode_vpn / spmode_system_proxy (chips), not stale disk alone
         const r = await nexusInvoke('connect_selected', Object.assign({
           profile_id: 1,
           tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
@@ -3161,7 +3189,7 @@
         if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
       } else {
         log('CORE', 'warn', `Stop 配置档 <span class="node">${connectedName || selectedName}</span>`);
-        // Throne: Stop RPC; also kill Core process (orphan after quit left power desynced).
+        // Stop RPC; also kill Core process (orphan after quit left power desynced).
         let r = await nexusInvoke('disconnect_selected');
         if (r && !r.ok && String(r.error || '').includes('core not started')) {
           r = await nexusInvoke('core_stop');
@@ -3181,7 +3209,7 @@
   // nexusInvoke defined later; hoist stub
   
 
-  // Throne-style selection: click = single; ⌘/Ctrl = toggle; Shift = range from anchor
+  // progressive selection: click = single; ⌘/Ctrl = toggle; Shift = range from anchor
   let selectAnchorRow = null;
   /** Live tr for range select — rebind by name after renderNodes/sort. */
   function resolveSelectAnchor(rows) {
@@ -3271,7 +3299,7 @@
   function openCtxMenu(x, y) {
     if (!ctxMenu) return;
     closeMenus();
-    // Throne: menu_update_subscription enabled only when group has url
+    // menu_update_subscription enabled only when group has url
     const gid = (typeof activeGroupId === 'function') ? activeGroupId() : 'default';
     const g = (typeof GROUPS !== 'undefined') ? GROUPS.find(x => x.id === gid) : null;
     const hasUrl = !!(g && g.url && String(g.url).trim());
@@ -3390,7 +3418,7 @@
             if (row) selectedLat = row.dataset.lat || '—';
           }
           if (connected) {
-            // Throne: restart selected — Stop then Start
+            // restart selected — Stop then Start
             setConnected(false);
             const dr = await nexusInvoke('disconnect_selected');
             if (dr && !dr.ok) await nexusInvoke('core_stop');
@@ -3424,7 +3452,7 @@
         'resolve-ip': () => { resolveSelectedIps(); },
         'clear-test': () => { clearTestResults(); },
         'reset-traffic': () => {
-          // Throne on_menu_reset_traffic: selected profiles only
+          // on_menu_reset_traffic: selected profiles only
           const rows = selectedRows();
           const targets = rows.length ? rows : [...nodeTable.querySelectorAll('tr')];
           const names = new Set(targets.map(r => r.dataset.name));
@@ -3484,7 +3512,7 @@
         },
         'show-qr': () => openQrDialog(one),
         dedupe: () => {
-          // Throne on_menu_delete_repeat: Uniq by profile identity (addr|type)
+          // on_menu_delete_repeat: Uniq by profile identity (addr|type)
           const seen = new Set();
           const drop = [];
           [...nodeTable.querySelectorAll('tr')].forEach(r => {
@@ -3516,7 +3544,7 @@
           log('SYS', 'ok', '已去除重复节点 · ' + drop.length + ' 个');
         },
         'rm-unavailable': () => {
-          // Throne clearUnavailableProfiles: latency == -1 (test failed)
+          // clearUnavailableProfiles: latency == -1 (test failed)
           removeNodesByPred(r => {
             const t = (r.dataset.lat || r.querySelector('.lat')?.textContent || '').trim();
             const ms = parseLatMs(r);
@@ -3524,7 +3552,7 @@
           }, '已移除不可用');
         },
         'rm-failed': () => {
-          // Throne remove invalid / no latency: empty or failed test result
+          // remove invalid / no latency: empty or failed test result
           removeNodesByPred(r => {
             const t = (r.dataset.lat || r.querySelector('.lat')?.textContent || '').trim();
             if (!t || t === '—' || t === '…') return true;
@@ -3599,7 +3627,7 @@
     return rows.length;
   }
 
-  // Throne: runURLTest → Core Test RPC + QueryURLTest poller paints latency as results arrive.
+  // runURLTest → Core Test RPC + QueryURLTest poller paints latency as results arrive.
   // Until Start()+Test RPC: real TCP connect RTT; progressive via `net-probe-result` events.
   let urlTesting = false;
   let urlTestAbort = false;
@@ -3707,7 +3735,7 @@
       }
     };
     try {
-      // Throne-style progressive: listen before invoke so early results paint immediately
+      // progressive progressive: listen before invoke so early results paint immediately
       if (urlTestUnlisten) { try { urlTestUnlisten(); } catch (_) {} urlTestUnlisten = null; }
       const un = await tauriListen('net-probe-result', onResult);
       if (typeof un === 'function') urlTestUnlisten = un;
@@ -3872,7 +3900,7 @@
     });
   });
   function clearTestResults() {
-    // Throne on_menu_clear_test_result: ClearTestResults for current group
+    // on_menu_clear_test_result: ClearTestResults for current group
     nodeTable.querySelectorAll('tr .lat').forEach(el => { el.textContent = '—'; el.className = 'lat muted'; });
     nodeTable.querySelectorAll('tr').forEach(r => { r.dataset.lat = '—'; });
     const gid = typeof currentGid === 'function' ? currentGid() : 'default';
@@ -3880,7 +3908,7 @@
     if (prof?.nodes) prof.nodes.forEach(n => { n.lat = null; });
     log('SYS', 'info', '已清理测试结果');
   }
-  // Throne: on_menu_update_subscription → AsyncUpdate(group->url, group->id)
+  // on_menu_update_subscription → AsyncUpdate(group->url, group->id)
   let subUpdating = false;
   function ensureProfile(gid, label, foot) {
     let bag;
@@ -3937,7 +3965,7 @@
     if (ob.network === 'tcp' || ob.network === 'raw') delete ob.network;
     return ob;
   }
-  /** Clash/JSON/iGG field bag → sing-box outbound (Throne Build subset). No invented secrets. */
+  /** Clash/JSON/iGG field bag → sing-box outbound (upstream Build subset). No invented secrets. */
   function buildOutboundFromFields(f) {
     const typeRaw = String(f.type || '').toLowerCase();
     const server = String(f.server || '').trim();
@@ -3946,13 +3974,13 @@
     const mapType = (tt) => {
       if (tt === 'ss' || tt === 'shadowsocks') return 'shadowsocks';
       if (tt === 'socks' || tt === 'socks5' || tt === 'ssocks5') return 'socks';
-      // Throne http.cpp Build: type always "http"; HTTPS = scheme/tls.enabled
+      // http.cpp Build: type always "http"; HTTPS = scheme/tls.enabled
       if (tt === 'http' || tt === 'https') return 'http';
       if (tt === 'vmess') return 'vmess';
       if (tt === 'vless') return 'vless';
       if (tt === 'trojan') return 'trojan';
       if (tt === 'anytls') return 'anytls';
-      // Throne tuic.cpp Build: type tuic; DisplayType TUIC
+      // tuic.cpp Build: type tuic; DisplayType TUIC
       if (tt === 'tuic' || tt === 'tuic5') return 'tuic';
       return tt || '';
     };
@@ -3965,7 +3993,7 @@
     if (ty === 'http' || ty === 'socks') {
       if (user) ob.username = user;
       if (pass) ob.password = pass;
-      // Throne: path on http outbound; https scheme / type HTTPS / tls flag → tls.enabled
+      // path on http outbound; https scheme / type HTTPS / tls flag → tls.enabled
       if (ty === 'http') {
         // iGG may send path:{} — only real strings
         if (typeof f.path === 'string' && f.path) ob.path = f.path;
@@ -4026,14 +4054,14 @@
       if (f.sni) ob.tls.server_name = f.sni;
       if (f.skip) ob.tls.insecure = true;
     } else if (ty === 'anytls') {
-      // Throne anyTLS::Build — password + tls always on
+      // anyTLS::Build — password + tls always on
       if (!pass) return null;
       ob.password = pass;
       ob.tls = { enabled: true };
       if (f.sni) ob.tls.server_name = f.sni;
       if (f.skip) ob.tls.insecure = true;
     } else if (ty === 'tuic') {
-      // Throne tuic::Build — uuid + password + congestion_control; tls always on
+      // tuic::Build — uuid + password + congestion_control; tls always on
       if (!uuid) return null;
       ob.uuid = uuid;
       if (pass) ob.password = pass;
@@ -4149,7 +4177,7 @@
       udp_relay_mode: o.udp_relay_mode || o['udp-relay-mode'] || '',
     };
     if (o.tls === true) fields.tls = true;
-    // Throne http/socks: password-only → username = password
+    // http/socks: password-only → username = password
     if (!fields.username && fields.password && (type === 'HTTP' || type === 'HTTPS' || type === 'SOCKS')) {
       fields.username = fields.password;
     }
@@ -4203,7 +4231,7 @@
     const out = [];
     const lines = String(text || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
     for (const line of lines) {
-      // throne: protocol dispatch table — accept common share schemes
+      // upstream: protocol dispatch table — accept common share schemes
       const m = line.match(/^(vless|trojan|ss|vmess|hysteria2?|hy2|socks5?|tuic|anytls|https?):\/\//i);
       if (!m) continue;
       if (/^https?:\/\//i.test(line) && !line.includes('@')) continue; // sub URL, not proxy share
@@ -4270,7 +4298,7 @@
     return t || 'VLESS';
   }
   function parseSubscriptionBody(raw) {
-    // Throne: HttpGet body → base64 / share-lines / JSON / clash proxies
+    // HttpGet body → base64 / share-lines / JSON / clash proxies
     let text = String(raw || '').trim();
     if (!text) return [];
     // strip HTML error pages early
@@ -4377,7 +4405,7 @@
       setGroupUpdateStatus('无可用分组', 'warn');
       return Promise.resolve(false);
     }
-    // Throne should_skip_group: empty url
+    // should_skip_group: empty url
     const targets = groups.filter(g => g.url && String(g.url).trim());
     const skipped = groups.length - targets.length;
     if (!targets.length) {
@@ -4421,7 +4449,7 @@
               bag[g.id] = prof;
             }
             const before = (prof.nodes || []).length;
-            // Throne GroupUpdater: HttpGet then parse; on fail keep existing nodes
+            // GroupUpdater: HttpGet then parse; on fail keep existing nodes
             const body = await fetchSubscriptionBody(g.url);
             const next = parseSubscriptionBody(body);
             if (!next.length) {
@@ -4573,7 +4601,7 @@
     el.classList.remove('open');
     el.hidden = true;
   }
-  /** sing-box outbound → flat edit fields (Throne dialog_edit_profile subset). */
+  /** sing-box outbound → flat edit fields (upstream dialog_edit_profile subset). */
   function fieldsFromOutbound(ob, fallback) {
     const o = (ob && typeof ob === 'object') ? ob : {};
     const ty = String(o.type || fallback?.type || 'vless').toLowerCase();
@@ -4780,7 +4808,7 @@
       fields.tls = !!getEditField('editTls');
       fields.type = 'vless';
     }
-    // Throne http/socks: empty user + password → username = password
+    // http/socks: empty user + password → username = password
     if ((tk === 'http' || tk === 'https' || tk === 'socks') && !fields.username && fields.password) {
       fields.username = fields.password;
     }
@@ -4849,12 +4877,20 @@
     const box = document.getElementById('qrBox');
     if (box) box.innerHTML = html;
   }
+  function formatQrDisplay(raw) {
+    if (!raw) return '（无真实分享链接 — 节点仅有 outbound 或未导入凭证）';
+    const s = String(raw).trim();
+    if (s.startsWith('{') || s.startsWith('[')) {
+      try { return JSON.stringify(JSON.parse(s), null, 2); } catch (_) { /* keep raw */ }
+    }
+    return s;
+  }
   async function openQrDialog(name) {
     const n = name || selectedName || '节点';
     const link = nodeShareLink(n);
     _qrCopyPayload = link || '';
     document.getElementById('qrName').textContent = n;
-    document.getElementById('qrLink').textContent = link || '（无真实分享链接 — 节点仅有 outbound 或未导入凭证）';
+    document.getElementById('qrLink').textContent = formatQrDisplay(link);
     setQrBox('<span class="qr-empty">生成中…</span>');
     openDialog('qrMask');
     if (!link) {
@@ -4892,7 +4928,7 @@
   // ——— group management ———
   let GROUPS = [
     { id: 'default', name: 'Default', count: 0, url: '', autoUpdate: true },
-    // empty URL skips update (Throne should_skip); nodes only from real import/sub
+    // empty URL skips update (upstream should_skip); nodes only from real import/sub
     { id: 'backup', name: '备用', count: 0, url: '', autoUpdate: false },
   ];
   let groupEditId = null;
@@ -5061,19 +5097,21 @@
     }
     return changed;
   }
-  function markUnwiredSettings() {
-    // routing/DNS decorative controls — generate hardcodes DoH + simple route
+  function hideUnwiredSettings() {
+    // routing/DNS not wired to generate — hide panel + nav for clean release UI
     const panel = document.getElementById('panel-routing');
-    if (!panel) return;
-    panel.querySelectorAll('.set-row').forEach(row => {
-      row.classList.add('unwired');
-      row.querySelectorAll('button, [contenteditable], .switch-only, .select, .field').forEach(el => {
-        el.setAttribute('aria-disabled', 'true');
-        if (el.tagName === 'BUTTON') el.disabled = true;
-        if (el.isContentEditable) el.contentEditable = 'false';
-      });
-      const hint = row.querySelector('.set-hint');
-      if (hint && !hint.classList.contains('unwired-tag')) hint.classList.add('unwired-tag');
+    if (panel) {
+      panel.hidden = true;
+      panel.setAttribute('aria-hidden', 'true');
+    }
+    document.querySelectorAll('.side-item[data-settings="routing"]').forEach(el => {
+      el.hidden = true;
+      el.setAttribute('aria-hidden', 'true');
+    });
+    // Tun fine settings already wrapped hidden; keep home Tun chip as control
+    document.querySelectorAll('.set-unwired-tun').forEach(el => {
+      el.hidden = true;
+      el.setAttribute('aria-hidden', 'true');
     });
   }
   function applyHydratedCatalog(data, src) {
@@ -5124,7 +5162,7 @@
     return document.querySelector('#subSeg button.active')?.dataset.sub || GROUPS[0]?.id || 'default';
   }
   function setActiveGroup(id, { render = true, logIt = false } = {}) {
-    // Throne: current_group switch → node list + subscription settings for that group
+    // current_group switch → node list + subscription settings for that group
     const seg = document.getElementById('subSeg');
     if (!seg) return;
     const btn = seg.querySelector(`button[data-sub="${id}"]`);
@@ -5228,7 +5266,7 @@
   });
   document.getElementById('groupAdd')?.addEventListener('click', () => openGroupEdit(null, 'create'));
   document.getElementById('groupUpdateAll')?.addEventListener('click', () => {
-    // Throne DialogManageGroups::on_update_all_clicked → UI_update_all_groups()
+    // DialogManageGroups::on_update_all_clicked → UI_update_all_groups()
     updateSubscription(null, { all: true });
   });
 
@@ -5591,7 +5629,7 @@
     } else {
       document.getElementById('stUptime').textContent = '—';
     }
-    // Throne IPTest via Core — until wired, never invent 104.16.*
+    // IPTest via Core — until wired, never invent 104.16.*
     document.getElementById('stOutIp').textContent = lastExitIp || '—';
     document.getElementById('stCountry').textContent = lastCountry || '—';
     const g = (typeof GROUPS !== 'undefined') ? GROUPS.find(x => x.id === (typeof activeGroupId === 'function' ? activeGroupId() : 'default')) : null;
@@ -5636,7 +5674,11 @@
     try {
       const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
       if (typeof inv === 'function') {
-        const cfg = await inv('generate_preview');
+        const payload = (typeof nodeConnectPayload === 'function')
+          ? nodeConnectPayload(selectedName)
+          : null;
+        if (!payload) throw new Error('当前节点无可用 link/outbound');
+        const cfg = await inv('generate_preview', payload);
         if (pre) pre.textContent = JSON.stringify(cfg, null, 2);
         log('SYS', 'ok', '已导出 Core generate_preview');
         return;
@@ -5822,7 +5864,7 @@
     setFieldText(el, url);
     if (typeof saveCatalog === 'function') saveCatalog(true);
     log('SYS', 'ok', url ? (`已保存订阅链接 → ${g.name}`) : (`已清空「${g.name}」订阅链接`));
-    // Throne: saving URL often followed by AsyncUpdate when user expects nodes
+    // saving URL often followed by AsyncUpdate when user expects nodes
     if (url && typeof updateSubscription === 'function') {
       updateSubscription(g.id);
     } else if (!url && typeof renderNodes === 'function') {
@@ -7570,8 +7612,8 @@
     });
   });
 
-  // boot: store catalog first (LS migrate); gray unwired routing/DNS settings
-  if (typeof markUnwiredSettings === 'function') markUnwiredSettings();
+  // boot: store catalog first (LS migrate); hide unwired routing/DNS for release UI
+  if (typeof hideUnwiredSettings === 'function') hideUnwiredSettings();
   hydrateCatalogOnBoot();
   window.addEventListener('pagehide', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
   window.addEventListener('beforeunload', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
@@ -7612,7 +7654,7 @@
   document.querySelectorAll('.menu').forEach(m => m.addEventListener('click', e => e.stopPropagation()));
 
   
-  // ——— import helpers (Throne: menu_add_from_clipboard / file / AsyncUpdate) ———
+  // ——— import helpers (upstream: menu_add_from_clipboard / file / AsyncUpdate) ———
   function currentGid() {
     return (typeof activeGroupId === 'function') ? activeGroupId() : (document.querySelector('#subSeg button.active')?.dataset.sub || 'default');
   }
@@ -7646,7 +7688,7 @@
     try {
       const text = (await navigator.clipboard.readText()).trim();
       if (!text) { log('SYS', 'warn', '剪贴板为空'); return; }
-      // Throne: if looks like subscription URL, AsyncUpdate(url)
+      // if looks like subscription URL, AsyncUpdate(url)
       if (/^https?:\/\//i.test(text) && !text.includes('\n') && text.length < 500) {
         const gid = currentGid();
         const g = GROUPS.find(x => x.id === gid);
@@ -7698,7 +7740,7 @@
     input.click();
   }
   function importScanQr() {
-    // Throne opens camera/screen QR; here file image → no decode lib, guide user
+    // opens camera/screen QR; here file image → no decode lib, guide user
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -7793,11 +7835,7 @@
         if (s) { s.classList.add('active'); s.setAttribute('aria-current', 'page'); }
         showView('settings', 'basic');
       },
-      quit: async () => {
-        const r = await nexusInvoke('app_quit');
-        if (!r.ok && !r.offline) log('SYS', 'warn', '退出失败: ' + (r.error || ''));
-        else if (r.offline) log('SYS', 'warn', '退出（示意）');
-      },
+      quit: () => { if (typeof requestQuitNexus === 'function') requestQuitNexus(); },
       'manage-groups': () => openGroupsDialog(),
       'runtime-stats': () => openStatsDialog(),
       'export-config': () => openExportDialog(),
@@ -7824,7 +7862,7 @@
       e.preventDefault();
       return;
     }
-    for (const id of ['editMask', 'groupsMask', 'qrMask', 'statsMask', 'exportMask', 'groupEditMask']) {
+    for (const id of ['editMask', 'groupsMask', 'qrMask', 'statsMask', 'exportMask', 'groupEditMask', 'quitMask']) {
       const el = document.getElementById(id);
       if (el && el.classList.contains('open')) {
         closeDialog(id);
@@ -7845,7 +7883,7 @@
   applyTheme(document.getElementById('themeSelect')?.dataset.value || 'System');
   applyIconStyle(document.getElementById('iconSelect')?.dataset.value || 'Monochrome');
 
-  // --- Nexus Tauri bridge (Phase C–E) ---
+  // --- Nexus Tauri bridge ---
   window.__NEXUS_BRIDGE__ = true;
   async function nexusBoot() {
     try {
@@ -7868,15 +7906,24 @@
         setChipOn('tunToggle', 'tunChip', !!d.tun);
         setChipOn('sysToggle', 'sysChip', !!d.system_proxy);
       }
-      log('SYS', 'info', `本地配置 ${d.profiles?.length || 0} 节点 · Tun ${d.tun ? '开' : '关'} · 系统代理 ${d.system_proxy ? '开' : '关'}`);
+      const cat = d.catalog;
+      let n = 0;
+      if (cat && cat.groups && typeof cat.groups === 'object') {
+        for (const g of Object.values(cat.groups)) {
+          if (g && Array.isArray(g.nodes)) n += g.nodes.length;
+        }
+      }
+      log('SYS', 'info', `本地配置 ${n} 节点 · Tun ${d.tun ? '开' : '关'} · 系统代理 ${d.system_proxy ? '开' : '关'}`);
     }
-    // Power sync: GUI quit while Tun/Start left NexusCore alive → show 已连接, not 未连接.
+    // Power sync: residual Core/mixed/utun after quit/crash → paint 已连接 (not dead chrome).
     try {
       const ss = await nexusInvoke('session_status');
-      if (ss && ss.ok && ss.data && ss.data.running) {
+      const d = ss && ss.ok ? ss.data : null;
+      const live = !!(d && (d.running || d.process_alive || d.mixed_open || d.rpc_running));
+      if (live) {
         if (typeof setChipOn === 'function') {
-          if (ss.data.tun != null) setChipOn('tunToggle', 'tunChip', !!ss.data.tun);
-          if (ss.data.system_proxy != null) setChipOn('sysToggle', 'sysChip', !!ss.data.system_proxy);
+          if (d.tun != null) setChipOn('tunToggle', 'tunChip', !!d.tun);
+          if (d.system_proxy != null) setChipOn('sysToggle', 'sysChip', !!d.system_proxy);
         }
         let pinName = '';
         try { pinName = localStorage.getItem('nexus.lastConnected') || ''; } catch (_) {}
@@ -7891,18 +7938,62 @@
         }
         if (typeof setConnected === 'function') setConnected(true, { pin: !!pinName });
         const bits = [];
-        if (ss.data.process_alive) bits.push('Core 进程');
-        if (ss.data.mixed_open) bits.push('mixed:2080');
-        if (ss.data.rpc_running) bits.push('RPC');
+        if (d.process_alive) bits.push('Core 进程');
+        if (d.mixed_open) bits.push('mixed:2080');
+        if (d.rpc_running) bits.push('RPC');
         log('OK', 'ok', '已同步连接状态 · ' + (bits.join(' · ') || '隧道仍在'));
       }
     } catch (_) {}
     if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
-}
+  }
+
+  // Policy A: quit = full teardown; warn when tunnel may still be live.
+  async function requestQuitNexus() {
+    let live = !!connected;
+    if (!live) {
+      try {
+        const ss = await nexusInvoke('session_status');
+        const d = ss && ss.ok ? ss.data : null;
+        live = !!(d && (d.running || d.process_alive || d.mixed_open || d.rpc_running));
+      } catch (_) {}
+    }
+    if (live) {
+      const mask = document.getElementById('quitMask');
+      if (mask) {
+        mask.hidden = false;
+        mask.classList.add('open');
+        return;
+      }
+    }
+    await performQuitNexus();
+  }
+  async function performQuitNexus() {
+    const mask = document.getElementById('quitMask');
+    if (mask) { mask.classList.remove('open'); mask.hidden = true; }
+    // Paint power OFF before process dies (user: 主动处理连接按钮).
+    if (typeof setConnected === 'function') setConnected(false);
+    try { localStorage.removeItem('nexus.lastConnected'); } catch (_) {}
+    if (typeof stopConnPoll === 'function') stopConnPoll();
+    log('SYS', 'warn', '正在断开隧道并退出…');
+    const r = await nexusInvoke('app_quit', { force: true });
+    if (r && !r.ok && !r.offline) log('SYS', 'warn', '退出失败: ' + (r.error || ''));
+    else if (r && r.offline) log('SYS', 'warn', '退出（示意）');
+  }
+  document.getElementById('quitCancel')?.addEventListener('click', () => {
+    const mask = document.getElementById('quitMask');
+    if (mask) { mask.classList.remove('open'); mask.hidden = true; }
+  });
+  document.getElementById('quitConfirm')?.addEventListener('click', () => { performQuitNexus(); });
+  document.getElementById('quitMask')?.addEventListener('click', (e) => {
+    if (e.target.id === 'quitMask') {
+      const mask = document.getElementById('quitMask');
+      if (mask) { mask.classList.remove('open'); mask.hidden = true; }
+    }
+  });
   const _applyTun = applyTun;
   applyTun = function(on, opts) {
     _applyTun(on, opts);
-    // Throne set_spmode_vpn: elevate (osascript password sheet) + re-Start if tunnel live.
+    // set_spmode_vpn: elevate (osascript password sheet) + re-Start if tunnel live.
     nexusInvoke('set_tun_cmd', { enabled: !!on }).then(async (r) => {
       if (!r || r.offline) return;
       if (!r.ok) {

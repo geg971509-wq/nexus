@@ -1,4 +1,4 @@
-//! Subscription HTTP fetch (Throne GroupUpdater::HttpGet equivalent).
+//! Subscription HTTP fetch (upstream GroupUpdater::HttpGet equivalent).
 //! Uses system `curl` on macOS so we get TLS + redirects without extra crates.
 
 use serde_json::json;
@@ -31,7 +31,7 @@ pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
             "--connect-timeout",
             "12",
             "-A",
-            "Nexus/0.1 (subscription; Throne-compatible)",
+            "Nexus/0.2 (subscription)",
             "-H",
             "Accept: text/plain,application/json,*/*",
             "--compressed",

@@ -8,7 +8,7 @@ import (
 
 func TestAcquireRejectsSecondCore(t *testing.T) {
 	// Given
-	name := filepath.Join(t.TempDir(), "throne-core.lock")
+	name := filepath.Join(t.TempDir(), "upstream-core.lock")
 	first, err := Acquire(name)
 	if err != nil {
 		t.Fatalf("first Acquire() error = %v", err)

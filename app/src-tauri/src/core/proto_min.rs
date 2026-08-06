@@ -14,18 +14,18 @@ pub fn encode_load_config_core_json(json: &str) -> Vec<u8> {
     encode_string_field1(json)
 }
 
-/// LoadConfigReq matching Throne C++ defaults (spb optional with = false always present).
+/// LoadConfigReq matching upstream C++ defaults (spb optional with = false always present).
 /// Core Start derefs *NeedExtraProcess / *NeedXray — nil panics; always encode false bools.
 /// Fields: core_config=1, disable_stats=2, need_extra_process=3, extra_no_out=8,
 /// need_xray=9, profile_id=100.
 pub fn encode_load_config_req(core_json: &str, profile_id: Option<i32>) -> Vec<u8> {
     let mut out = encode_string_field1(core_json);
-    // bool fields Throne always materializes (default false)
+    // bool fields upstream always materializes (default false)
     encode_bool_field(&mut out, 2, false); // disable_stats
     encode_bool_field(&mut out, 3, false); // need_extra_process
     encode_bool_field(&mut out, 8, false); // extra_no_out
     encode_bool_field(&mut out, 9, false); // need_xray
-    // profile_id: Throne always sets; default -1 when None
+    // profile_id: upstream always sets; default -1 when None
     let pid = profile_id.unwrap_or(-1);
     write_varint(&mut out, (100u64 << 3) | 0);
     write_svarint32(&mut out, pid);

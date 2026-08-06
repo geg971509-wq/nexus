@@ -8,7 +8,7 @@ import (
 	"net"
 	"sync"
 
-	"ThroneCore/gen"
+	"NexusCore/gen"
 
 	"google.golang.org/protobuf/proto"
 )

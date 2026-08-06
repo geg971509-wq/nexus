@@ -1,13 +1,19 @@
-//! Pure generate: profile/settings → sing-box JSON (MVP minimal).
-use super::store::{Profile, Store};
+//! Pure generate: outbound + flags → sing-box JSON.
 use serde_json::{json, Map, Value};
 use std::path::PathBuf;
 
+/// Generate-time node handle (not persisted; catalog is store truth).
+pub struct GenNode {
+    pub outbound: Value,
+    /// "unknown" | "yes" | "no" — default-on mux injects only when "yes".
+    pub mux_capability: String,
+}
+
 pub struct GenerateInput<'a> {
-    pub profile: &'a Profile,
+    pub node: &'a GenNode,
     pub system_proxy_port: u16,
     pub tun: bool,
-    /// Product setting: inject mux when profile has no multiplex key and capability is yes.
+    /// Inject mux when outbound has no multiplex key and capability is yes.
     pub mux_default_on: bool,
     pub mux_protocol: &'a str,
     pub mux_concurrency: i64,
@@ -42,10 +48,10 @@ pub fn apply_mux_gate(
     obj.insert("multiplex".into(), Value::Object(mux));
 }
 
-/// Throne-aligned DNS (MVP): DoH to IP so system DNS (often TUN-hijacked) is not required.
+/// engine-aligned DNS (MVP): DoH to IP so system DNS (often TUN-hijacked) is not required.
 /// - dns-remote detours via proxy only when outbound is not `direct` (sing-box rejects detour→direct).
 /// - Proxy server hostname (if any) resolves via dns-direct so chain bootstrap cannot deadlock.
-/// - Tun on Darwin: avoid type=local for bootstrap (Throne uses underlying/udp).
+/// - Tun on Darwin: avoid type=local for bootstrap (upstream uses underlying/udp).
 fn build_dns_section(outbound: &Value, tun: bool) -> Value {
     let is_direct = outbound.get("type").and_then(|t| t.as_str()) == Some("direct");
 
@@ -56,7 +62,7 @@ fn build_dns_section(outbound: &Value, tun: bool) -> Value {
         json!({"type": "local", "tag": "dns-local"})
     };
 
-    // No-detour DoH — works when default path is a foreign TUN (e.g. Throne already up).
+    // No-detour DoH — works when default path is a foreign TUN (e.g. upstream already up).
     let dns_direct = json!({
         "type": "https",
         "tag": "dns-direct",
@@ -73,7 +79,7 @@ fn build_dns_section(outbound: &Value, tun: bool) -> Value {
         "domain_resolver": "dns-local"
     });
     if !is_direct {
-        // Throne: remote DNS rides the proxy so plain UDP DNS is not required on the WAN.
+        // remote DNS rides the proxy so plain UDP DNS is not required on the WAN.
         dns_remote
             .as_object_mut()
             .unwrap()
@@ -118,7 +124,7 @@ fn build_dns_section(outbound: &Value, tun: bool) -> Value {
 
 /// Pure function — no UI/socket.
 pub fn generate_config(input: &GenerateInput<'_>) -> Value {
-    let mut outbound = input.profile.outbound.clone();
+    let mut outbound = input.node.outbound.clone();
     if outbound.get("tag").is_none() {
         if let Some(obj) = outbound.as_object_mut() {
             obj.insert("tag".into(), json!("proxy"));
@@ -126,7 +132,7 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
     }
     apply_mux_gate(
         &mut outbound,
-        &input.profile.mux_capability,
+        &input.node.mux_capability,
         input.mux_default_on,
         input.mux_protocol,
         input.mux_concurrency,
@@ -135,7 +141,7 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
 
     // sing-box 1.12+: dial fields need domain_resolver. Without it, proxy server
     // hostname resolves via dns-remote→detour proxy → "DNS query loopback".
-    // Throne: route.default_domain_resolver = dns-direct (and pin on outbound).
+    // route.default_domain_resolver = dns-direct (and pin on outbound).
     if outbound.get("domain_resolver").is_none() {
         if let Some(obj) = outbound.as_object_mut() {
             let server = obj.get("server").and_then(|s| s.as_str()).unwrap_or("");
@@ -146,7 +152,7 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
     }
     let outbounds = vec![outbound, json!({"type":"direct","tag":"direct"})];
 
-    // Throne: mixed 127.0.0.1:inbound_socks_port (default 2080)
+    // mixed 127.0.0.1:inbound_socks_port (default 2080)
     let mut inbounds = vec![json!({
         "type": "mixed",
         "tag": "mixed-in",
@@ -155,10 +161,10 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
     })];
 
     if input.tun {
-        // Throne generate.cpp genTunName(): macOS empty → sing-box CalculateInterfaceName → utunN.
+        // generate.cpp genTunName(): macOS empty → sing-box CalculateInterfaceName → utunN.
         // Non-empty non-utun name → "bad tun name" on darwin (sing-tun tun_darwin.go).
         // address array (sing-box ≥1.10); inet4_address removed in 1.12.
-        // Throne SettingsRepo: vpn_tun_ipv4_cidr default 172.19.0.1/24; private_range_bypass true.
+        // SettingsRepo: vpn_tun_ipv4_cidr default 172.19.0.1/24; private_range_bypass true.
         const TUN_V4: &str = "172.19.0.1/24";
         let mut tun_obj = serde_json::Map::new();
         tun_obj.insert("type".into(), json!("tun"));
@@ -166,9 +172,9 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         tun_obj.insert("address".into(), json!([TUN_V4]));
         tun_obj.insert("auto_route".into(), json!(true));
         tun_obj.insert("strict_route".into(), json!(false));
-        // Throne SettingsRepo macOS default: gvisor (Windows may use system).
+        // SettingsRepo macOS default: gvisor (Windows may use system).
         tun_obj.insert("stack".into(), json!("gvisor"));
-        // Throne SettingsRepo macOS default vpn_mtu = 1500 (not jumbo 9000).
+        // SettingsRepo macOS default vpn_mtu = 1500 (not jumbo 9000).
         tun_obj.insert("mtu".into(), json!(1500));
         // Do NOT set route_address to Tun CIDR (sing-tun allowlist replaces full auto_route).
         // Carve Tun out of private excludes so Tun+1 DNS stays on-iface while LAN bypasses.
@@ -189,9 +195,9 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         inbounds.push(Value::Object(tun_obj));
     }
 
-    // Throne RouteProfile defaults: sniff → hijack DNS → private/LAN direct → final proxy.
-    // auto_detect_interface: true (Throne when vpn; also correct for mixed+sysproxy).
-    // default_domain_resolver: Throne always sets dns-direct so egress dial never
+    // RouteProfile defaults: sniff → hijack DNS → private/LAN direct → final proxy.
+    // auto_detect_interface: true (upstream when vpn; also correct for mixed+sysproxy).
+    // default_domain_resolver: upstream always sets dns-direct so egress dial never
     // uses dns-remote (would detour proxy while resolving proxy itself).
     let route = json!({
         "rules": [
@@ -206,7 +212,7 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         }
     });
 
-    // Throne: experimental.clash_api required for TrafficManager / QueryConnections
+    // experimental.clash_api required for TrafficManager / QueryConnections
     // (even without external_controller — empty object still creates clash server).
     // cache_file.path MUST be absolute: GUI Core cwd is `/`, relative → /cache.db
     // (read-only FS) → Start fails → power button looks dead.
@@ -241,7 +247,7 @@ fn cache_file_path() -> String {
         .into_owned()
 }
 
-/// Throne TunPrivateBypass::privateRangeBypassExcludingTun — private LAN bypass at OS route
+/// TunPrivateBypass::privateRangeBypassExcludingTun — private LAN bypass at OS route
 /// level, with Tun subnet carved out so Core system DNS (Tun+1) is not swallowed by 172.16/12.
 fn private_range_bypass_excluding_tun(tun_cidr: &str) -> Vec<String> {
     const PRIVATE: &[&str] = &[
@@ -318,7 +324,7 @@ fn cidr_contains_v4(outer: (u32, u8), inner: (u32, u8)) -> bool {
     (inner_net & mask) == (outer_net & mask)
 }
 
-/// base \ hole as CIDR list; hole must sit inside base (Throne subtractV4Cidr).
+/// base \ hole as CIDR list; hole must sit inside base (upstream subtractV4Cidr).
 fn subtract_v4_cidr(base: (u32, u8), hole: (u32, u8)) -> Vec<String> {
     if !cidr_contains_v4(base, hole) {
         return vec![format_v4_cidr(base.0, base.1)];
@@ -356,13 +362,9 @@ pub fn generate_with_outbound(outbound: Value, port: u16, tun: bool) -> Value {
     }
     // if type is direct-only, route.final stays proxy tag pointing at direct-like outbound
     generate_config(&GenerateInput {
-        profile: &Profile {
-            id: "ui".into(),
-            name: "ui".into(),
-            group_id: "ui".into(),
+        node: &GenNode {
             outbound,
             mux_capability: "unknown".into(),
-            mux_capability_at: 0,
         },
         system_proxy_port: port,
         tun,
@@ -372,46 +374,20 @@ pub fn generate_with_outbound(outbound: Value, port: u16, tun: bool) -> Value {
     })
 }
 
-pub fn generate_for_store(store: &Store, port: u16) -> Result<Value, String> {
-    let id = store
-        .selected_profile_id
-        .as_ref()
-        .ok_or("no selected profile")?;
-    let profile = store
-        .profiles
-        .iter()
-        .find(|p| &p.id == id)
-        .ok_or("selected profile missing")?;
-    Ok(generate_config(&GenerateInput {
-        profile,
-        system_proxy_port: port,
-        tun: store.tun,
-        // Product has no mux_default_on setting yet — keep false (safe).
-        mux_default_on: false,
-        mux_protocol: "h2mux",
-        mux_concurrency: 8,
-    }))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::store::Profile;
 
-    fn sample_profile(outbound: Value) -> Profile {
-        Profile {
-            id: "1".into(),
-            name: "t".into(),
-            group_id: "g".into(),
+    fn sample_node(outbound: Value) -> GenNode {
+        GenNode {
             outbound,
             mux_capability: "unknown".into(),
-            mux_capability_at: 0,
         }
     }
 
-    fn gen(p: &Profile, port: u16, tun: bool) -> Value {
+    fn gen(n: &GenNode, port: u16, tun: bool) -> Value {
         generate_config(&GenerateInput {
-            profile: p,
+            node: n,
             system_proxy_port: port,
             tun,
             mux_default_on: false,
@@ -422,16 +398,16 @@ mod tests {
 
     #[test]
     fn generate_has_mixed_and_proxy() {
-        let p = sample_profile(json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}));
-        let v = gen(&p, 2080, false);
+        let n = sample_node(json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}));
+        let v = gen(&n, 2080, false);
         assert_eq!(v["inbounds"][0]["listen_port"], 2080);
         assert_eq!(v["outbounds"][0]["type"], "socks");
     }
 
     #[test]
     fn tun_mac_omits_named_interface() {
-        let p = sample_profile(json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}));
-        let v = gen(&p, 2080, true);
+        let n = sample_node(json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}));
+        let v = gen(&n, 2080, true);
         let tun = v["inbounds"]
             .as_array()
             .unwrap()
@@ -474,7 +450,7 @@ mod tests {
     }
     #[test]
     fn route_defaults_proxy_final() {
-        let p = sample_profile(json!({"type":"socks","tag":"proxy","server":"1.1.1.1","server_port":1080}));
+        let p = sample_node(json!({"type":"socks","tag":"proxy","server":"1.1.1.1","server_port":1080}));
         let v = gen(&p, 2080, false);
         assert_eq!(v["route"]["final"], "proxy");
         assert_eq!(v["route"]["auto_detect_interface"], true);
@@ -519,7 +495,7 @@ mod tests {
 
     #[test]
     fn dns_present_and_hijack_route() {
-        let p = sample_profile(json!({"type":"socks","tag":"proxy","server":"1.1.1.1","server_port":1080}));
+        let p = sample_node(json!({"type":"socks","tag":"proxy","server":"1.1.1.1","server_port":1080}));
         let v = gen(&p, 2080, false);
         assert!(v.get("dns").is_some(), "dns section required");
         let servers = v["dns"]["servers"].as_array().expect("dns.servers");
@@ -536,7 +512,7 @@ mod tests {
 
     #[test]
     fn dns_direct_outbound_no_detour() {
-        let p = sample_profile(json!({"type":"direct","tag":"proxy"}));
+        let p = sample_node(json!({"type":"direct","tag":"proxy"}));
         let v = gen(&p, 2080, false);
         let remote = v["dns"]["servers"]
             .as_array()
@@ -550,7 +526,7 @@ mod tests {
 
     #[test]
     fn dns_proxy_hostname_uses_direct_resolver() {
-        let p = sample_profile(json!({
+        let p = sample_node(json!({
             "type":"vmess","tag":"proxy",
             "server":"us6.example.com","server_port":443,"uuid":"x"
         }));
@@ -569,7 +545,7 @@ mod tests {
         assert_eq!(
             v["route"]["default_domain_resolver"]["server"],
             "dns-direct",
-            "missing Throne default_domain_resolver → DNS loopback on proxy dial"
+            "missing upstream default_domain_resolver → DNS loopback on proxy dial"
         );
         assert_eq!(
             v["outbounds"][0]["domain_resolver"],
@@ -580,7 +556,7 @@ mod tests {
 
     #[test]
     fn dns_tls_sni_also_bootstraps() {
-        let p = sample_profile(json!({
+        let p = sample_node(json!({
             "type":"http","tag":"proxy",
             "server":"edge.example.net","server_port":443,
             "tls":{"enabled":true,"server_name":"sni.example.net"}

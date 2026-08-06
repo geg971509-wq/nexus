@@ -1,4 +1,4 @@
-module ThroneCore
+module NexusCore
 
 go 1.26
 

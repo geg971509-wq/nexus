@@ -1,6 +1,6 @@
-//! Share-link → sing-box outbound JSON (Throne configs/outbounds/* ParseFromLink + ExportToJson subset).
+//! Share-link → sing-box outbound JSON (upstream configs/outbounds/* ParseFromLink + ExportToJson subset).
 //! Supported: vless:// vmess:// trojan:// ss:// socks:// http(s):// anytls:// tuic:// (+ optional JSON outbound object).
-//! Full transport/reality parity can grow field-by-field from Throne when needed.
+//! Full transport/reality parity can grow field-by-field from upstream when needed.
 
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -46,7 +46,7 @@ pub fn parse_to_outbound(input: &str) -> Result<Value, String> {
 }
 
 fn parse_vless(link: &str) -> Result<Value, String> {
-    // Throne vless::ParseFromLink
+    // vless::ParseFromLink
     let u = UrlParts::parse(link)?;
     if u.user.is_empty() || u.host.is_empty() {
         return Err("vless: need uuid@host".into());
@@ -81,7 +81,7 @@ fn parse_vless(link: &str) -> Result<Value, String> {
 
 
 fn parse_vmess(link: &str) -> Result<Value, String> {
-    // Throne vmess::ParseFromLink:
+    // vmess::ParseFromLink:
     // 1) v2rayN: base64 JSON after vmess://
     // 2) standard URI: vmess://uuid@host:port?security=tls&…
     let rest = link
@@ -206,7 +206,7 @@ fn looks_like_uuid(s: &str) -> bool {
 }
 
 fn parse_vmess_uri(link: &str) -> Result<Value, String> {
-    // Throne standard VMess URL: uuid@host:port?encryption=&security=tls&…
+    // standard VMess URL: uuid@host:port?encryption=&security=tls&…
     let u = UrlParts::parse(link)?;
     if u.user.is_empty() || u.host.is_empty() {
         return Err("vmess: need uuid@host".into());
@@ -225,7 +225,7 @@ fn parse_vmess_uri(link: &str) -> Result<Value, String> {
     o.insert("server".into(), json!(u.host));
     o.insert("server_port".into(), json!(port));
     o.insert("uuid".into(), json!(u.user));
-    // encryption = cipher (Throne GetQueryValue encryption default auto)
+    // encryption = cipher (upstream GetQueryValue encryption default auto)
     let enc = u
         .query
         .get("encryption")
@@ -244,7 +244,7 @@ fn parse_vmess_uri(link: &str) -> Result<Value, String> {
     {
         o.insert("alter_id".into(), json!(aid));
     }
-    // TLS: security=tls|reality (Throne TLS::ParseFromLink) — NOT the cipher field
+    // TLS: security=tls|reality (upstream TLS::ParseFromLink) — NOT the cipher field
     if let Some(tls) = tls_from_query(&u.query, true) {
         o.insert("tls".into(), tls);
     } else if u
@@ -313,7 +313,7 @@ fn parse_trojan(link: &str) -> Result<Value, String> {
     o.insert("server".into(), json!(u.host));
     o.insert("server_port".into(), json!(port));
     o.insert("password".into(), json!(u.user));
-    // Throne Trojan clash path enables TLS; link path uses tls->ParseFromLink
+    // Trojan clash path enables TLS; link path uses tls->ParseFromLink
     let tls = tls_from_query(&u.query, true).unwrap_or_else(|| json!({"enabled": true}));
     o.insert("tls".into(), tls);
     if let Some(tr) = transport_from_query(&u.query) {
@@ -323,7 +323,7 @@ fn parse_trojan(link: &str) -> Result<Value, String> {
 }
 
 fn parse_ss(link: &str) -> Result<Value, String> {
-    // Throne shadowsocks::ParseFromLink (SIP002 + legacy base64)
+    // shadowsocks::ParseFromLink (SIP002 + legacy base64)
     let rest = link.trim_start_matches(|c| c != ':').trim_start_matches("://");
     let (main, _frag) = match rest.split_once('#') {
         Some((a, b)) => (a, Some(b)),
@@ -381,7 +381,7 @@ fn parse_socks(link: &str) -> Result<Value, String> {
 }
 
 fn parse_http_proxy(link: &str) -> Result<Value, String> {
-    // Throne http.cpp ParseFromLink: type always "http"; https scheme → tls.enabled
+    // http.cpp ParseFromLink: type always "http"; https scheme → tls.enabled
     let u = UrlParts::parse(link)?;
     if u.host.is_empty() {
         return Err("http: need host".into());
@@ -402,7 +402,7 @@ fn parse_http_proxy(link: &str) -> Result<Value, String> {
     o.insert("server".into(), json!(u.host));
     o.insert("server_port".into(), json!(port));
     let pass = u.password.clone();
-    // Throne: password-only → username = password
+    // password-only → username = password
     let user = if u.user.is_empty() && !pass.is_empty() {
         pass.clone()
     } else {
@@ -421,7 +421,7 @@ fn parse_http_proxy(link: &str) -> Result<Value, String> {
 }
 
 fn parse_anytls(link: &str) -> Result<Value, String> {
-    // Throne anyTLS::ParseFromLink — password in username field; tls always on
+    // anyTLS::ParseFromLink — password in username field; tls always on
     let u = UrlParts::parse(link)?;
     if u.host.is_empty() {
         return Err("anytls: need host".into());
@@ -456,7 +456,7 @@ fn parse_anytls(link: &str) -> Result<Value, String> {
 }
 
 fn parse_tuic(link: &str) -> Result<Value, String> {
-    // Throne tuic::ParseFromLink — uuid:password@host; congestion_control; tls always on
+    // tuic::ParseFromLink — uuid:password@host; congestion_control; tls always on
     let u = UrlParts::parse(link)?;
     if u.user.is_empty() || u.host.is_empty() {
         return Err("tuic: need uuid@host".into());
@@ -517,7 +517,7 @@ fn parse_tuic(link: &str) -> Result<Value, String> {
 }
 
 fn tls_from_query(q: &HashMap<String, String>, default_enable_if_security: bool) -> Option<Value> {
-    // Throne TLS::ParseFromLink keys: security=tls|reality, sni, alpn, fp, pbk, sid, spx, insecure
+    // TLS::ParseFromLink keys: security=tls|reality, sni, alpn, fp, pbk, sid, spx, insecure
     let security = q
         .get("security")
         .map(|s| s.as_str())
@@ -571,7 +571,7 @@ fn tls_from_query(q: &HashMap<String, String>, default_enable_if_security: bool)
 }
 
 fn transport_from_query(q: &HashMap<String, String>) -> Option<Value> {
-    // Throne Transport::ParseFromLink
+    // Transport::ParseFromLink
     let mut ty = q.get("type").cloned().unwrap_or_default();
     if ty.is_empty() || ty == "tcp" || ty == "raw" {
         if q.get("headerType").map(|s| s.as_str()) == Some("http") {
@@ -776,7 +776,7 @@ mod tests {
 
     #[test]
     fn vmess_uri_security_tls() {
-        // Throne standard VMess URL (not v2rayN b64)
+        // standard VMess URL (not v2rayN b64)
         let o = parse_to_outbound(
             "vmess://11111111-1111-1111-1111-111111111111@node.example.com:49362?security=tls#US",
         )
@@ -855,7 +855,7 @@ mod tests {
 
     #[test]
     fn https_proxy_enables_tls() {
-        // Throne: https://user:pass@host:port → type http + tls.enabled
+        // https://user:pass@host:port → type http + tls.enabled
         let o = parse_to_outbound(
             "https://e4e6e20b-8713-4b3e-a12a-772b7e530c04:e4e6e20b-8713-4b3e-a12a-772b7e530c04@edge.example.com:443#igg",
         )
@@ -891,7 +891,7 @@ mod tests {
 
     #[test]
     fn tuic_igg_style() {
-        // Throne: tuic://uuid:pass@host:port?congestion_control=bbr&alpn=h3
+        // tuic://uuid:pass@host:port?congestion_control=bbr&alpn=h3
         let o = parse_to_outbound(
             "tuic://33D9EFC7-8BCD-F4A1-AAFF-D95A2F06970D:e4e6e20b-8713-4b3e-a12a-772b7e530c04@sing1.71edgeiqiyi.com:8443?congestion_control=bbr&alpn=h3#sg",
         )

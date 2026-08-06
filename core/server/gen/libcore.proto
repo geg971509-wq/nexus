@@ -66,7 +66,7 @@ message LoadConfigReq {
   // Seconds without gated traffic before a lazily started instance is shut down
   // again. 0 keeps it resident once it has started.
   optional int32 xray_idle_seconds = 15 [default = 0];
-  // Fields from 100 up are fork-local, so merges from Throne-official never
+  // Fields from 100 up are fork-local, so merges from upstream-official never
   // collide on a field number.
   optional int32 profile_id = 100 [default = -1];
 }

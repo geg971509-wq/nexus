@@ -73,8 +73,8 @@ func (p *Process) Stop() {
 }
 
 // newCmd builds the exec.Cmd shared by the launch paths that go through Go's
-// os/exec: stdout/stderr funnel into the Throne log, and the child environment
-// has THRONE* stripped. Platform-specific privilege handling (unix setuid) is
+// os/exec: stdout/stderr funnel into the upstream log, and the child environment
+// has NEXUS* stripped. Platform-specific privilege handling (unix setuid) is
 // layered on by startChild before the command is started.
 func newCmd(path string, args []string, noOut bool) *exec.Cmd {
 	cmd := exec.Command(path, args...)
@@ -153,13 +153,13 @@ func CreateExtraConfig(content string) (string, string, error) {
 	return configPath, cleanupPath, nil
 }
 
-// childEnv returns the parent environment minus any THRONE-prefixed variables,
+// childEnv returns the parent environment minus any NEXUS-prefixed variables,
 // which carry app-internal configuration the external process must not see.
 func childEnv() []string {
 	parent := os.Environ()
 	out := make([]string, 0, len(parent))
 	for _, kv := range parent {
-		if name, _, ok := strings.Cut(kv, "="); ok && strings.HasPrefix(strings.ToUpper(name), "THRONE") {
+		if name, _, ok := strings.Cut(kv, "="); ok && strings.HasPrefix(strings.ToUpper(name), "NEXUS") {
 			continue
 		}
 		out = append(out, kv)

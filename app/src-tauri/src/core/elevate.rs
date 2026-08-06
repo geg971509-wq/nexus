@@ -1,4 +1,4 @@
-//! macOS Tun privilege: setuid-root NexusCore (Throne Mac_Set_Core_Permissions subset).
+//! macOS Tun privilege: setuid-root NexusCore (upstream Mac_Set_Core_Permissions subset).
 //! Bundle may live on nosuid volumes (`a nosuid volume`); copy into
 //! `~/Library/Application Support/Nexus/bin/` (Data volume) before chown/chmod u+s.
 

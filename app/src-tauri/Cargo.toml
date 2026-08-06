@@ -1,7 +1,7 @@
 [package]
 name = "nexus"
-version = "0.1.0"
-description = "Nexus VPN — Tauri shell (macOS MVP)"
+version = "0.2.0"
+description = "Nexus VPN — Tauri shell (macOS)"
 authors = ["Nexus"]
 edition = "2021"
 default-run = "nexus"
@@ -22,8 +22,11 @@ path = "src/bin/core_smoke.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+# TCP probe must bind physical iface under Tun (IP_BOUND_IF); socket2 already transitive.
+socket2 = "0.6"
+libc = "0.2"

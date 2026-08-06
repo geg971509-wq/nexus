@@ -1,32 +1,30 @@
 # Nexus
 
-macOS VPN / proxy client (MVP skeleton). UI: Apple-minimal HTML. Engine: Go core (ThroneCore lineage) + sing-box/xray git deps. Shell: **Tauri 2 + Rust**.
+macOS VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box + xray) + framed IPC. Shell: **Tauri 2 + Rust**.
 
 ## Identity
 
 | Item | Value |
 |------|--------|
 | Product | Nexus |
+| Version | 0.2.0 |
 | Bundle ID | `app.nexus.desktop` |
 | Deeplink | `nexus://` |
 | Data dir | `~/Library/Application Support/Nexus` |
-| Socket prefix | `nexus-` |
-| Core binary | `bin/NexusCore` (libcore framed IPC) |
-
-**Do not edit** `upstream source tree`. This tree is a copy + product worktree.
-
+| Socket env | `NEXUS_CORE_SOCKET` / `NEXUS_CORE_DEBUG` |
+| Core binary | `NexusCore` (libcore framed IPC) |
 
 ## Layout
 
-- `app/` — Tauri 2 (`ui/` = HTML + icons)
+- `app/` — Tauri 2 (`ui/index.html` is the UI)
 - `app/src-tauri/src/core/` — framed IPC client + session spawn
 - `app/src-tauri/src/data/` — JSON store + pure generate
 - `app/src-tauri/src/sys.rs` — system proxy
-- `core/server/` — Go core source
-- `bin/NexusCore` · `bin/Nexus.app` — build outputs
-- `docs/nexus-throne-port-plan.md` — FINAL port plan
+- `core/server/` — Go core source (`module NexusCore`)
+- `bin/NexusCore` · `bin/Nexus.app` — build outputs (gitignored)
+- `docs/core-dependencies.md` — Core dependency pins
 
-## Build (final .app)
+## Build (local .app)
 
 ```bash
 cd .
@@ -36,8 +34,11 @@ cd .
 ./build.sh --skip-core --skip-npm  # faster rebuild when core/deps ready
 ```
 
-Requires: macOS, Xcode CLT, `go`, `cargo`/`rustc`, `npm`.  
-Does **not** build Qt/Throne CMake.
+Requires: macOS, Xcode CLT, `go`, `cargo`/`rustc`, `npm`.
+
+### Distribution note (unsigned)
+
+This build path produces an **unsigned** local app (no Developer ID / notarization). Fine for your machine and internal use. Gatekeeper will block copies to other Macs until you codesign + notarize with your Apple credentials (not wired in `build.sh` yet).
 
 ## Dev
 
@@ -50,8 +51,15 @@ cargo run --bin core_smoke
 cd .. && npm run tauri dev
 ```
 
-## Status (2026-08-04)
+## Capabilities (0.2.0)
 
-- Phase A–E skeleton: IPC smoke PASS; store/generate; sys stubs; UI bridge
-- `connect` runs generate → CheckConfig only; **Start() deferred** until import path trusted
-- No push to remote unless asked
+- Connect: UI selected node → generate → Core `Start` (share link or outbound JSON)
+- Tun chip + system proxy; exit always clears OS proxy on `:2080` and stops Core
+- Catalog (groups/nodes) in `store.json` via `catalog_get` / `catalog_put`
+- Node traffic column from `QueryConnections` aggregate while connected
+- Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled 连通 (not proxy path test)
+- Advanced routing/DNS settings hidden until generate is wired to them
+
+## Status
+
+Product shell is operational for macOS local use. Not a notarized App Store / public download build.

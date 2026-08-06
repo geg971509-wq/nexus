@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"ThroneCore/gen"
+	"NexusCore/gen"
 )
 
 func TestQueryStateReportsActiveProfile(t *testing.T) {

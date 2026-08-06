@@ -52,7 +52,7 @@ func init() {
 // DefaultInterface returns the current physical default-route interface tracked
 // by the always-on monitor, or nil when the monitor is unavailable. Virtual
 // (TUN) and loopback interfaces are excluded by the monitor, so the result is
-// safe to bind a core egress to even while throne-tun is up.
+// safe to bind a core egress to even while upstream-tun is up.
 func DefaultInterface() *control.Interface {
 	if DnsManagerInstance == nil || DnsManagerInstance.Monitor == nil {
 		return nil

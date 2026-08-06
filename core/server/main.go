@@ -10,23 +10,23 @@ import (
 	runtimeDebug "runtime/debug"
 	"time"
 
-	"ThroneCore/internal/boxmain"
-	"ThroneCore/internal/corelock"
-	"ThroneCore/ipc"
-	"ThroneCore/test_utils"
+	"NexusCore/internal/boxmain"
+	"NexusCore/internal/corelock"
+	"NexusCore/ipc"
+	"NexusCore/test_utils"
 
 	"github.com/xtls/xray-core/core"
 
-	_ "ThroneCore/internal/distro/all"
+	_ "NexusCore/internal/distro/all"
 	C "github.com/sagernet/sing-box/constant"
 )
 
 func RunCore() {
-	socketName := os.Getenv("THRONE_CORE_SOCKET")
+	socketName := os.Getenv("NEXUS_CORE_SOCKET")
 	if socketName == "" {
-		log.Fatal("THRONE_CORE_SOCKET not set")
+		log.Fatal("NEXUS_CORE_SOCKET not set")
 	}
-	debug = os.Getenv("THRONE_CORE_DEBUG") == "1"
+	debug = os.Getenv("NEXUS_CORE_DEBUG") == "1"
 
 	lock, err := corelock.Acquire(socketName)
 	if errors.Is(err, corelock.ErrAlreadyRunning) {
@@ -49,7 +49,7 @@ func RunCore() {
 		}
 		retryDelay = 250 * time.Millisecond
 
-		fmt.Println("Core Has Successfully Connected to Throne!")
+		fmt.Println("Core Has Successfully Connected to Nexus!")
 		if dispatchErr := runDispatch(conn); dispatchErr != nil && debug {
 			log.Printf("GUI IPC disconnected: %v", dispatchErr)
 		}

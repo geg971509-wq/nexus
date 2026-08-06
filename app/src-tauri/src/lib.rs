@@ -3,6 +3,7 @@ mod data;
 mod sys;
 mod sub;
 mod net;
+mod tray_spin;
 
 use core::session::{CoreSession, SESSION};
 
@@ -11,7 +12,7 @@ fn app_identity() -> serde_json::Value {
     serde_json::json!({
         "name": "Nexus",
         "identifier": "app.nexus.desktop",
-        "phase": "CDE-mvp-bridge",
+        "version": "0.2.0",
     })
 }
 
@@ -102,8 +103,11 @@ async fn session_status() -> Result<serde_json::Value, String> {
         }
         let process_alive = CoreSession::core_process_alive();
         let mixed_open = CoreSession::mixed_port_open(2080);
-        // Live tunnel if Start still loaded, or orphan Core still holding mixed/utun.
-        let live = rpc_running || (!has_session && (process_alive || mixed_open));
+        // Live if RPC Start still loaded, OR Core/mixed residual (GUI relaunch / SESSION lag).
+        // Do not require !has_session — dead SESSION + live process was painting 未连接.
+        let live = rpc_running || process_alive || mixed_open;
+        // Keep menu-bar Earth spin in sync (boot / orphan Core / reconnect).
+        tray_spin::set_spinning(live);
         Ok(serde_json::json!({
             "running": live,
             "rpc_running": rpc_running,
@@ -178,13 +182,28 @@ async fn store_snapshot() -> Result<serde_json::Value, String> {
     .map_err(|e| format!("store_snapshot join: {e}"))?
 }
 
+/// Export config for selected node — same input shape as connect_selected.
 #[tauri::command]
-async fn generate_preview() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        use data::generate::generate_for_store;
+async fn generate_preview(
+    link: Option<String>,
+    outbound: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use data::generate::generate_with_outbound;
+        use data::share_link::parse_to_outbound;
         use data::store::Store;
         let st = Store::load();
-        generate_for_store(&st, 2080)
+        let ob = if let Some(v) = outbound {
+            if v.get("type").and_then(|t| t.as_str()).is_none() {
+                return Err("outbound missing type".into());
+            }
+            v
+        } else if let Some(lk) = link.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            parse_to_outbound(lk)?
+        } else {
+            return Err("no selected node link/outbound for preview".into());
+        };
+        Ok(generate_with_outbound(ob, 2080, st.tun))
     })
     .await
     .map_err(|e| format!("generate_preview join: {e}"))?
@@ -225,7 +244,7 @@ async fn set_system_proxy_cmd(enabled: bool) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         use core::session::SESSION;
         use data::store::Store;
-        // Throne set_spmode_system_proxy: always persist intent; OS write only if profile running.
+        // set_spmode_system_proxy: always persist intent; OS write only if profile running.
         let mut st = Store::load();
         st.system_proxy = enabled;
         st.save()?;
@@ -242,7 +261,7 @@ async fn set_system_proxy_cmd(enabled: bool) -> Result<String, String> {
                 "system_proxy intent=on (OS apply on Start · mixed 127.0.0.1:{port})"
             ));
         }
-        // enable+running → point OS at mixed; disable → clear OS always (Throne ClearSystemProxy)
+        // enable+running → point OS at mixed; disable → clear OS always (upstream ClearSystemProxy)
         // primary service sync (~0.2s); other NICs background — chip must not wait ~1s for all.
         sys::set_system_proxy(enabled, port)
     })
@@ -250,7 +269,7 @@ async fn set_system_proxy_cmd(enabled: bool) -> Result<String, String> {
     .map_err(|e| format!("system proxy join: {e}"))?
 }
 
-/// Throne set_spmode_vpn: persist + elevate Core (osascript password sheet).
+/// set_spmode_vpn: persist + elevate Core (osascript password sheet).
 /// Live tunnel re-Start is UI-side (needs node payload); here only privilege + flag.
 #[tauri::command]
 async fn set_tun_cmd(enabled: bool) -> Result<serde_json::Value, String> {
@@ -310,9 +329,9 @@ async fn set_tun_cmd(enabled: bool) -> Result<serde_json::Value, String> {
     .map_err(|e| format!("set_tun join: {e}"))?
 }
 
-/// Throne-aligned connect: BuildSingBoxConfig → Start(LoadConfigReq).
+/// engine-aligned connect: BuildSingBoxConfig → Start(LoadConfigReq).
 /// UI passes selected node share `link` or raw `outbound` JSON; no invent credentials.
-/// Tun/system-proxy follow Throne `spmode_vpn` / `spmode_system_proxy` (UI chips → optional args → store).
+/// Tun/system-proxy follow upstream `spmode_vpn` / `spmode_system_proxy` (UI chips → optional args → store).
 /// Async + spawn_blocking: sync Start holds SESSION + Core RPC and freezes the power button.
 #[tauri::command]
 async fn connect_selected(
@@ -342,7 +361,7 @@ fn connect_selected_sync(
     use data::store::Store;
 
     let mut st = Store::load();
-    // Throne: Start uses current checkbox state, not a stale disk flag.
+    // Start uses current checkbox state, not a stale disk flag.
     // Prefer explicit UI args; persist so next cold Start matches chips.
     let mut dirty = false;
     if let Some(v) = tun {
@@ -379,11 +398,11 @@ fn connect_selected_sync(
         );
     };
 
-    // Throne generate.cpp: tun inbound only if spmode_vpn
+    // generate.cpp: tun inbound only if spmode_vpn
     let cfg = generate_with_outbound(ob, port, use_tun);
     let json = serde_json::to_string(&cfg).map_err(|e| e.to_string())?;
 
-    // Tun: setuid Core before LoadConfig (Throne profile_start elevation).
+    // Tun: setuid Core before LoadConfig (upstream profile_start elevation).
     // osascript password sheet runs here if setuid copy missing — outside SESSION.
     if use_tun {
         CoreSession::ensure_privileged_core()?;
@@ -410,7 +429,7 @@ fn connect_selected_sync(
             }
         }
 
-        // Throne: Start may replace running instance; Stop first if already running
+        // Start may replace running instance; Stop first if already running
         if let Ok((running, _)) = s.query_state() {
             if running {
                 let _ = s.stop_rpc();
@@ -444,7 +463,7 @@ fn connect_selected_sync(
         (start_err, running, qpid)
     };
 
-    // Throne: system proxy applied when spmode_system_proxy (not when Tun-only).
+    // system proxy applied when spmode_system_proxy (not when Tun-only).
     // Only after Start success — OS must point at a live mixed port.
     let mut proxy_note = None;
     if start_err.is_none() {
@@ -460,6 +479,11 @@ fn connect_selected_sync(
                 Err(e) => proxy_note = Some(format!("clear system proxy: {e}")),
             }
         }
+    }
+
+    // Menu-bar Earth spins while tunnel is up (proxy and/or Tun).
+    if start_err.is_none() {
+        tray_spin::set_spinning(true);
     }
 
     Ok(serde_json::json!({
@@ -507,7 +531,7 @@ async fn query_connections() -> Result<serde_json::Value, String> {
     .map_err(|e| format!("query_connections join: {e}"))?
 }
 
-/// Throne Stop RPC only — keep Core process for next Start.
+/// Stop RPC only — keep Core process for next Start.
 #[tauri::command]
 async fn disconnect_selected() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(disconnect_selected_sync)
@@ -543,6 +567,7 @@ fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
             Err(e) => proxy_note = Some(format!("clear system proxy: {e}")),
         }
     }
+    tray_spin::set_spinning(false);
     Ok(serde_json::json!({
         "stopped": stop_err.is_none(),
         "stop_error": stop_err,
@@ -552,7 +577,7 @@ fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
     }))
 }
 
-/// Throne GroupUpdater::HttpGet — download subscription body (no parse).
+/// GroupUpdater::HttpGet — download subscription body (no parse).
 #[tauri::command]
 async fn sub_fetch(url: String) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || sub::fetch(&url))
@@ -560,7 +585,7 @@ async fn sub_fetch(url: String) -> Result<serde_json::Value, String> {
         .map_err(|e| format!("sub_fetch join: {e}"))?
 }
 
-/// TCP connect RTT probe. Emits `net-probe-result` per finished target (Throne progressive).
+/// TCP connect RTT probe. Emits `net-probe-result` per finished target (upstream progressive).
 /// Runs off the async runtime so the webview keeps painting while probes are in flight.
 #[tauri::command]
 async fn net_tcp_probe(
@@ -596,7 +621,7 @@ async fn net_tcp_probe(
     .map_err(|e| format!("probe join: {e}"))
 }
 
-/// Abort in-flight TCP probes (Throne stopSpeedtest).
+/// Abort in-flight TCP probes (upstream stopSpeedtest).
 #[tauri::command]
 fn net_tcp_probe_stop() -> Result<(), String> {
     net::abort_probes();
@@ -643,9 +668,14 @@ async fn net_resolve_hosts(
     .map_err(|e| format!("resolve join: {e}"))
 }
 
+/// Policy A: explicit quit fully tears down tunnel (Core + OS proxy + spin).
+/// Set only after user confirms (or tunnel already dead). ExitRequested honors this.
+static ALLOW_EXIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Single quit/teardown path: stop Core + always best-effort clear OS proxy at :2080.
-/// Used by app_quit, tray quit, and ExitRequested (Cmd+Q). Idempotent.
+/// Used by app_quit, tray quit, and Exit (after confirm). Idempotent.
 fn teardown_session() {
+    tray_spin::set_spinning(false);
     // Always clear — store flag can lag OS; exit must not leave browsers on dead :2080.
     let _ = sys::set_system_proxy(false, 2080);
     let _ = (|| -> Result<(), String> {
@@ -659,10 +689,45 @@ fn teardown_session() {
     })();
 }
 
-#[tauri::command]
-fn app_quit(app: tauri::AppHandle) {
+/// Best-effort: RPC running, NexusCore process, or mixed :2080 still accepting.
+fn tunnel_is_live() -> bool {
+    if let Ok(mut g) = SESSION.lock() {
+        if let Some(s) = g.as_mut() {
+            if let Ok((running, _)) = s.query_state() {
+                if running {
+                    return true;
+                }
+            }
+        }
+    }
+    CoreSession::core_process_alive() || CoreSession::mixed_port_open(2080)
+}
+
+/// Native warning before full teardown (tray / Cmd+Q when webview dialog unavailable).
+fn confirm_disconnect_quit() -> bool {
+    // cancel button → non-zero exit → false
+    let script = r#"display dialog "当前隧道仍在运行（含 Tun / 系统代理）。退出将停止 Core、关闭系统代理并拆除隧道。" with title "Nexus" buttons {"取消", "断开并退出"} default button "断开并退出" cancel button "取消" with icon caution"#;
+    std::process::Command::new("osascript")
+        .args(["-e", script])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// force=true: UI already warned → teardown + exit. force=false: warn if live.
+fn request_quit(app: tauri::AppHandle, force: bool) {
+    use std::sync::atomic::Ordering;
+    if !force && tunnel_is_live() && !confirm_disconnect_quit() {
+        return;
+    }
+    ALLOW_EXIT.store(true, Ordering::SeqCst);
     teardown_session();
     app.exit(0);
+}
+
+#[tauri::command]
+fn app_quit(app: tauri::AppHandle, force: Option<bool>) {
+    request_quit(app, force.unwrap_or(false));
 }
 
 fn show_main_window(app: &tauri::AppHandle) {
@@ -728,10 +793,8 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main_window(app),
-                    "quit" => {
-                        teardown_session();
-                        app.exit(0);
-                    }
+                    // Policy A: warn if tunnel live, then full teardown
+                    "quit" => request_quit(app.clone(), false),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -747,6 +810,7 @@ pub fn run() {
                 .build(app)?;
             // tray registered with app on build; retain handle for process life
             app.manage(_tray);
+            tray_spin::init(app.handle());
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -762,8 +826,28 @@ pub fn run() {
                         show_main_window(app);
                     }
                 }
-                // Cmd+Q / dock Quit / any exit — same teardown as tray quit
-                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                // Cmd+Q / dock Quit: warn if live, then teardown on Exit
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    use std::sync::atomic::Ordering;
+                    if ALLOW_EXIT.load(Ordering::SeqCst) {
+                        // confirmed (or not live via request_quit) — proceed to Exit
+                    } else if tunnel_is_live() {
+                        api.prevent_exit();
+                        let app = app.clone();
+                        std::thread::Builder::new()
+                            .name("nexus-quit-confirm".into())
+                            .spawn(move || {
+                                if confirm_disconnect_quit() {
+                                    ALLOW_EXIT.store(true, Ordering::SeqCst);
+                                    teardown_session();
+                                    app.exit(0);
+                                }
+                            })
+                            .ok();
+                    }
+                    // not live → allow exit; Exit handler teardowns (idempotent)
+                }
+                tauri::RunEvent::Exit => {
                     teardown_session();
                 }
                 _ => {}

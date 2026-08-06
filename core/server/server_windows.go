@@ -1,8 +1,8 @@
 package main
 
 import (
-	"ThroneCore/gen"
-	"ThroneCore/internal/boxdns"
+	"NexusCore/gen"
+	"NexusCore/internal/boxdns"
 	"context"
 )
 

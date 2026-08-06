@@ -1,7 +1,7 @@
 package test_utils
 
 import (
-	"ThroneCore/internal/boxbox"
+	"NexusCore/internal/boxbox"
 	"context"
 	"errors"
 	"github.com/sagernet/sing-box/adapter"

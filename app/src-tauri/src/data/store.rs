@@ -1,46 +1,17 @@
-//! Minimal profile store (JSON file). SQLite schema can replace without changing command shapes.
+//! Minimal app store (JSON file). Catalog blob is the node source of truth.
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Profile {
-    pub id: String,
-    pub name: String,
-    pub group_id: String,
-    /// Raw outbound object for sing-box (import-first)
-    pub outbound: serde_json::Value,
-    /// Mux A/B probe: "unknown" | "yes" | "no". Default-on injects only when "yes".
-    #[serde(default = "default_mux_unknown")]
-    pub mux_capability: String,
-    #[serde(default)]
-    pub mux_capability_at: i64,
-}
-
-fn default_mux_unknown() -> String {
-    "unknown".into()
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Group {
-    pub id: String,
-    pub name: String,
-    pub url: String,
-    pub auto_update: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Store {
-    pub groups: Vec<Group>,
-    pub profiles: Vec<Profile>,
-    pub selected_profile_id: Option<String>,
-    /// Throne spmode_system_proxy — product default ON (user: 默认打开系统代理).
+    /// System proxy intent — product default ON.
     #[serde(default = "default_true")]
     pub system_proxy: bool,
-    /// Throne spmode_vpn — default off (needs privilege).
+    /// Tun intent — default off (needs privilege).
     #[serde(default)]
     pub tun: bool,
-    /// UI node catalog blob (`nexus.catalog.v1` shape). Single source after migration from localStorage.
+    /// UI node catalog blob (`nexus.catalog.v1` shape).
     #[serde(default)]
     pub catalog: Option<serde_json::Value>,
 }
@@ -52,9 +23,6 @@ fn default_true() -> bool {
 impl Default for Store {
     fn default() -> Self {
         Self {
-            groups: Vec::new(),
-            profiles: Vec::new(),
-            selected_profile_id: None,
             system_proxy: true,
             tun: false,
             catalog: None,
@@ -72,6 +40,7 @@ impl Store {
     pub fn load() -> Self {
         let p = Self::path();
         if let Ok(s) = fs::read_to_string(&p) {
+            // Unknown legacy fields (profiles/groups/…) are ignored by serde.
             if let Ok(st) = serde_json::from_str(&s) {
                 return st;
             }
@@ -89,28 +58,6 @@ impl Store {
             let _ = fs::set_permissions(&p, fs::Permissions::from_mode(0o600));
         }
         Ok(())
-    }
-
-    pub fn upsert_direct_demo(&mut self) {
-        if self.groups.is_empty() {
-            self.groups.push(Group {
-                id: "default".into(),
-                name: "Default".into(),
-                url: String::new(),
-                auto_update: false,
-            });
-        }
-        if self.profiles.is_empty() {
-            self.profiles.push(Profile {
-                id: "direct-1".into(),
-                name: "Direct".into(),
-                group_id: "default".into(),
-                outbound: serde_json::json!({"type":"direct","tag":"proxy"}),
-                mux_capability: "unknown".into(),
-                mux_capability_at: 0,
-            });
-            self.selected_profile_id = Some("direct-1".into());
-        }
     }
 }
 

@@ -87,7 +87,7 @@ impl CoreSession {
         Self::resolve_bundle_core()
     }
 
-    /// Throne get_elevated_permissions: setuid copy + password sheet if needed.
+    /// get_elevated_permissions: setuid copy + password sheet if needed.
     pub fn ensure_privileged_core() -> Result<PathBuf, String> {
         let src = Self::resolve_bundle_core();
         if src.as_os_str().is_empty() || !src.is_file() {
@@ -199,14 +199,14 @@ impl CoreSession {
         }
         listener.set_nonblocking(true)?;
 
-        // File sink (not piped): keeps THRONE_CORE_DEBUG without freezing Core.
+        // File sink (not piped): keeps NEXUS_CORE_DEBUG without freezing Core.
         // cwd under Application Support so relative paths never hit `/` (read-only).
         let (stdout, stderr) = Self::core_stdio_sinks();
         let core_cwd = Self::core_workdir();
         let mut child = Command::new(core_bin)
             .current_dir(&core_cwd)
-            .env("THRONE_CORE_SOCKET", &path)
-            .env("THRONE_CORE_DEBUG", "1")
+            .env("NEXUS_CORE_SOCKET", &path)
+            .env("NEXUS_CORE_DEBUG", "1")
             .stdout(stdout)
             .stderr(stderr)
             .spawn()?;
@@ -246,7 +246,7 @@ impl CoreSession {
         Ok(decode_core_state(&data))
     }
 
-    /// Core euid==0 (setuid child). Throne IsPrivileged RPC.
+    /// Core euid==0 (setuid child). upstream IsPrivileged RPC.
     pub fn is_privileged(&mut self) -> Result<bool, String> {
         let c = self.client.as_mut().ok_or("no client")?;
         let data = c.call("IsPrivileged", &[]).map_err(|e| e.to_string())?;
@@ -268,7 +268,7 @@ impl CoreSession {
         Ok(decode_error_resp(&data))
     }
 
-    /// Throne Client::Start(LoadConfigReq) — load sing-box config into running Core process.
+    /// Client::Start(LoadConfigReq) — load sing-box config into running Core process.
     pub fn start_rpc(&mut self, core_json: &str, profile_id: i32) -> Result<Option<String>, String> {
         let c = self.client.as_mut().ok_or("no client")?;
         let payload = encode_load_config_req(core_json, Some(profile_id));
@@ -285,7 +285,7 @@ impl CoreSession {
         Ok(decode_error_resp(&data))
     }
 
-    /// Throne QueryConnections — live traffic rows for the connection table.
+    /// QueryConnections — live traffic rows for the connection table.
     pub fn query_connections(&mut self) -> Result<Vec<ConnRow>, String> {
         let c = self.client.as_mut().ok_or("no client")?;
         let data = c.call("QueryConnections", &[]).map_err(|e| e.to_string())?;
@@ -327,5 +327,5 @@ impl CoreSession {
     }
 }
 
-/// Process-wide optional session for Tauri commands (Phase B smoke).
+/// Process-wide optional session for Tauri commands.
 pub static SESSION: Mutex<Option<CoreSession>> = Mutex::new(None);

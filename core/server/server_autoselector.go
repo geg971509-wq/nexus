@@ -1,7 +1,7 @@
 package main
 
 import (
-	"ThroneCore/gen"
+	"NexusCore/gen"
 	"context"
 	"time"
 

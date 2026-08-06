@@ -136,14 +136,14 @@ func makeConfigReadable(f *os.File) error {
 // (fchown'd to the user, 0600) stays secret. cleanup removes the directory.
 func createSecureConfigFile() (*os.File, string, error) {
 	if os.Geteuid() != 0 {
-		f, err := os.CreateTemp("", "throne-extra-*.conf")
+		f, err := os.CreateTemp("", "upstream-extra-*.conf")
 		if err != nil {
 			return nil, "", err
 		}
 		return f, f.Name(), nil
 	}
 
-	dir, err := os.MkdirTemp("/tmp", "throne-extra-")
+	dir, err := os.MkdirTemp("/tmp", "upstream-extra-")
 	if err != nil {
 		return nil, "", err
 	}

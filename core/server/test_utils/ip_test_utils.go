@@ -1,7 +1,7 @@
 package test_utils
 
 import (
-	"ThroneCore/internal/boxbox"
+	"NexusCore/internal/boxbox"
 	"context"
 	"encoding/json"
 	"errors"
@@ -154,7 +154,7 @@ func ipTest(ctx context.Context, client *http.Client) (IPInfo, error) {
 		return res, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "Throne/IPTest")
+	req.Header.Set("User-Agent", "upstream/IPTest")
 	resp, err := client.Do(req)
 	if err != nil {
 		return res, err

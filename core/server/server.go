@@ -12,15 +12,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"ThroneCore/gen"
-	"ThroneCore/internal/boxbox"
-	"ThroneCore/internal/boxdns"
-	"ThroneCore/internal/boxmain"
-	"ThroneCore/internal/process"
-	"ThroneCore/internal/sys"
-	"ThroneCore/internal/wg"
-	"ThroneCore/internal/xray"
-	"ThroneCore/test_utils"
+	"NexusCore/gen"
+	"NexusCore/internal/boxbox"
+	"NexusCore/internal/boxdns"
+	"NexusCore/internal/boxmain"
+	"NexusCore/internal/process"
+	"NexusCore/internal/sys"
+	"NexusCore/internal/wg"
+	"NexusCore/internal/xray"
+	"NexusCore/test_utils"
 
 	"github.com/google/shlex"
 	"github.com/sagernet/sing-box/adapter"
@@ -31,7 +31,7 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/service"
 	"github.com/xtls/xray-core/core"
-	xthrone "github.com/xtls/xray-core/throne"
+	xthrone "github.com/xtls/xray-core/upstream"
 	xinternet "github.com/xtls/xray-core/transport/internet"
 )
 
@@ -89,7 +89,7 @@ func defaultInterfaceFinder() string {
 }
 
 // init keeps the live Xray instance's egress bound to the current default-route
-// interface. Throne's always-on boxdns monitor fires this callback whenever the
+// interface. upstream's always-on boxdns monitor fires this callback whenever the
 // default interface changes (e.g. a network switch), and we push the new name
 // onto whichever Xray instance is currently live, so new dials follow the move —
 // the runtime counterpart to the initial SetEgressInterface at Start. Test and
@@ -216,7 +216,7 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 	if *in.NeedXray {
 		// Wire egress on the instance after creation, before Start: a dynamic
 		// interface finder for auto interface binding, and (when an address is
-		// provided) a throne-dns resolver that resolves outbound server domains
+		// provided) a upstream-dns resolver that resolves outbound server domains
 		// through sing-box's loopback DNS. Test/validation instances get only the
 		// interface finder (so their egress still leaves the physical NIC instead
 		// of looping through an active TUN) and never the DNS resolver, so their

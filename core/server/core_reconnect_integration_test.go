@@ -13,19 +13,19 @@ import (
 	"testing"
 	"time"
 
-	"ThroneCore/gen"
+	"NexusCore/gen"
 
 	"google.golang.org/protobuf/proto"
 )
 
 func TestCoreKeepsListenerAcrossGUIReconnect(t *testing.T) {
-	if os.Getenv("THRONE_CORE_RECONNECT_HELPER") == "1" {
+	if os.Getenv("NEXUS_CORE_RECONNECT_HELPER") == "1" {
 		RunCore()
 		return
 	}
 
 	// Given
-	socketPath := fmt.Sprintf("/tmp/throne-core-%d-%d.sock", os.Getpid(), time.Now().UnixNano())
+	socketPath := fmt.Sprintf("/tmp/upstream-core-%d-%d.sock", os.Getpid(), time.Now().UnixNano())
 	t.Cleanup(func() {
 		_ = os.Remove(socketPath)
 		_ = os.Remove(socketPath + ".lock")
@@ -35,8 +35,8 @@ func TestCoreKeepsListenerAcrossGUIReconnect(t *testing.T) {
 	var output bytes.Buffer
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCoreKeepsListenerAcrossGUIReconnect$")
 	cmd.Env = append(os.Environ(),
-		"THRONE_CORE_RECONNECT_HELPER=1",
-		"THRONE_CORE_SOCKET="+socketPath,
+		"NEXUS_CORE_RECONNECT_HELPER=1",
+		"NEXUS_CORE_SOCKET="+socketPath,
 	)
 	cmd.Stdout = &output
 	cmd.Stderr = &output

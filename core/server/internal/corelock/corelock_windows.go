@@ -17,7 +17,7 @@ type Lock struct {
 
 func Acquire(name string) (*Lock, error) {
 	digest := sha256.Sum256([]byte(name))
-	mutexName, err := windows.UTF16PtrFromString(`Local\ThroneCore-` + hex.EncodeToString(digest[:16]))
+	mutexName, err := windows.UTF16PtrFromString(`Local\NexusCore-` + hex.EncodeToString(digest[:16]))
 	if err != nil {
 		return nil, fmt.Errorf("encode core mutex name: %w", err)
 	}

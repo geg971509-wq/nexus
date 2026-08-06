@@ -1,4 +1,4 @@
-//! libcore framed IPC (LE), matches ThroneCore dispatch.go / Qt RPC.cpp
+//! libcore framed IPC (LE), matches NexusCore dispatch.go / Qt RPC.cpp
 use std::io::{Read, Write};
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
@@ -45,7 +45,7 @@ impl LibcoreClient {
         self.call_timeout(method, payload, Duration::from_secs(15))
     }
 
-    /// Same framed IPC as Throne Qt Client::Call; optional per-call read timeout.
+    /// Same framed IPC as upstream Qt Client::Call; optional per-call read timeout.
     pub fn call_timeout(
         &mut self,
         method: &str,

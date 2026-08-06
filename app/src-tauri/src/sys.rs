@@ -1,4 +1,4 @@
-//! macOS system proxy / DNS — Throne QvProxyConfigurator subset.
+//! macOS system proxy / DNS — upstream QvProxyConfigurator subset.
 //! networksetup over services; proxy only meaningful when mixed is up.
 //!
 //! Latency: full scan of every service is ~1s on multi-NIC Macs. Apply primary
@@ -58,7 +58,7 @@ fn run_ns(args: &[&str]) -> Result<(), String> {
     }
 }
 
-/// Throne macOSgetNetworkServices: skip header + disabled (*).
+/// macOSgetNetworkServices: skip header + disabled (*).
 pub fn list_network_services() -> Vec<String> {
     let out = Command::new(NETWORKSETUP)
         .args(["-listallnetworkservices"])
@@ -125,7 +125,7 @@ fn ordered_services() -> &'static Vec<String> {
 
 fn apply_one(service: &str, enabled: bool, host: &str, port_s: &str) -> Result<(), String> {
     if !enabled {
-        // Throne ClearSystemProxy
+        // ClearSystemProxy
         for args in [
             ["-setautoproxystate", service, "off"],
             ["-setwebproxystate", service, "off"],
@@ -136,7 +136,7 @@ fn apply_one(service: &str, enabled: bool, host: &str, port_s: &str) -> Result<(
         }
         return Ok(());
     }
-    // Throne SetSystemProxy: set + explicit state on
+    // SetSystemProxy: set + explicit state on
     run_ns(&["-setwebproxy", service, host, port_s])?;
     run_ns(&["-setsecurewebproxy", service, host, port_s])?;
     run_ns(&["-setwebproxystate", service, "on"])?;
@@ -146,7 +146,7 @@ fn apply_one(service: &str, enabled: bool, host: &str, port_s: &str) -> Result<(
     Ok(())
 }
 
-/// Throne SetSystemProxy / ClearSystemProxy (macOS).
+/// SetSystemProxy / ClearSystemProxy (macOS).
 /// Primary service applied synchronously (~0.2s); remaining services in a background thread.
 pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
     let services = ordered_services().clone();

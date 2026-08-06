@@ -1,6 +1,6 @@
 [[permission]]
 identifier = "allow-nexus-commands"
-description = "Allow Nexus app IPC commands (Phase B–E)"
+description = "Allow Nexus app IPC commands"
 commands.allow = [
   "app_identity",
   "app_quit",

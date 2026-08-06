@@ -1,20 +1,25 @@
-//! Real network probes for node context menu (Throne URL-test / resolve-IP subset).
+//! Real network probes for node context menu (upstream URL-test / resolve-IP subset).
 //! Full proxy URL-test needs Core `Test` RPC + Start() config — not wired yet.
 //! This measures TCP connect RTT to server:port (honest reachability, not proxy path).
 //!
+//! Under Tun, a plain `TcpStream::connect` is accepted by the local gvisor/utun stack
+//! in ~0–2 ms (hairpin), so latency looks fake-green. Probe sockets bind the physical
+//! NIC via `IP_BOUND_IF` / `IPV6_BOUND_IF` so SYNs leave en0/… and skip utun.
+//!
 //! Progressive results: each finished probe is delivered via callback (UI emit),
-//! matching Throne QueryURLTest poller — do not wait for the whole batch to paint.
+//! matching upstream QueryURLTest poller — do not wait for the whole batch to paint.
 
 use serde::Serialize;
 use serde_json::json;
-use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use socket2::{Domain, Protocol, SockAddr, Socket, Type};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// Shared abort for in-flight URL tests (Throne stopSpeedtest).
+/// Shared abort for in-flight URL tests (upstream stopSpeedtest).
 static PROBE_ABORT: AtomicBool = AtomicBool::new(false);
 
 pub fn abort_probes() {
@@ -62,15 +67,196 @@ fn parse_target(host: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
         })
 }
 
-fn tcp_connect_ms(addrs: &[SocketAddr], timeout: Duration) -> Result<(i64, String), String> {
+/// True for utun / loopback / Apple peer / virtual faces we must not bind for direct probe.
+fn is_virtual_ifname(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    n == "lo0"
+        || n.starts_with("lo")
+        || n.starts_with("utun")
+        || n.starts_with("awdl")
+        || n.starts_with("llw")
+        || n.starts_with("bridge")
+        || n.starts_with("ap")
+        || n.starts_with("gif")
+        || n.starts_with("stf")
+        || n.starts_with("anpi")
+        || n.starts_with("ipsec")
+        || n.starts_with("ppp")
+        || n.starts_with("vmnet")
+        || n.starts_with("vmenet")
+        || n.starts_with("zt")
+        || n.contains("tailscale")
+}
+
+/// Default-route interface name (`route -n get default`), if any.
+fn default_route_ifname() -> Option<String> {
+    let out = std::process::Command::new("/sbin/route")
+        .args(["-n", "get", "default"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout);
+    for line in s.lines() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("interface:") {
+            let name = rest.trim();
+            if !name.is_empty() {
+                return Some(name.to_string());
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn if_nametoindex(name: &str) -> Option<u32> {
+    let c = std::ffi::CString::new(name).ok()?;
+    let idx = unsafe { libc::if_nametoindex(c.as_ptr()) };
+    if idx == 0 {
+        None
+    } else {
+        Some(idx)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn if_nametoindex(_name: &str) -> Option<u32> {
+    None
+}
+
+/// Physical NIC ifindex for direct dial under Tun.
+/// Prefer non-virtual default route; else first UP en*/eth* with an IPv4.
+#[cfg(target_os = "macos")]
+fn physical_ifindex() -> Option<u32> {
+    if let Some(name) = default_route_ifname() {
+        if !is_virtual_ifname(&name) {
+            if let Some(idx) = if_nametoindex(&name) {
+                return Some(idx);
+            }
+        }
+    }
+    // Tun up → default is often utunN; pick first real en* with IPv4.
+    unsafe {
+        let mut ifap: *mut libc::ifaddrs = std::ptr::null_mut();
+        if libc::getifaddrs(&mut ifap) != 0 || ifap.is_null() {
+            return None;
+        }
+        let mut best: Option<(u8, u32)> = None; // rank, ifindex
+        let mut cur = ifap;
+        while !cur.is_null() {
+            let ifa = &*cur;
+            cur = ifa.ifa_next;
+            if ifa.ifa_addr.is_null() {
+                continue;
+            }
+            if (*ifa.ifa_addr).sa_family as i32 != libc::AF_INET {
+                continue;
+            }
+            let flags = ifa.ifa_flags as i32;
+            if flags & libc::IFF_UP as i32 == 0 || flags & libc::IFF_LOOPBACK as i32 != 0 {
+                continue;
+            }
+            if ifa.ifa_name.is_null() {
+                continue;
+            }
+            let name = match std::ffi::CStr::from_ptr(ifa.ifa_name).to_str() {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            if is_virtual_ifname(name) {
+                continue;
+            }
+            let rank = if name == "en0" {
+                0u8
+            } else if name.starts_with("en") {
+                1
+            } else if name.starts_with("eth") {
+                2
+            } else {
+                3
+            };
+            let Some(idx) = if_nametoindex(name) else {
+                continue;
+            };
+            match best {
+                None => best = Some((rank, idx)),
+                Some((r, _)) if rank < r => best = Some((rank, idx)),
+                _ => {}
+            }
+        }
+        libc::freeifaddrs(ifap);
+        best.map(|(_, idx)| idx)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn physical_ifindex() -> Option<u32> {
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn set_bound_if(sock: &Socket, ifindex: u32, v6: bool) -> std::io::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    let fd = sock.as_raw_fd();
+    let idx = ifindex as libc::c_uint;
+    let (level, opt) = if v6 {
+        (libc::IPPROTO_IPV6, libc::IPV6_BOUND_IF)
+    } else {
+        (libc::IPPROTO_IP, libc::IP_BOUND_IF)
+    };
+    let ret = unsafe {
+        libc::setsockopt(
+            fd,
+            level,
+            opt,
+            &idx as *const _ as *const libc::c_void,
+            std::mem::size_of_val(&idx) as libc::socklen_t,
+        )
+    };
+    if ret != 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_bound_if(_sock: &Socket, _ifindex: u32, _v6: bool) -> std::io::Result<()> {
+    Ok(())
+}
+
+fn tcp_connect_ms(
+    addrs: &[SocketAddr],
+    timeout: Duration,
+    ifindex: Option<u32>,
+) -> Result<(i64, String), String> {
     let mut last_err = String::from("connect failed");
     for addr in addrs {
         if is_aborted() {
             return Err("test aborted".into());
         }
+        let domain = if addr.is_ipv4() {
+            Domain::IPV4
+        } else {
+            Domain::IPV6
+        };
         let t0 = Instant::now();
-        match TcpStream::connect_timeout(addr, timeout) {
-            Ok(_stream) => {
+        let sock = match Socket::new(domain, Type::STREAM, Some(Protocol::TCP)) {
+            Ok(s) => s,
+            Err(e) => {
+                last_err = format!("socket: {e}");
+                continue;
+            }
+        };
+        if let Some(idx) = ifindex {
+            // Best-effort: if bind-if fails, still try unbound (better than skip).
+            let _ = set_bound_if(&sock, idx, addr.is_ipv6());
+        }
+        let sockaddr = SockAddr::from(*addr);
+        match sock.connect_timeout(&sockaddr, timeout) {
+            Ok(()) => {
                 let ms = t0.elapsed().as_millis() as i64;
                 return Ok((ms, addr.ip().to_string()));
             }
@@ -80,7 +266,13 @@ fn tcp_connect_ms(addrs: &[SocketAddr], timeout: Duration) -> Result<(i64, Strin
     Err(last_err)
 }
 
-fn one_probe(id: String, host: String, port: u16, timeout: Duration) -> ProbeResult {
+fn one_probe(
+    id: String,
+    host: String,
+    port: u16,
+    timeout: Duration,
+    ifindex: Option<u32>,
+) -> ProbeResult {
     if is_aborted() {
         return ProbeResult {
             id,
@@ -93,7 +285,7 @@ fn one_probe(id: String, host: String, port: u16, timeout: Duration) -> ProbeRes
         };
     }
     match parse_target(&host, port) {
-        Ok(addrs) => match tcp_connect_ms(&addrs, timeout) {
+        Ok(addrs) => match tcp_connect_ms(&addrs, timeout, ifindex) {
             Ok((ms, ip)) => ProbeResult {
                 id,
                 host,
@@ -126,7 +318,7 @@ fn one_probe(id: String, host: String, port: u16, timeout: Duration) -> ProbeRes
 }
 
 /// Concurrent TCP probes. `on_each` is called as soon as each target finishes
-/// (Throne progressive latency paint). Returns all results when the batch ends.
+/// (upstream progressive latency paint). Returns all results when the batch ends.
 pub fn probe_batch_progressive<F>(
     targets: &[serde_json::Value],
     timeout_ms: u64,
@@ -137,6 +329,8 @@ where
     F: FnMut(&ProbeResult),
 {
     clear_abort();
+    // Once per batch: under Tun, default route is often utun — bind en0/… instead.
+    let ifindex = physical_ifindex();
     let timeout = Duration::from_millis(timeout_ms.clamp(200, 30_000));
     let conc = concurrency.clamp(1, 32);
     if targets.is_empty() {
@@ -184,7 +378,7 @@ where
             break;
         }
         handles.push(thread::spawn(move || {
-            let res = one_probe(id, host, port, timeout);
+            let res = one_probe(id, host, port, timeout, ifindex);
             let _ = tx_c.send(res);
             if let Ok(mut g) = sem_c.lock() {
                 *g = g.saturating_sub(1);
@@ -213,7 +407,6 @@ pub fn probe_batch(
 ) -> Vec<ProbeResult> {
     probe_batch_progressive(targets, timeout_ms, concurrency, |_| {})
 }
-
 
 #[derive(Clone, Serialize)]
 pub struct ResolveResult {
@@ -385,5 +578,32 @@ mod tests {
         );
         assert_eq!(res.len(), 2);
         assert_eq!(*hits.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn virtual_ifnames_detected() {
+        assert!(is_virtual_ifname("utun3"));
+        assert!(is_virtual_ifname("lo0"));
+        assert!(is_virtual_ifname("awdl0"));
+        assert!(!is_virtual_ifname("en0"));
+        assert!(!is_virtual_ifname("en1"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn physical_ifindex_resolves_on_macos() {
+        // Developer Macs always have at least lo0; physical may be en0.
+        // Just ensure the helper does not panic; ifindex None is ok in CI sandboxes.
+        let _ = physical_ifindex();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn bound_if_setsockopt_on_socket() {
+        let Some(idx) = physical_ifindex() else {
+            return; // sandbox / no NIC
+        };
+        let sock = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP)).unwrap();
+        set_bound_if(&sock, idx, false).expect("IP_BOUND_IF");
     }
 }

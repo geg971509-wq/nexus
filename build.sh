@@ -33,7 +33,7 @@ Usage: ./build.sh [options]
 
 Env:
   NEXUS_CORE_BIN    override core path at runtime (absolute file only)
-  NEXUS_CORE_TAGS   override go build -tags (default: Throne-aligned sing-box features)
+  NEXUS_CORE_TAGS   override go build -tags (default: engine-aligned sing-box features)
   MACOSX_DEPLOYMENT_TARGET  default 12.0
 
 Core deps (all linked into bin/NexusCore via go build -tags; no separate installers):
@@ -95,7 +95,7 @@ TRIPLE="$(target_triple)"
 log "root=$ROOT triple=$TRIPLE debug=$DEBUG"
 
 # --- 1) NexusCore (sing-box + xray + sing-tun + WG fully linked in one static-ish Go binary) ---
-# Throne oracle: script/build_go.sh (darwin) + build.sh build_core tags/ldflags.
+# upstream oracle: script/build_go.sh (darwin) + build.sh build_core tags/ldflags.
 # Without these -tags, gVisor/WG/QUIC/uTLS/Tailscale/Naive are compile-time stubs or missing.
 # All deps come from go.mod + replace pins (no separate sing-box/xray installers).
 CORE_TAGS="${NEXUS_CORE_TAGS:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,badlinkname,tfogo_checklinkname0}"
@@ -145,7 +145,7 @@ else
   #   wireguard-go → github.com/throneproj/wireguard-go
   [[ -d "$CORE_SRC/third_party/sing-tun" ]] || die "missing local replace path: $CORE_SRC/third_party/sing-tun"
   [[ -f "$CORE_SRC/third_party/sing-tun/go.mod" ]] || die "incomplete sing-tun vendored tree"
-  # generated protos must exist (Nexus ships pre-generated gen/; Throne may regen via protoc)
+  # generated protos must exist (Nexus ships pre-generated gen/; upstream may regen via protoc)
   [[ -f "$CORE_SRC/gen/libcore.pb.go" ]] || die "missing $CORE_SRC/gen/libcore.pb.go (pre-generated protobuf)"
 
   log "building NexusCore (go · tags=$CORE_TAGS)…"
@@ -162,7 +162,7 @@ else
     log "sing-tun:  $(go list -m -f '{{.Path}} {{.Version}}{{if .Replace}} => {{.Replace.Path}}{{end}}' github.com/sagernet/sing-tun)"
     log "wireguard: $(go list -m -f '{{.Path}}{{if .Replace}} => {{.Replace.Path}} {{.Replace.Version}}{{end}}' github.com/sagernet/wireguard-go 2>/dev/null || echo 'via sing-box')"
 
-    # darwin CGO for tun/stack — align with Throne build.sh (SDK + deployment target) + build_go.sh weak UTTypes
+    # darwin CGO for tun/stack — align with upstream build.sh (SDK + deployment target) + build_go.sh weak UTTypes
     export CGO_ENABLED="${CGO_ENABLED:-1}"
     if [[ "$(uname -s)" == "Darwin" ]]; then
       SDKROOT="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
@@ -218,17 +218,29 @@ if ! (cd "$APP_DIR" && npx --no-install tauri --version >/dev/null 2>&1); then
   fi
 fi
 
-# --- 2.5) UI source of truth: index.html → nexus-vpn-ui.html (never hand-edit the copy) ---
+# --- 2.5) Release UI staging: index.html + assets only ---
 UI_SRC="$APP_DIR/ui/index.html"
-UI_PAIR="$APP_DIR/ui/nexus-vpn-ui.html"
 [[ -f "$UI_SRC" ]] || die "missing UI source: $UI_SRC"
-cp "$UI_SRC" "$UI_PAIR"
-cmp -s "$UI_SRC" "$UI_PAIR" || die "UI pair out of sync after cp (index vs nexus-vpn-ui)"
-ok "UI synced · index.html → nexus-vpn-ui.html"
+UI_STAGE="$TAURI_DIR/ui-release-dist"
+rm -rf "$UI_STAGE"
+mkdir -p "$UI_STAGE"
+cp "$UI_SRC" "$UI_STAGE/index.html"
+if [[ -d "$APP_DIR/ui/assets" ]]; then
+  cp -R "$APP_DIR/ui/assets" "$UI_STAGE/assets"
+fi
+UI_CONF_OVERRIDE="$TAURI_DIR/tauri.release-ui.json"
+cat > "$UI_CONF_OVERRIDE" <<EOF
+{
+  "build": {
+    "frontendDist": "./ui-release-dist"
+  }
+}
+EOF
+ok "UI release staging · $UI_STAGE (index only)"
 
 # --- 3) tauri build ---
 log "tauri build…"
-BUILD_ARGS=(build)
+BUILD_ARGS=(build --config "$UI_CONF_OVERRIDE")
 if $DEBUG; then
   BUILD_ARGS+=(--debug)
 fi
@@ -271,6 +283,12 @@ DEST_APP="$BIN_DIR/Nexus.app"
 rm -rf "$DEST_APP"
 cp -R "$APP_PATH" "$DEST_APP"
 ok "copied → $DEST_APP"
+
+# release bundle: only staged index.html (no stray HTML pair copies)
+html_count="$(find "$DEST_APP" -name '*.html' 2>/dev/null | wc -l | tr -d ' ')"
+[[ "$html_count" -le 1 ]] || die "release app has unexpected HTML count=$html_count"
+ok "bundle UI clean · html_count=$html_count"
+
 
 echo
 ok "build complete"
