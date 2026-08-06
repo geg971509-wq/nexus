@@ -16,6 +16,79 @@ pub struct GenerateInput<'a> {
     pub mux_default_on: bool,
     pub mux_protocol: &'a str,
     pub mux_concurrency: i64,
+    /// Hostnames/IPs to reject (already normalized preferred).
+    pub blocklist: &'a [String],
+}
+
+/// Normalize a single user/conn host for the blocklist (strip port; domain lowercased).
+pub fn normalize_block_host(raw: &str) -> Result<String, String> {
+    let s = raw.trim().trim_end_matches('.');
+    if s.is_empty() {
+        return Err("empty host".into());
+    }
+    if s.contains("://") || s.contains('/') || s.contains(' ') {
+        return Err("invalid host".into());
+    }
+    // [v6]:port
+    if s.starts_with('[') {
+        let end = s.find(']').ok_or_else(|| "invalid ipv6 host".to_string())?;
+        let inner = &s[1..end];
+        let rest = &s[end + 1..];
+        if !rest.is_empty() && !rest.starts_with(':') {
+            return Err("invalid ipv6 host".into());
+        }
+        let ip: std::net::Ipv6Addr = inner
+            .parse()
+            .map_err(|_| "invalid ipv6 host".to_string())?;
+        return Ok(ip.to_string());
+    }
+    // host:port (not bare ipv6)
+    let host = if let Some((h, port)) = s.rsplit_once(':') {
+        if !h.is_empty()
+            && !port.is_empty()
+            && port.chars().all(|c| c.is_ascii_digit())
+            && h.parse::<std::net::Ipv6Addr>().is_err()
+        {
+            h
+        } else if s.parse::<std::net::Ipv6Addr>().is_ok() {
+            s
+        } else {
+            s
+        }
+    } else {
+        s
+    };
+    if host.is_empty() {
+        return Err("empty host".into());
+    }
+    if let Ok(ip) = host.parse::<std::net::Ipv4Addr>() {
+        return Ok(ip.to_string());
+    }
+    if let Ok(ip) = host.parse::<std::net::Ipv6Addr>() {
+        return Ok(ip.to_string());
+    }
+    let lower = host.to_ascii_lowercase();
+    if !lower
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+        || lower.starts_with('.')
+        || lower.ends_with('.')
+        || lower.contains("..")
+    {
+        return Err("invalid domain".into());
+    }
+    Ok(lower)
+}
+
+pub fn normalize_blocklist(items: &[String]) -> Result<Vec<String>, String> {
+    let mut out = Vec::new();
+    for raw in items {
+        let h = normalize_block_host(raw)?;
+        if !out.iter().any(|x| x == &h) {
+            out.push(h);
+        }
+    }
+    Ok(out)
 }
 
 /// Decision table: unspecified outbound + mux_default_on → enable only if capability == "yes".
@@ -194,16 +267,29 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         inbounds.push(Value::Object(tun_obj));
     }
 
-    // RouteProfile defaults: sniff → hijack DNS → private/LAN direct → final proxy.
+    // RouteProfile defaults: sniff → hijack DNS → reject blocklist → private/LAN direct → final proxy.
     // auto_detect_interface: true (upstream when vpn; also correct for mixed+sysproxy).
     // default_domain_resolver: upstream always sets dns-direct so egress dial never
     // uses dns-remote (would detour proxy while resolving proxy itself).
+    let mut route_rules = vec![
+        json!({"action": "sniff"}),
+        json!({"protocol": "dns", "action": "hijack-dns"}),
+    ];
+    for host in input.blocklist {
+        let Ok(h) = normalize_block_host(host) else {
+            continue;
+        };
+        if h.parse::<std::net::Ipv4Addr>().is_ok() {
+            route_rules.push(json!({"ip_cidr": [format!("{h}/32")], "action": "reject"}));
+        } else if h.parse::<std::net::Ipv6Addr>().is_ok() {
+            route_rules.push(json!({"ip_cidr": [format!("{h}/128")], "action": "reject"}));
+        } else {
+            route_rules.push(json!({"domain": [h], "action": "reject"}));
+        }
+    }
+    route_rules.push(json!({"ip_is_private": true, "outbound": "direct"}));
     let route = json!({
-        "rules": [
-            {"action": "sniff"},
-            {"protocol": "dns", "action": "hijack-dns"},
-            {"ip_is_private": true, "outbound": "direct"}
-        ],
+        "rules": route_rules,
         "final": "proxy",
         "auto_detect_interface": true,
         "default_domain_resolver": {
@@ -346,7 +432,12 @@ fn subtract_v4_cidr(base: (u32, u8), hole: (u32, u8)) -> Vec<String> {
 }
 
 /// Build config from an explicit outbound (UI-selected share link / JSON).
-pub fn generate_with_outbound(outbound: Value, port: u16, tun: bool) -> Value {
+pub fn generate_with_outbound(
+    outbound: Value,
+    port: u16,
+    tun: bool,
+    blocklist: &[String],
+) -> Value {
     // ensure tag
     let mut outbound = outbound;
     if outbound.get("tag").is_none() {
@@ -365,6 +456,7 @@ pub fn generate_with_outbound(outbound: Value, port: u16, tun: bool) -> Value {
         mux_default_on: false,
         mux_protocol: "h2mux",
         mux_concurrency: 8,
+        blocklist,
     })
 }
 
@@ -387,6 +479,7 @@ mod tests {
             mux_default_on: false,
             mux_protocol: "smux",
             mux_concurrency: 8,
+            blocklist: &[],
         })
     }
 
@@ -566,5 +659,100 @@ mod tests {
             .unwrap_or_default();
         assert!(domains.iter().any(|x| x == "edge.example.net"));
         assert!(domains.iter().any(|x| x == "sni.example.net"));
+    }
+
+    #[test]
+    fn normalize_block_host_strips_port_and_lowercases_domain() {
+        assert_eq!(
+            normalize_block_host("Example.COM:443").unwrap(),
+            "example.com"
+        );
+        assert_eq!(normalize_block_host("1.2.3.4:80").unwrap(), "1.2.3.4");
+        assert_eq!(
+            normalize_block_host("  ads.tracker.io.  ").unwrap(),
+            "ads.tracker.io"
+        );
+    }
+
+    #[test]
+    fn normalize_block_host_rejects_url_and_path() {
+        assert!(normalize_block_host("https://x.com/y").is_err());
+        assert!(normalize_block_host("x.com/path").is_err());
+        assert!(normalize_block_host("").is_err());
+        assert!(normalize_block_host("   ").is_err());
+    }
+
+    #[test]
+    fn normalize_blocklist_dedupes_case_insensitive_domain() {
+        let out = normalize_blocklist(&[
+            "A.com".into(),
+            "a.com".into(),
+            "1.2.3.4".into(),
+            "1.2.3.4:443".into(),
+        ])
+        .unwrap();
+        assert_eq!(out, vec!["a.com".to_string(), "1.2.3.4".to_string()]);
+    }
+
+    #[test]
+    fn generate_injects_reject_rules_before_private() {
+        let n = sample_node(json!({
+            "type": "socks",
+            "tag": "proxy",
+            "server": "127.0.0.1",
+            "server_port": 1080
+        }));
+        let blocks = vec!["telemetry.evil".to_string(), "9.9.9.9".to_string()];
+        let v = generate_config(&GenerateInput {
+            node: &n,
+            system_proxy_port: 2080,
+            tun: false,
+            mux_default_on: false,
+            mux_protocol: "smux",
+            mux_concurrency: 8,
+            blocklist: &blocks,
+        });
+        let rules = v["route"]["rules"].as_array().expect("rules");
+        assert_eq!(rules[0].get("action"), Some(&json!("sniff")));
+        assert_eq!(rules[1].get("protocol"), Some(&json!("dns")));
+        assert!(rules.iter().any(|r| {
+            r.get("action") == Some(&json!("reject"))
+                && r.get("domain")
+                    .and_then(|d| d.as_array())
+                    .map(|a| a.iter().any(|x| x == "telemetry.evil"))
+                    .unwrap_or(false)
+        }));
+        assert!(rules.iter().any(|r| {
+            r.get("action") == Some(&json!("reject"))
+                && r.get("ip_cidr")
+                    .and_then(|d| d.as_array())
+                    .map(|a| a.iter().any(|x| x == "9.9.9.9/32"))
+                    .unwrap_or(false)
+        }));
+        let priv_idx = rules
+            .iter()
+            .position(|r| r.get("ip_is_private") == Some(&json!(true)))
+            .expect("private rule");
+        let first_reject = rules
+            .iter()
+            .position(|r| r.get("action") == Some(&json!("reject")))
+            .expect("reject");
+        assert!(first_reject < priv_idx, "reject must be before private direct");
+        assert_eq!(v["route"]["final"], "proxy");
+    }
+
+    #[test]
+    fn generate_empty_blocklist_has_no_reject() {
+        let n = sample_node(json!({
+            "type": "socks",
+            "tag": "proxy",
+            "server": "127.0.0.1",
+            "server_port": 1080
+        }));
+        let v = gen(&n, 2080, false);
+        let rules = v["route"]["rules"].as_array().unwrap();
+        assert!(!rules
+            .iter()
+            .any(|r| r.get("action") == Some(&json!("reject"))));
     }
 }

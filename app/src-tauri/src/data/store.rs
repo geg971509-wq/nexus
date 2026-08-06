@@ -14,6 +14,9 @@ pub struct Store {
     /// UI node catalog blob (`nexus.catalog.v1` shape).
     #[serde(default)]
     pub catalog: Option<serde_json::Value>,
+    /// User blocklist: hostnames and IPs (no ports). Rejected at generate time.
+    #[serde(default)]
+    pub blocklist: Vec<String>,
 }
 
 fn default_true() -> bool {
@@ -26,6 +29,7 @@ impl Default for Store {
             system_proxy: true,
             tun: false,
             catalog: None,
+            blocklist: Vec::new(),
         }
     }
 }

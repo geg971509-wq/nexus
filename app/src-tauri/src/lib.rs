@@ -205,7 +205,7 @@ async fn generate_preview(
         } else {
             return Err("no selected node link/outbound for preview".into());
         };
-        Ok(generate_with_outbound(ob, 2080, st.tun))
+        Ok(generate_with_outbound(ob, 2080, st.tun, &st.blocklist))
     })
     .await
     .map_err(|e| format!("generate_preview join: {e}"))?
@@ -237,6 +237,32 @@ async fn catalog_put(blob: serde_json::Value) -> Result<String, String> {
     })
     .await
     .map_err(|e| format!("catalog_put join: {e}"))?
+}
+
+#[tauri::command]
+async fn blocklist_get() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        use data::store::Store;
+        let st = Store::load();
+        Ok(serde_json::json!({ "items": st.blocklist }))
+    })
+    .await
+    .map_err(|e| format!("blocklist_get join: {e}"))?
+}
+
+#[tauri::command]
+async fn blocklist_put(items: Vec<String>) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use data::generate::normalize_blocklist;
+        use data::store::Store;
+        let normalized = normalize_blocklist(&items)?;
+        let mut st = Store::load();
+        st.blocklist = normalized.clone();
+        st.save()?;
+        Ok(serde_json::json!({ "items": normalized }))
+    })
+    .await
+    .map_err(|e| format!("blocklist_put join: {e}"))?
 }
 
 /// Persist chip intent; OS apply only when Core is running (or always on disable).
@@ -401,7 +427,7 @@ fn connect_selected_sync(
     };
 
     // generate.cpp: tun inbound only if spmode_vpn
-    let cfg = generate_with_outbound(ob, port, use_tun);
+    let cfg = generate_with_outbound(ob, port, use_tun, &st.blocklist);
     let json = serde_json::to_string(&cfg).map_err(|e| e.to_string())?;
 
     // Tun: setuid Core before LoadConfig (upstream profile_start elevation).
@@ -802,6 +828,8 @@ pub fn run() {
             generate_preview,
             catalog_get,
             catalog_put,
+            blocklist_get,
+            blocklist_put,
             set_system_proxy_cmd,
             set_tun_cmd,
             connect_selected,
