@@ -5,7 +5,7 @@ Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box 
 | Item | Value |
 |------|--------|
 | Product | Nexus |
-| Version | 0.2.1 |
+| Version | 0.2.2 |
 | Bundle ID | `app.nexus.desktop` |
 | Deeplink | `nexus://` |
 | Core binary | `NexusCore` (framed IPC) |
@@ -79,14 +79,15 @@ export PATH="$HOME/.cargo/bin:$PATH"
 cd app && npm run tauri dev
 ```
 
-## Capabilities (0.2.1)
+## Capabilities (0.2.2)
 
 - Connect: selected node → generate → Core `Start` (share link or outbound JSON)
 - Tun chip + system proxy; exit clears OS proxy on `:2080` and stops Core
 - Catalog (groups/nodes) in store via `catalog_get` / `catalog_put`
 - Node **流量** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only 重置流量 zeros)
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled 连通 (not proxy path test)
-- **拦截:** sidebar list + connection right-click (任意进程 / 当前进程); store → `domain_suffix` / IP reject on generate, apply immediate when connected
+- **拦截:** sidebar list + connection right-click three scopes (目标·全部进程 / 目标·仅此应用 / 应用·全部连接 by full executable path); multi-select bulk block (one put / one reconnect); store → `domain_suffix` / IP / process-only reject on generate; apply reconnects when connected
+- Connection table: merge by Core id, multi-select like nodes (bulk block / copy), process + PID columns
 - Advanced routing/DNS settings hidden until generate is wired to them
 - Windows: elevated shell, no console flash on helper spawns
 

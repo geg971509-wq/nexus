@@ -1,6 +1,6 @@
 [package]
 name = "nexus"
-version = "0.2.1"
+version = "0.2.2"
 description = "Nexus VPN — Tauri shell (macOS + Windows)"
 authors = ["Nexus"]
 edition = "2021"

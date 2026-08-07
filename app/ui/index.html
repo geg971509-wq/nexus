@@ -2281,12 +2281,12 @@
                     <div class="grow" data-tauri-drag-region aria-hidden="true"></div>
                     <div class="search" data-tauri-drag-region="false">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                      <input type="search" id="blockFilterInput" placeholder="过滤域名 / IP" title="按域名或 IP 筛选" autocomplete="off" />
+                      <input type="search" id="blockFilterInput" placeholder="过滤域名 / IP / 应用" title="按域名、IP 或应用筛选" autocomplete="off" />
                     </div>
                   </div>
-                  <div id="blockEmpty" class="block-empty" hidden>暂无拦截项。<br/>在底部「连接」表右键：拦截目标 / 拦截应用，或在上方手动添加域名。</div>
+                  <div id="blockEmpty" class="block-empty" hidden>暂无拦截项。<br/>在底部「连接」表右键：拦截目标 / 拦截应用（可多选后批量拦截），或在上方手动添加域名。</div>
                   <div id="blockFilterEmpty" class="block-empty" hidden>无匹配项</div>
-                  <ul id="blockList" class="block-list" aria-label="拦截域名与 IP"></ul>
+                  <ul id="blockList" class="block-list" aria-label="拦截域名、IP 与应用"></ul>
                 </div>
               </div>
             </div>
@@ -5474,7 +5474,8 @@
         }
         const key = blockEntryKey({ host, process_path: proc || null });
         const next = blocklistItems.filter(x => blockEntryKey(x) !== key);
-        await saveBlocklist(next, { reason: 'delete' });
+        const ok = await saveBlocklist(next);
+        if (ok) log('SYS', 'ok', '已移除拦截项');
       });
     });
     applyBlocklistFilter();
@@ -5516,7 +5517,7 @@
     }
   }
 
-  async function saveBlocklist(items, { reason } = {}) {
+  async function saveBlocklist(items) {
     try {
       // full-replace put: never write before a successful get (would wipe store)
       if (!blocklistLoaded) await loadBlocklist();
@@ -5544,7 +5545,7 @@
       blocklistItems = r.data.items.map(coerceBlockEntry).filter(Boolean);
       blocklistLoaded = true;
       renderBlocklist(blocklistItems);
-      log('SYS', 'ok', reason === 'delete' ? '已移除拦截项' : '拦截列表已更新');
+      // success log is caller-owned (add/delete) — avoid double generic lines
       await applyBlocklistLive();
       return true;
     } catch (e) {
@@ -5554,28 +5555,37 @@
   }
 
   /**
-   * Add reject entry.
-   * - host + null process → 拦截目标 · 全部进程
-   * - host + processPath → 拦截目标 · 仅此应用
-   * - empty host + processPath → 拦截应用 · 全部连接
+   * Batch-add reject entries (one put / one live apply).
+   * Each: host-only | host+path | process-only (empty host).
+   * Invalid rows skipped; existing keys skipped; returns true if nothing new needed.
    */
-  async function addBlockHost(raw, processPath) {
-    const host = String(raw || '').trim();
-    const pp = processPath != null ? String(processPath).trim() : '';
-    if (!host && !pp) {
-      log('SYS', 'warn', '无效拦截项');
-      return false;
+  async function addBlockEntries(rawEntries) {
+    const batch = [];
+    const seen = new Set();
+    let badHostN = 0, badPathN = 0;
+    for (const raw of (Array.isArray(rawEntries) ? rawEntries : [])) {
+      const host = String(raw?.host ?? '').trim();
+      const pp = raw?.process_path != null ? String(raw.process_path).trim() : '';
+      if (!host && !pp) continue;
+      if (host && (host.includes('://') || host.includes('/') || /\s/.test(host))) {
+        badHostN++;
+        continue;
+      }
+      if (pp && (pp.includes('\0') || /[\r\n]/.test(pp))) {
+        badPathN++;
+        continue;
+      }
+      const entry = { host: host || '', process_path: pp || null };
+      const key = blockEntryKey(entry);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      batch.push(entry);
     }
-    if (host && (host.includes('://') || host.includes('/') || /\s/.test(host))) {
-      log('SYS', 'warn', '无效地址');
-      return false;
-    }
-    if (pp && (pp.includes('\0') || /[\r\n]/.test(pp))) {
-      log('SYS', 'warn', '无效进程路径');
-      return false;
-    }
-    if (!host && !pp) {
-      log('SYS', 'warn', '无效进程路径');
+    if (!batch.length) {
+      if (badHostN && !badPathN) log('SYS', 'warn', '无效地址');
+      else if (badPathN && !badHostN) log('SYS', 'warn', '无效进程路径');
+      else if (badHostN || badPathN) log('SYS', 'warn', '无效拦截项');
+      else log('SYS', 'warn', '无效拦截项');
       return false;
     }
     if (!blocklistLoaded) await loadBlocklist();
@@ -5583,17 +5593,37 @@
       log('SYS', 'warn', '拦截列表未加载，拒绝添加以免清空');
       return false;
     }
-    const entry = { host: host || '', process_path: pp || null };
-    if (!entry.host && !entry.process_path) {
-      log('SYS', 'warn', '无效拦截项');
-      return false;
+    const have = new Set(blocklistItems.map(blockEntryKey));
+    const fresh = [];
+    let skipped = 0;
+    for (const e of batch) {
+      const k = blockEntryKey(e);
+      if (have.has(k)) { skipped++; continue; }
+      have.add(k);
+      fresh.push(e);
     }
-    const key = blockEntryKey(entry);
-    if (blocklistItems.some(x => blockEntryKey(x) === key)) {
-      log('SYS', 'info', '已在拦截列表：' + blockEntryLabel(entry));
+    if (!fresh.length) {
+      log('SYS', 'info', skipped === 1
+        ? '已在拦截列表：' + blockEntryLabel(batch[0])
+        : `已在拦截列表（${skipped}）`);
       return true;
     }
-    return saveBlocklist(blocklistItems.concat([entry]), { reason: 'add' });
+    const ok = await saveBlocklist(blocklistItems.concat(fresh));
+    if (ok) {
+      if (fresh.length === 1 && !skipped) {
+        log('SYS', 'ok', '已添加拦截：' + blockEntryLabel(fresh[0]));
+      } else {
+        log('SYS', 'ok', `本次新增 ${fresh.length}` + (skipped ? ` · 已有跳过 ${skipped}` : ''));
+      }
+    }
+    return ok;
+  }
+
+  /** Single-entry wrapper (manual add / legacy callers). */
+  async function addBlockHost(raw, processPath) {
+    const host = String(raw || '').trim();
+    const pp = processPath != null ? String(processPath).trim() : '';
+    return addBlockEntries([{ host, process_path: pp || null }]);
   }
 
   document.getElementById('blockAddBtn')?.addEventListener('click', () => {
@@ -5922,39 +5952,70 @@
     if (!p.includes('/') && !p.includes('\\')) return '';
     return p;
   }
-  function setConnMenuItemState(btn, ready, titleOk, titleNo) {
+  function setConnMenuItemState(btn, ready, label, titleOk, titleNo) {
     if (!btn) return;
     btn.disabled = !ready;
     btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
     btn.title = ready ? titleOk : titleNo;
     btn.classList.toggle('is-disabled', !ready);
+    const grow = btn.querySelector('.grow');
+    if (grow && label != null) grow.textContent = label;
+  }
+  /** Selected rows for bulk block; fallback to right-clicked row. */
+  function connBlockTargetRows() {
+    const sel = visibleConnRows().filter(r => r.classList.contains('selected'));
+    if (sel.length) return sel;
+    return connCtxRow ? [connCtxRow] : [];
   }
   function syncConnBlockMenuState() {
     if (!connCtxMenu) return;
-    const hostReady = !!hostFromConnRow(connCtxRow);
-    const pathReady = !!processPathFromConnRow(connCtxRow);
+    const rows = connBlockTargetRows();
+    let nHost = 0, nPath = 0, nHostPath = 0;
+    for (const r of rows) {
+      const h = !!hostFromConnRow(r);
+      const p = !!processPathFromConnRow(r);
+      if (h) nHost++;
+      if (p) nPath++;
+      if (h && p) nHostPath++;
+    }
+    const multi = (n) => (n > 1 ? `（${n} 项）` : '');
+    // copy: multi-select when selected; else right-clicked row
+    const copyRows = rows;
+    let nCopyHost = 0;
+    for (const r of copyRows) if (hostFromConnRow(r)) nCopyHost++;
     setConnMenuItemState(
       connCtxMenu.querySelector('[data-conn-ctx="copy-host"]'),
-      hostReady,
-      '仅复制目标域名或 IP',
+      nCopyHost > 0,
+      '复制域名/IP' + multi(nCopyHost),
+      '仅复制目标域名或 IP' + multi(nCopyHost),
       '无效目标地址'
     );
     setConnMenuItemState(
+      connCtxMenu.querySelector('[data-conn-ctx="copy-row"]'),
+      copyRows.length > 0,
+      '复制整行' + multi(copyRows.length),
+      '复制整行连接信息' + multi(copyRows.length),
+      '无可复制连接'
+    );
+    setConnMenuItemState(
       connCtxMenu.querySelector('[data-conn-ctx="block-any"]'),
-      hostReady,
-      '拦截该目标：任意进程访问此域名/IP 均拒绝',
+      nHost > 0,
+      '拦截目标 · 全部进程' + multi(nHost),
+      '拦截目标：任意进程访问此域名/IP 均拒绝' + multi(nHost),
       '无效目标地址'
     );
     setConnMenuItemState(
       connCtxMenu.querySelector('[data-conn-ctx="block-proc"]'),
-      hostReady && pathReady,
-      '拦截该目标：仅此应用访问此域名/IP 时拒绝',
-      pathReady ? '无效目标地址' : '完整进程路径尚未就绪，请稍候再试或改用「拦截目标 · 全部进程」'
+      nHostPath > 0,
+      '拦截目标 · 仅此应用' + multi(nHostPath),
+      '拦截目标：仅此应用访问此域名/IP 时拒绝' + multi(nHostPath),
+      nPath > 0 ? '选中行缺少有效目标' : '完整进程路径尚未就绪，请稍候再试或改用「拦截目标 · 全部进程」'
     );
     setConnMenuItemState(
       connCtxMenu.querySelector('[data-conn-ctx="block-app"]'),
-      pathReady,
-      '拦截该应用：此进程的全部网络连接均拒绝',
+      nPath > 0,
+      '拦截应用 · 全部连接' + multi(nPath),
+      '拦截应用：此进程的全部网络连接均拒绝' + multi(nPath),
       '完整进程路径尚未就绪，请稍候再试'
     );
   }
@@ -5975,35 +6036,62 @@
       }
       closeConnCtxMenu();
       if (act === 'copy-host') {
-        const host = hostFromConnRow(connCtxRow);
-        if (!host) { log('SYS', 'warn', '无效地址'); return; }
-        copyText(host).then(() => log('SYS', 'ok', '已复制域名/IP：' + host))
+        const rows = connBlockTargetRows();
+        const hosts = [];
+        const seen = new Set();
+        for (const row of rows) {
+          const host = hostFromConnRow(row);
+          if (!host || seen.has(host)) continue;
+          seen.add(host);
+          hosts.push(host);
+        }
+        if (!hosts.length) { log('SYS', 'warn', '无效地址'); return; }
+        const text = hosts.join('\n');
+        copyText(text).then(() => log('SYS', 'ok', hosts.length === 1
+          ? '已复制域名/IP：' + hosts[0]
+          : `已复制 ${hosts.length} 个域名/IP`))
           .catch(() => log('SYS', 'ok', '已复制域名/IP'));
       } else if (act === 'copy-row') {
-        const text = connRowText(connCtxRow);
-        if (!text) { log('SYS', 'info', '无可复制连接'); return; }
-        copyText(text).then(() => log('SYS', 'ok', '已复制整行：' + text.replace(/\t/g, ' · ')))
+        const rows = connBlockTargetRows();
+        const lines = [];
+        for (const row of rows) {
+          const t = connRowText(row);
+          if (t) lines.push(t);
+        }
+        if (!lines.length) { log('SYS', 'info', '无可复制连接'); return; }
+        const text = lines.join('\n');
+        copyText(text).then(() => log('SYS', 'ok', lines.length === 1
+          ? '已复制整行：' + lines[0].replace(/\t/g, ' · ')
+          : `已复制 ${lines.length} 行`))
           .catch(() => log('SYS', 'ok', '已复制整行'));
-      } else if (act === 'block-any') {
-        const host = hostFromConnRow(connCtxRow);
-        if (!host) { log('SYS', 'warn', '无效地址'); return; }
-        if (typeof addBlockHost === 'function') await addBlockHost(host, null);
-      } else if (act === 'block-proc') {
-        const host = hostFromConnRow(connCtxRow);
-        const pp = processPathFromConnRow(connCtxRow);
-        if (!host) { log('SYS', 'warn', '无效地址'); return; }
-        if (!pp) {
-          log('SYS', 'warn', '完整进程路径尚未就绪，请稍候再试或改用「拦截目标 · 全部进程」');
+      } else if (act === 'block-any' || act === 'block-proc' || act === 'block-app') {
+        const rows = connBlockTargetRows();
+        const specs = [];
+        let miss = 0;
+        for (const row of rows) {
+          const host = hostFromConnRow(row);
+          const pp = processPathFromConnRow(row);
+          if (act === 'block-any') {
+            if (!host) { miss++; continue; }
+            specs.push({ host, process_path: null });
+          } else if (act === 'block-proc') {
+            if (!host || !pp) { miss++; continue; }
+            specs.push({ host, process_path: pp });
+          } else {
+            if (!pp) { miss++; continue; }
+            specs.push({ host: '', process_path: pp });
+          }
+        }
+        if (!specs.length) {
+          log('SYS', 'warn', act === 'block-app'
+            ? '完整进程路径尚未就绪，请稍候再试'
+            : (act === 'block-proc'
+              ? '完整进程路径尚未就绪，请稍候再试或改用「拦截目标 · 全部进程」'
+              : '无效地址'));
           return;
         }
-        if (typeof addBlockHost === 'function') await addBlockHost(host, pp);
-      } else if (act === 'block-app') {
-        const pp = processPathFromConnRow(connCtxRow);
-        if (!pp) {
-          log('SYS', 'warn', '完整进程路径尚未就绪，请稍候再试');
-          return;
-        }
-        if (typeof addBlockHost === 'function') await addBlockHost('', pp);
+        await addBlockEntries(specs);
+        if (miss) log('SYS', 'info', `已跳过 ${miss} 行（字段未就绪）`);
       }
     });
   });
@@ -6298,7 +6386,8 @@
   function parseConnFlow(row) {
     const t = row.dataset.flow;
     if (t != null && t !== '' && isFinite(Number(t))) return Number(t);
-    const txt = row.cells[5]?.textContent || '';
+    // 7 cols: time|app|pid|dest|proto|out|flow — flow is cells[6]
+    const txt = row.cells[6]?.textContent || '';
     const m = String(txt).match(/([\d.]+)\s*([KMG]?B)/i);
     if (!m) return -1;
     let n = parseFloat(m[1]);
