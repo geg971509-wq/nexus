@@ -3338,7 +3338,7 @@
   let powerBusy = false;
   powerBtn.addEventListener('click', async () => {
     if (powerBusy) {
-      log('CORE', 'info', '连接操作进行中…');
+      log('CORE', 'info', t('log.busy'));
       return;
     }
     powerBusy = true;
@@ -3349,15 +3349,15 @@
         const payload = (typeof nodeConnectPayload === 'function')
           ? nodeConnectPayload(selectedName)
           : null;
-        log('CORE', 'info', `Start 配置档 <span class="node">${selectedName}</span>`);
+        log('CORE', 'info', t('log.startProfile', { name: selectedName }));
         if (!payload) {
           const n = typeof findNodeByName === 'function' ? findNodeByName(selectedName) : null;
           if (n && n.link && !isShareUri(n.link)) {
-            log('CORE', 'warn', '节点分享链接无效（伪 vmess/非 UUID）— 请「更新」订阅或导入含 uuid 的真实链接；系统代理仅在 Start 成功后写入');
+            log('CORE', 'warn', t('log.badShare'));
           } else if (n && n.addr && n.addr !== '—') {
-            log('CORE', 'warn', '选定节点无连接配置（订阅解析未保存凭证）— 请点「更新」重新拉取订阅');
+            log('CORE', 'warn', t('log.noCreds'));
           } else {
-            log('CORE', 'warn', '选定节点无真实分享链接（演示节点无法成隧道）— 请导入订阅或粘贴 vless/trojan/ss/vmess 链接');
+            log('CORE', 'warn', t('log.noRealLink'));
           }
           return;
         }
@@ -3368,26 +3368,26 @@
           system_proxy: !!document.getElementById('sysToggle')?.checked,
         }, payload));
         if (!r || r.offline) {
-          log('CORE', 'warn', '后端未就绪，无法启动隧道');
+          log('CORE', 'warn', t('log.backendDown'));
           return;
         }
-        if (!r.ok) { log('CORE', 'warn', `Start 失败: ${r.error}`); return; }
+        if (!r.ok) { log('CORE', 'warn', t('log.startFail', { error: r.error })); return; }
         if (r.data?.start_error) {
           log('CORE', 'warn', `Start: ${r.data.start_error}`);
           return;
         }
         if (!r.data?.started) {
-          log('CORE', 'warn', 'Start 未成功');
+          log('CORE', 'warn', t('log.startNoOk'));
           return;
         }
         setConnected(true); // pins connectedName = selectedName at Start success
         try { localStorage.setItem('nexus.lastConnected', connectedName || selectedName || ''); } catch (_) {}
         const port = r.data?.listen_port || 2080;
-        log('OK', 'ok', `隧道已启动 · mixed 127.0.0.1:${port} · ${connectedName || selectedName}`);
+        log('OK', 'ok', t('log.tunnelOn', { port, name: connectedName || selectedName }));
         if (r.data?.proxy_note) log('SYS', 'info', r.data.proxy_note);
         if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
       } else {
-        log('CORE', 'warn', `Stop 配置档 <span class="node">${connectedName || selectedName}</span>`);
+        log('CORE', 'warn', t('log.stopProfile', { name: connectedName || selectedName }));
         // Stop RPC; also kill Core process (orphan after quit left power desynced).
         let r = await nexusInvoke('disconnect_selected');
         if (r && !r.ok && String(r.error || '').includes('core not started')) {
@@ -3397,7 +3397,7 @@
         }
         setConnected(false);
         try { localStorage.removeItem('nexus.lastConnected'); } catch (_) {}
-        log('OK', 'ok', '已断开（Stop）');
+        log('OK', 'ok', t('log.stopped'));
         if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
       }
     } finally {
@@ -3540,7 +3540,7 @@
       selectedLat = first.dataset.lat || first.querySelector('.lat')?.textContent || selectedLat;
       selectAnchorRow = first;
     }
-    log('SYS', 'info', `已全选 ${rows.length} 个节点`);
+    log('SYS', 'info', t('log.selectedN', { n: rows.length }));
     return rows.length;
   }
 
@@ -3624,11 +3624,11 @@
         },
         stop: () => {
           if (connected) powerBtn.click();
-          else log('SYS', 'info', '当前未连接');
+          else log('SYS', 'info', t('log.notConnected'));
         },
         delete: () => {
           const rows = selectedRows();
-          if (!rows.length) { log('SYS', 'warn', '未选定节点'); return; }
+          if (!rows.length) { log('SYS', 'warn', t('log.noNode')); return; }
           const names = new Set(rows.map(r => r.dataset.name));
           const gid = currentGid();
           const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
@@ -3640,7 +3640,7 @@
           rows.forEach(r => r.remove());
           renumberRows();
           if (typeof saveCatalog === 'function') saveCatalog(true);
-          log('SYS', 'warn', `已删除 ${rows.length} 个节点`);
+          log('SYS', 'warn', t('log.deletedN', { n: rows.length }));
         },
         'select-all': () => { selectAllNodes(); },
         'refresh-sub': () => { updateSubscription(null); },
@@ -3682,12 +3682,12 @@
           } else if (typeof refreshSbProxyFromNodes === 'function') {
             refreshSbProxyFromNodes();
           }
-          log('SYS', 'info', '已重置流量 · ' + targets.length + ' 个节点');
+          log('SYS', 'info', t('log.resetTraffic', { n: targets.length }));
         },
         edit: () => openEditDialog(one),
         clone: () => {
           const row = selectedRows()[0];
-          if (!row) { log('SYS', 'warn', '未选定节点'); return; }
+          if (!row) { log('SYS', 'warn', t('log.noNode')); return; }
           const name = (row.dataset.name || '节点') + ' 副本';
           const gid = currentGid();
           const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
@@ -3715,11 +3715,11 @@
           row.after(clone);
           renumberRows();
           if (typeof saveCatalog === 'function') saveCatalog(true);
-          log('SYS', 'ok', '已克隆：' + name);
+          log('SYS', 'ok', t('log.cloned', { name }));
         },
         'copy-link': () => {
           const link = nodeShareLink(one);
-          copyText(link).then(() => log('SYS', 'ok', '已复制链接 · ' + one)).catch(() => log('SYS', 'ok', '链接：' + link));
+          copyText(link).then(() => log('SYS', 'ok', t('log.copiedLinkNamed', { name: one }))).catch(() => log('SYS', 'ok', t('log.linkIs', { link })));
         },
         'show-qr': () => openQrDialog(one),
         dedupe: () => {
@@ -3731,7 +3731,7 @@
             if (seen.has(key)) drop.push(r);
             else seen.add(key);
           });
-          if (!drop.length) { log('SYS', 'info', '无重复节点'); return; }
+          if (!drop.length) { log('SYS', 'info', t('log.noDupes')); return; }
           const names = new Set(drop.map(r => r.dataset.name));
           const gid = currentGid();
           const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
@@ -3751,7 +3751,7 @@
           drop.forEach(r => r.remove());
           renumberRows();
           if (typeof saveCatalog === 'function') saveCatalog(true);
-          log('SYS', 'ok', '已去除重复节点 · ' + drop.length + ' 个');
+          log('SYS', 'ok', t('log.deduped', { n: drop.length }));
         },
         'rm-unavailable': () => {
           // clearUnavailableProfiles: latency == -1 (test failed)
@@ -3808,7 +3808,7 @@
   function isTunOn() { return !!document.getElementById('tunToggle')?.checked; }
   function applyTun(on) {
     setChipOn('tunToggle', 'tunChip', on);
-    log('SYS', 'info', on ? '已开启 Tun 模式' : '已关闭 Tun 模式');
+    log('SYS', 'info', on ? t('log.tunOn') : t('log.tunOff'));
     if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
   }
   document.getElementById('tunToggle')?.addEventListener('change', (e) => {
@@ -3820,7 +3820,7 @@
 
   function removeNodesByPred(pred, logLabel) {
     const rows = [...nodeTable.querySelectorAll('tr')].filter(pred);
-    if (!rows.length) { log('SYS', 'info', (logLabel || '移除') + ' · 0 个'); return 0; }
+    if (!rows.length) { log('SYS', 'info', t('log.removed0', { label: logLabel || t('log.remove') })); return 0; }
     const names = new Set(rows.map(r => r.dataset.name).filter(Boolean));
     const gid = typeof currentGid === 'function' ? currentGid() : 'default';
     const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
@@ -3832,7 +3832,7 @@
     rows.forEach(r => r.remove());
     renumberRows();
     if (typeof saveCatalog === 'function') saveCatalog(true);
-    log('SYS', 'warn', (logLabel || '已移除') + ' · ' + rows.length + ' 个');
+    log('SYS', 'warn', t('log.removedN', { label: logLabel || t('log.removed'), n: rows.length }));
     return rows.length;
   }
 
@@ -3902,7 +3902,7 @@
   }
   async function runUrlTest(scope) {
     if (urlTesting) {
-      log('TEST', 'warn', '测速进行中…（可点停止）');
+      log('TEST', 'warn', t('log.testBusy'));
       return;
     }
     const rows = scope === 'group'
@@ -3913,11 +3913,11 @@
       const t = parseRowTarget(r);
       if (t) targets.push(t);
     }
-    if (!targets.length) { log('TEST', 'warn', '无可测试节点（缺 host:port）'); return; }
+    if (!targets.length) { log('TEST', 'warn', t('log.noTestTargets')); return; }
     urlTesting = true;
     urlTestAbort = false;
     const label = scope === 'group' ? 'URL 测试当前组' : 'URL 测试选定项';
-    log('TEST', 'info', `${label} · ${targets.length} 个节点 · TCP 直连 RTT（非代理路径）…`);
+    log('TEST', 'info', t('log.testStart', { label, n: targets.length }));
     // mark pending + index by id for progressive paint
     const byId = new Map();
     for (const t of targets) {
@@ -3957,7 +3957,7 @@
           concurrency: 8,
         });
       } catch (e) {
-        log('TEST', 'warn', 'net_tcp_probe 不可用：' + (e && e.message || e));
+        log('TEST', 'warn', t('log.probeUnavailable', { error: e && e.message || e }));
         for (const t of targets) {
           if (!seen.has(t.id)) { applyLatencyToRow(t.row, -1, true); fail++; }
         }
@@ -3970,8 +3970,8 @@
         if (!seen.has(t.id)) { applyLatencyToRow(t.row, -1, true); fail++; }
       }
       const aborted = !!(res?.aborted || urlTestAbort);
-      log('OK', 'ok', `${label}完成 · 通 ${ok} · 失败 ${fail}` + (aborted ? '（已停止）' : ''));
-      log('SYS', 'info', '说明：当前为 TCP 连通 RTT（直连服务器），非代理路径 URL 测试；Core Test RPC 待 Start() 后接入');
+      log('OK', 'ok', t('log.testDone', { label, ok, fail, extra: aborted ? t('log.testStopped') : '' }));
+      log('SYS', 'info', t('log.testNote'));
     } finally {
       if (urlTestUnlisten) { try { urlTestUnlisten(); } catch (_) {} urlTestUnlisten = null; }
       urlTesting = false;
@@ -4005,9 +4005,9 @@
   async function resolveSelectedIps() {
     // Same progressive model as URL test: ONE Rust batch + net-resolve-result events.
     // Per-row net_resolve_host IPC + per-row log freezes the webview on "select all".
-    if (resolveIpRunning) { log('TEST', 'warn', '出口 IP 解析进行中…'); return; }
+    if (resolveIpRunning) { log('TEST', 'warn', t('log.exitIpBusy')); return; }
     const rows = selectedRows();
-    if (!rows.length) { log('SYS', 'warn', '未选定节点'); return; }
+    if (!rows.length) { log('SYS', 'warn', t('log.noNode')); return; }
     const byId = new Map();
     const targets = [];
     for (const row of rows) {
@@ -4018,9 +4018,9 @@
       byId.set(t.id, { row, t });
       targets.push({ id: t.id, host: t.host });
     }
-    if (!targets.length) { log('SYS', 'warn', '选定行无有效地址'); return; }
+    if (!targets.length) { log('SYS', 'warn', t('log.noValidAddr')); return; }
     resolveIpRunning = true;
-    log('TEST', 'info', `解析出口 IP · ${targets.length} 个…`);
+    log('TEST', 'info', t('log.exitIpStart', { n: targets.length }));
     let replaced = 0, fail = 0, done = 0;
     const seen = new Set();
     // throttle log spam: only summary + first few failures
@@ -4041,7 +4041,7 @@
           fail++;
           if (failLogged < 3) {
             failLogged++;
-            log('SYS', 'warn', `解析失败 · ${t.id || t.host}：${r.error || '无地址'}`);
+            log('SYS', 'warn', t('log.exitIpFail', { id: t.id || t.host, error: r.error || t('log.noAddr') }));
           }
         }
       } finally {
@@ -4062,7 +4062,7 @@
         });
       } catch (e) {
         // fallback: old single-host path only if batch cmd missing
-        log('TEST', 'warn', '批量解析不可用，回退逐条…');
+        log('TEST', 'warn', t('log.exitIpFallback'));
         for (const { id, host } of targets) {
           try {
             const one = await tauriInvoke('net_resolve_host', { host });
@@ -4084,17 +4084,17 @@
           done++;
         }
       }
-      log('SYS', 'ok', `出口 IP 完成 · 替换 ${replaced} · 失败 ${fail} · 共 ${done}`);
+      log('SYS', 'ok', t('log.exitIpDone', { replaced, fail, done }));
     } finally {
       if (unlisten) { try { unlisten(); } catch (_) {} }
       resolveIpRunning = false;
     }
   }
   function stopUrlTest() {
-    if (!urlTesting) { log('TEST', 'info', '当前无测速任务'); return; }
+    if (!urlTesting) { log('TEST', 'info', t('log.noTestJob')); return; }
     urlTestAbort = true;
     tauriInvoke('net_tcp_probe_stop').catch(() => {});
-    log('TEST', 'warn', '正在停止测速…');
+    log('TEST', 'warn', t('log.stoppingTest'));
   }
   document.querySelectorAll('#testMenu [data-test]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -4115,7 +4115,7 @@
     const gid = typeof currentGid === 'function' ? currentGid() : 'default';
     const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
     if (prof?.nodes) prof.nodes.forEach(n => { n.lat = null; });
-    log('SYS', 'info', '已清理测试结果');
+    log('SYS', 'info', t('log.clearedTests'));
   }
   // on_menu_update_subscription → AsyncUpdate(group->url, group->id)
   let subUpdating = false;
@@ -4598,19 +4598,19 @@
   }
   function updateSubscription(gid, { all = false } = {}) {
     if (subUpdating) {
-      log('SYS', 'warn', '订阅更新进行中…');
+      log('SYS', 'warn', t('log.subBusy'));
       setGroupUpdateStatus('上一轮更新尚未结束', 'warn');
       return Promise.resolve(false);
     }
     if (typeof GROUPS === 'undefined' || !Array.isArray(GROUPS)) {
-      log('SYS', 'warn', '分组数据未就绪');
+      log('SYS', 'warn', t('log.groupsNotReady'));
       return Promise.resolve(false);
     }
     const groups = all
       ? [...GROUPS]
       : [GROUPS.find(g => g.id === (gid || (typeof activeGroupId === 'function' ? activeGroupId() : 'default')))].filter(Boolean);
     if (!groups.length) {
-      log('SYS', 'warn', '无可用分组');
+      log('SYS', 'warn', t('log.noGroups'));
       setGroupUpdateStatus('无可用分组', 'warn');
       return Promise.resolve(false);
     }
@@ -4618,7 +4618,7 @@
     const targets = groups.filter(g => g.url && String(g.url).trim());
     const skipped = groups.length - targets.length;
     if (!targets.length) {
-      log('SYS', 'warn', '当前分组无订阅链接（设置 → 订阅 中填写，或编辑分组）');
+      log('SYS', 'warn', t('log.noSubUrl'));
       setGroupUpdateStatus('无订阅链接，已跳过', 'warn');
       if (!all) {
         const s = document.querySelector('.side-item[data-settings="sub"]');
@@ -4644,7 +4644,7 @@
       try {
         for (let i = 0; i < targets.length; i++) {
           const g = targets[i];
-          log('SYS', 'info', `正在更新订阅：${g.name}…`);
+          log('SYS', 'info', t('log.subUpdating', { name: g.name }));
           if (allBtn && all) allBtn.textContent = `更新中 ${i + 1}/${targets.length}`;
           setGroupUpdateStatus(`更新「${g.name}」(${i + 1}/${targets.length})…`, 'info');
           try {
@@ -4697,12 +4697,12 @@
             totalAdd += addR;
             totalDel += delR;
             ok++;
-            log('OK', 'ok', `「${g.name}」已更新 · +${addR} −${delR} · 共 ${next.length}`);
+            log('OK', 'ok', t('log.subUpdated', { name: g.name, add: addR, del: delR, total: next.length }));
             if (typeof renderGroupList === 'function') renderGroupList();
           } catch (err) {
             fail++;
             // keep existing nodes — no random replace
-            log('SYS', 'warn', `「${g.name}」更新失败：${err && err.message || err} · 保留 ${g.count || 0} 节点`);
+            log('SYS', 'warn', t('log.subFailKeep', { name: g.name, error: err && err.message || err, n: g.count || 0 }));
           }
         }
         const cur = typeof activeGroupId === 'function' ? activeGroupId() : 'default';
@@ -4712,15 +4712,15 @@
         const skipMsg = skipped ? ` · 跳过 ${skipped} 无 URL` : '';
         if (fail && !ok) {
           setGroupUpdateStatus(`更新失败${skipMsg}`, 'warn');
-          log('SYS', 'warn', '订阅更新失败');
+          log('SYS', 'warn', t('log.subFail'));
           return false;
         }
         const summary = `已更新 ${ok} 组 · +${totalAdd} −${totalDel}${skipMsg}${fail ? ` · 失败 ${fail}` : ''}`;
         setGroupUpdateStatus(summary, fail ? 'warn' : 'ok');
-        if (targets.length > 1 || all) log('SYS', 'ok', '全部订阅更新完成 · ' + summary);
+        if (targets.length > 1 || all) log('SYS', 'ok', t('log.subAllDone', { summary }));
         return true;
       } catch (err) {
-        log('SYS', 'warn', '订阅更新异常：' + (err && err.message || err));
+        log('SYS', 'warn', t('log.subException', { error: err && err.message || err }));
         setGroupUpdateStatus('更新异常：' + (err && err.message || err), 'warn');
         return false;
       }
@@ -4739,7 +4739,7 @@
   });
   document.getElementById('clearLog').addEventListener('click', () => {
     logPanel.innerHTML = '';
-    log('SYS', 'info', '日志已清空');
+    log('SYS', 'info', t('log.logCleared'));
   });
 
   // ——— helpers: clipboard / share / dialogs ———
@@ -5095,7 +5095,7 @@
     }
     if (typeof saveCatalog === 'function') saveCatalog(true);
     closeDialog('editMask');
-    log('SYS', 'ok', '已保存节点：' + name);
+    log('SYS', 'ok', t('log.nodeSaved', { name }));
   });
 
   let _qrCopyPayload = '';
@@ -5135,7 +5135,7 @@
       setQrBox(svg);
     } catch (e) {
       setQrBox('<span class="qr-empty">' + t('js.qrFail', { err: escHtml(String(e?.message || e)) }) + '</span>');
-      log('SYS', 'warn', '二维码生成失败：' + (e?.message || e));
+      log('SYS', 'warn', t('log.qrFail', { error: e?.message || e }));
     }
   }
   document.getElementById('qrClose')?.addEventListener('click', () => closeDialog('qrMask'));
@@ -5145,10 +5145,10 @@
   document.getElementById('qrCopy')?.addEventListener('click', () => {
     const link = _qrCopyPayload || document.getElementById('qrLink').textContent || '';
     if (!link || link.startsWith('（')) {
-      log('SYS', 'warn', '无真实链接可复制');
+      log('SYS', 'warn', t('log.noLinkCopy'));
       return;
     }
-    copyText(link).then(() => log('SYS', 'ok', '已复制链接')).catch(() => log('SYS', 'info', link));
+    copyText(link).then(() => log('SYS', 'ok', t('log.linkCopied'))).catch(() => log('SYS', 'info', link));
   });
 
   // ——— group management ———
@@ -5204,7 +5204,7 @@
       try { localStorage.setItem(CATALOG_KEY, JSON.stringify(blob)); } catch (_) {}
       if (typeof nexusInvoke === 'function') {
         nexusInvoke('catalog_put', { blob }).catch(e => {
-          try { log('SYS', 'warn', '订阅写入 store 失败：' + (e && e.message || e)); } catch (_) {}
+          try { log('SYS', 'warn', t('log.subStoreFail', { error: e && e.message || e })); } catch (_) {}
         });
       }
     };
@@ -5375,7 +5375,7 @@
     }
     if (typeof syncSubSettingsFromActiveGroup === 'function') syncSubSettingsFromActiveGroup();
     const n = GROUPS.reduce((s, g) => s + (g.count | 0), 0);
-    try { log('SYS', 'info', `已恢复订阅 · ${GROUPS.length} 组 · ${n} 节点` + (src ? ' · ' + src : '') + (stripped ? ' · 已清空演示节点' : '')); } catch (_) {}
+    try { log('SYS', 'info', t('log.subRestored', { groups: GROUPS.length, n, src: src ? ' · ' + src : '', stripped: stripped ? t('log.demoStripped') : '' })); } catch (_) {}
     return true;
   }
   let blocklistItems = [];
@@ -5447,7 +5447,7 @@
           } catch (_) {}
         }
         if (items == null) {
-          if (r && r.error) log('SYS', 'warn', '读取拦截列表失败：' + r.error);
+          if (r && r.error) log('SYS', 'warn', t('log.blockLoadFail', { error: r.error }));
           if (blocklistItems.length) renderBlocklist(blocklistItems);
           else applyBlocklistFilter();
           return blocklistItems;
@@ -5457,7 +5457,7 @@
         renderBlocklist(blocklistItems);
         return blocklistItems;
       } catch (e) {
-        try { log('SYS', 'warn', '读取拦截列表失败：' + (e && e.message || e)); } catch (_) {}
+        try { log('SYS', 'warn', t('log.blockLoadFail', { error: e && e.message || e })); } catch (_) {}
         if (blocklistItems.length) renderBlocklist(blocklistItems);
         else applyBlocklistFilter();
         return blocklistItems;
@@ -5547,13 +5547,13 @@
         if (!host && !proc) return;
         if (!blocklistLoaded) await loadBlocklist();
         if (!blocklistLoaded) {
-          log('SYS', 'warn', '拦截列表未加载，拒绝删除以免清空');
+          log('SYS', 'warn', t('log.blockRefuseDel'));
           return;
         }
         const key = blockEntryKey({ host, process_path: proc || null });
         const next = blocklistItems.filter(x => blockEntryKey(x) !== key);
         const ok = await saveBlocklist(next);
-        if (ok) log('SYS', 'ok', '已移除拦截项');
+        if (ok) log('SYS', 'ok', t('log.blockRemoved'));
       });
     });
     applyBlocklistFilter();
@@ -5563,32 +5563,33 @@
   async function applyBlocklistLive() {
     if (typeof connected === 'undefined' || !connected) return;
     if (blocklistApplyBusy || (typeof powerBusy !== 'undefined' && powerBusy)) {
-      log('SYS', 'info', '连接操作进行中，拦截列表已保存，稍后手动重连以生效');
+      log('SYS', 'info', t('log.blockSavedLater'));
       return;
     }
     const name = (typeof connectedName !== 'undefined' && connectedName) || selectedName;
     const payload = (typeof nodeConnectPayload === 'function') ? nodeConnectPayload(name) : null;
     if (!payload) {
-      log('SYS', 'warn', '已记录但配置未生效，请手动重连');
+      log('SYS', 'warn', t('log.blockSavedManual'));
       return;
     }
     blocklistApplyBusy = true;
     if (typeof powerBusy !== 'undefined') powerBusy = true;
     try {
-      log('CORE', 'info', '应用拦截列表 · 重载配置');
+      log('CORE', 'info', t('log.blockApply'));
       const r = await nexusInvoke('connect_selected', Object.assign({
         profile_id: 1,
         tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
         system_proxy: !!document.getElementById('sysToggle')?.checked,
       }, payload));
       if (!r || r.offline || !r.ok || r.data?.start_error || !r.data?.started) {
-        log('SYS', 'warn', '已记录但配置未生效，请手动重连'
-          + (r?.data?.start_error ? ('：' + r.data.start_error) : (r?.error ? ('：' + r.error) : '')));
+        log('SYS', 'warn', t('log.blockSavedManualMaybe', {
+            error: r?.data?.start_error ? ('：' + r.data.start_error) : (r?.error ? ('：' + r.error) : '')
+          }));
         return;
       }
-      log('OK', 'ok', '拦截规则已应用');
+      log('OK', 'ok', t('log.blockApplied'));
     } catch (e) {
-      log('SYS', 'warn', '已记录但配置未生效，请手动重连：' + (e && e.message || e));
+      log('SYS', 'warn', t('log.blockSavedManualErr', { error: e && e.message || e }));
     } finally {
       blocklistApplyBusy = false;
       if (typeof powerBusy !== 'undefined') powerBusy = false;
@@ -5600,7 +5601,7 @@
       // full-replace put: never write before a successful get (would wipe store)
       if (!blocklistLoaded) await loadBlocklist();
       if (!blocklistLoaded) {
-        log('SYS', 'warn', '拦截列表未加载，拒绝写入以免清空');
+        log('SYS', 'warn', t('log.blockRefuseWrite'));
         return false;
       }
       const payload = (Array.isArray(items) ? items : [])
@@ -5613,11 +5614,11 @@
         });
       const r = await nexusInvoke('blocklist_put', { items: payload });
       if (r && r.offline) {
-        log('SYS', 'warn', '后端未就绪，无法保存拦截列表');
+        log('SYS', 'warn', t('log.blockBackendDown'));
         return false;
       }
       if (!r || !r.ok || !r.data || !Array.isArray(r.data.items)) {
-        log('SYS', 'warn', '保存拦截列表失败' + (r && r.error ? ('：' + r.error) : ''));
+        log('SYS', 'warn', r && r.error ? t('log.blockSaveFailErr', { error: r.error }) : t('log.blockSaveFail'));
         return false;
       }
       blocklistItems = r.data.items.map(coerceBlockEntry).filter(Boolean);
@@ -5627,7 +5628,7 @@
       await applyBlocklistLive();
       return true;
     } catch (e) {
-      log('SYS', 'warn', '保存拦截列表失败：' + (e && e.message || e));
+      log('SYS', 'warn', t('log.blockSaveFailErr', { error: e && e.message || e }));
       return false;
     }
   }
@@ -5660,15 +5661,15 @@
       batch.push(entry);
     }
     if (!batch.length) {
-      if (badHostN && !badPathN) log('SYS', 'warn', '无效地址');
-      else if (badPathN && !badHostN) log('SYS', 'warn', '无效进程路径');
-      else if (badHostN || badPathN) log('SYS', 'warn', '无效拦截项');
-      else log('SYS', 'warn', '无效拦截项');
+      if (badHostN && !badPathN) log('SYS', 'warn', t('log.invalidAddr'));
+      else if (badPathN && !badHostN) log('SYS', 'warn', t('log.invalidProc'));
+      else if (badHostN || badPathN) log('SYS', 'warn', t('log.invalidBlock'));
+      else log('SYS', 'warn', t('log.invalidBlock'));
       return false;
     }
     if (!blocklistLoaded) await loadBlocklist();
     if (!blocklistLoaded) {
-      log('SYS', 'warn', '拦截列表未加载，拒绝添加以免清空');
+      log('SYS', 'warn', t('log.blockRefuseAdd'));
       return false;
     }
     const have = new Set(blocklistItems.map(blockEntryKey));
@@ -5682,16 +5683,16 @@
     }
     if (!fresh.length) {
       log('SYS', 'info', skipped === 1
-        ? '已在拦截列表：' + blockEntryLabel(batch[0])
-        : `已在拦截列表（${skipped}）`);
+        ? t('log.blockAlready1', { label: blockEntryLabel(batch[0]) })
+        : t('log.blockAlreadyN', { n: skipped }));
       return true;
     }
     const ok = await saveBlocklist(blocklistItems.concat(fresh));
     if (ok) {
       if (fresh.length === 1 && !skipped) {
-        log('SYS', 'ok', '已添加拦截：' + blockEntryLabel(fresh[0]));
+        log('SYS', 'ok', t('log.blockAdded1', { label: blockEntryLabel(fresh[0]) }));
       } else {
-        log('SYS', 'ok', `本次新增 ${fresh.length}` + (skipped ? ` · 已有跳过 ${skipped}` : ''));
+        log('SYS', 'ok', t('log.blockAddedN', { n: fresh.length, skip: skipped ? t('log.blockSkip', { n: skipped }) : '' }));
       }
     }
     return ok;
@@ -5767,7 +5768,7 @@
     if (render && typeof renderNodes === 'function') renderNodes(id);
     if (logIt) {
       const g = GROUPS.find(x => x.id === id);
-      log('SYS', 'info', '已切换订阅：' + (g?.name || id));
+      log('SYS', 'info', t('log.subSwitched', { name: g?.name || id }));
     }
     if (document.getElementById('groupsMask')?.classList.contains('open')) renderGroupList();
     // settings 订阅 panel must follow top-bar group (URL + auto-update)
@@ -5834,7 +5835,7 @@
   function deleteGroup(id) {
     const g = GROUPS.find(x => x.id === id);
     if (!g) return;
-    if (GROUPS.length <= 1) { log('SYS', 'warn', '至少保留一个分组'); return; }
+    if (GROUPS.length <= 1) { log('SYS', 'warn', t('log.keepOneGroup')); return; }
     if (!confirm(`删除分组「${g.name}」？其中的节点列表将一并移除。`)) return;
     const wasActive = activeGroupId() === id;
     GROUPS = GROUPS.filter(x => x.id !== id);
@@ -5843,7 +5844,7 @@
     if (wasActive && GROUPS[0]) setActiveGroup(GROUPS[0].id, { logIt: false });
     renderGroupList();
     if (typeof saveCatalog === 'function') saveCatalog(true);
-    log('SYS', 'warn', '已删除分组：' + g.name);
+    log('SYS', 'warn', t('log.groupDeleted', { name: g.name }));
   }
   function openGroupsDialog() {
     renderGroupList();
@@ -5900,18 +5901,18 @@
         let text = (sel && !sel.isCollapsed && logPanel.contains(sel.anchorNode))
           ? sel.toString()
           : logPlainText(logPanel);
-        if (!text) { log('SYS', 'info', '无可复制内容'); return; }
-        copyText(text).then(() => log('SYS', 'ok', '已复制日志')).catch(() => log('SYS', 'info', '复制失败'));
+        if (!text) { log('SYS', 'info', t('log.nothingCopy')); return; }
+        copyText(text).then(() => log('SYS', 'ok', t('log.logCopied'))).catch(() => log('SYS', 'info', t('log.copyFail')));
       } else if (act === 'select-all') {
         const range = document.createRange();
         range.selectNodeContents(logPanel);
         const sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
-        log('SYS', 'info', '已全选日志');
+        log('SYS', 'info', t('log.logSelectAll'));
       } else if (act === 'clear') {
         logPanel.innerHTML = '';
-        log('SYS', 'info', '日志已清空');
+        log('SYS', 'info', t('log.logCleared'));
       }
     });
   });
@@ -6094,14 +6095,14 @@
       nHostPath > 0,
       '拦截目标 · 仅此应用' + multi(nHostPath),
       '拦截目标：仅此应用访问此域名/IP 时拒绝' + multi(nHostPath),
-      nPath > 0 ? '选中行缺少有效目标' : '完整进程路径尚未就绪，请稍候再试或改用「拦截目标 · 全部进程」'
+      nPath > 0 ? '选中行缺少有效目标' : t('log.procPathWaitAlt')
     );
     setConnMenuItemState(
       connCtxMenu.querySelector('[data-conn-ctx="block-app"]'),
       nPath > 0,
       '拦截应用 · 全部连接' + multi(nPath),
       '拦截应用：此进程的全部网络连接均拒绝' + multi(nPath),
-      '完整进程路径尚未就绪，请稍候再试'
+      t('log.procPathWait')
     );
   }
   document.querySelectorAll('#connCtxMenu [data-conn-ctx]').forEach(btn => {
@@ -6109,13 +6110,13 @@
       const act = btn.dataset.connCtx;
       if ((act === 'block-proc' || act === 'block-app') && btn.disabled) {
         log('SYS', 'warn', act === 'block-app'
-          ? '完整进程路径尚未就绪，请稍候再试'
-          : '完整进程路径尚未就绪，请稍候再试或改用「拦截目标 · 全部进程」');
+          ? t('log.procPathWait')
+          : t('log.procPathWaitAlt'));
         closeConnCtxMenu();
         return;
       }
       if ((act === 'copy-host' || act === 'block-any') && btn.disabled) {
-        log('SYS', 'warn', '无效地址');
+        log('SYS', 'warn', t('log.invalidAddr'));
         closeConnCtxMenu();
         return;
       }
@@ -6130,12 +6131,12 @@
           seen.add(host);
           hosts.push(host);
         }
-        if (!hosts.length) { log('SYS', 'warn', '无效地址'); return; }
+        if (!hosts.length) { log('SYS', 'warn', t('log.invalidAddr')); return; }
         const text = hosts.join('\n');
         copyText(text).then(() => log('SYS', 'ok', hosts.length === 1
-          ? '已复制域名/IP：' + hosts[0]
-          : `已复制 ${hosts.length} 个域名/IP`))
-          .catch(() => log('SYS', 'ok', '已复制域名/IP'));
+          ? t('log.copiedHost1', { host: hosts[0] })
+          : t('log.copiedHostN', { n: hosts.length })))
+          .catch(() => log('SYS', 'ok', t('log.copiedHost')));
       } else if (act === 'copy-row') {
         const rows = connBlockTargetRows();
         const lines = [];
@@ -6143,12 +6144,12 @@
           const t = connRowText(row);
           if (t) lines.push(t);
         }
-        if (!lines.length) { log('SYS', 'info', '无可复制连接'); return; }
+        if (!lines.length) { log('SYS', 'info', t('log.noConnCopy')); return; }
         const text = lines.join('\n');
         copyText(text).then(() => log('SYS', 'ok', lines.length === 1
-          ? '已复制整行：' + lines[0].replace(/\t/g, ' · ')
-          : `已复制 ${lines.length} 行`))
-          .catch(() => log('SYS', 'ok', '已复制整行'));
+          ? t('log.copiedRow1', { line: lines[0].replace(/\t/g, ' · ') })
+          : t('log.copiedRowN', { n: lines.length })))
+          .catch(() => log('SYS', 'ok', t('log.copiedRow')));
       } else if (act === 'block-any' || act === 'block-proc' || act === 'block-app') {
         const rows = connBlockTargetRows();
         const specs = [];
@@ -6169,14 +6170,14 @@
         }
         if (!specs.length) {
           log('SYS', 'warn', act === 'block-app'
-            ? '完整进程路径尚未就绪，请稍候再试'
+            ? t('log.procPathWait')
             : (act === 'block-proc'
-              ? '完整进程路径尚未就绪，请稍候再试或改用「拦截目标 · 全部进程」'
-              : '无效地址'));
+              ? t('log.procPathWaitAlt')
+              : t('log.invalidAddr')));
           return;
         }
         await addBlockEntries(specs);
-        if (miss) log('SYS', 'info', `已跳过 ${miss} 行（字段未就绪）`);
+        if (miss) log('SYS', 'info', t('log.skippedRows', { n: miss }));
       }
     });
   });
@@ -6589,7 +6590,7 @@
   }
   document.getElementById('statsClose')?.addEventListener('click', () => closeDialog('statsMask'));
   document.getElementById('statsRefresh')?.addEventListener('click', () => {
-    fillRuntimeStats().then(() => log('SYS', 'info', '已刷新运行状态'));
+    fillRuntimeStats().then(() => log('SYS', 'info', t('log.runtimeRefreshed')));
   });
   document.getElementById('statsMask')?.addEventListener('click', e => {
     if (e.target.id === 'statsMask') closeDialog('statsMask');
@@ -6628,19 +6629,19 @@
         if (!payload) throw new Error('当前节点无可用 link/outbound');
         const cfg = await inv('generate_preview', payload);
         if (pre) pre.textContent = JSON.stringify(cfg, null, 2);
-        log('SYS', 'ok', '已导出 Core generate_preview');
+        log('SYS', 'ok', t('log.previewExported'));
         return;
       }
     } catch (e) {
-      log('SYS', 'warn', 'generate_preview 失败：' + (e && e.message || e));
+      log('SYS', 'warn', t('log.previewFail', { error: e && e.message || e }));
     }
     if (pre) pre.textContent = buildExportConfigLocal();
-    log('SYS', 'info', '导出为本地草图（非 Core）');
+    log('SYS', 'info', t('log.previewLocal'));
   }
   document.getElementById('exportClose')?.addEventListener('click', () => closeDialog('exportMask'));
   document.getElementById('exportCopy')?.addEventListener('click', () => {
     const t = document.getElementById('exportPre').textContent || '';
-    copyText(t).then(() => log('SYS', 'ok', '已复制 Sing-box 配置')).catch(() => log('SYS', 'info', '复制失败'));
+    copyText(t).then(() => log('SYS', 'ok', t('log.sbCopied'))).catch(() => log('SYS', 'info', t('log.copyFail')));
   });
   document.getElementById('exportMask')?.addEventListener('click', e => {
     if (e.target.id === 'exportMask') closeDialog('exportMask');
@@ -6705,13 +6706,13 @@
   document.getElementById('geSave')?.addEventListener('click', () => {
     const name = (document.getElementById('geName')?.value || '').trim();
     if (!name) {
-      log('SYS', 'warn', '分组名称不能为空');
+      log('SYS', 'warn', t('log.groupNameEmpty'));
       document.getElementById('geName')?.focus();
       return;
     }
     if (groupEditMode === 'create') {
       if (GROUPS.some(x => x.name === name)) {
-        log('SYS', 'warn', '已存在同名分组');
+        log('SYS', 'warn', t('log.groupNameDup'));
         return;
       }
       const id = 'g' + Date.now().toString(36);
@@ -6726,13 +6727,13 @@
       renderGroupList();
       closeDialog('groupEditMask');
       if (typeof saveCatalog === 'function') saveCatalog(true);
-      log('SYS', 'ok', '已新建分组：' + name);
+      log('SYS', 'ok', t('log.groupCreated', { name }));
       return;
     }
     const g = GROUPS.find(x => x.id === groupEditId);
     if (!g) { closeDialog('groupEditMask'); return; }
     if (GROUPS.some(x => x.id !== g.id && x.name === name)) {
-      log('SYS', 'warn', '已存在同名分组');
+      log('SYS', 'warn', t('log.groupNameDup'));
       return;
     }
     g.name = name;
@@ -6747,7 +6748,7 @@
     renderGroupList();
     closeDialog('groupEditMask');
     if (typeof saveCatalog === 'function') saveCatalog(true);
-    log('SYS', 'ok', groupEditMode === 'rename' ? ('已重命名：' + name) : ('已保存分组：' + name + (g.url ? ' · ' + g.url : '')));
+    log('SYS', 'ok', groupEditMode === 'rename' ? t('log.groupRenamed', { name }) : t('log.groupSaved', { name, url: g.url ? ' · ' + g.url : '' }));
   });
 
 
@@ -6801,17 +6802,17 @@
     if (el.classList.contains('placeholder') || url === 'https://…/sub') url = '';
     url = url.trim();
     if (url && !/^https?:\/\//i.test(url) && !/^([a-z][a-z0-9+\-.]*):\/\//i.test(url)) {
-      log('SYS', 'warn', '订阅链接需以 http(s):// 开头');
+      log('SYS', 'warn', t('log.subUrlHttp'));
       el.focus();
       return;
     }
     const id = (typeof activeGroupId === 'function') ? activeGroupId() : (document.querySelector('#subSeg button.active')?.dataset.sub);
     const g = GROUPS.find(x => x.id === id) || GROUPS[0];
-    if (!g) { log('SYS', 'warn', '无可用分组'); return; }
+    if (!g) { log('SYS', 'warn', t('log.noGroups')); return; }
     g.url = url;
     setFieldText(el, url);
     if (typeof saveCatalog === 'function') saveCatalog(true);
-    log('SYS', 'ok', url ? (`已保存订阅链接 → ${g.name}`) : (`已清空「${g.name}」订阅链接`));
+    log('SYS', 'ok', url ? t('log.subUrlSaved', { name: g.name }) : t('log.subUrlCleared', { name: g.name }));
     // saving URL often followed by AsyncUpdate when user expects nodes
     if (url && typeof updateSubscription === 'function') {
       updateSubscription(g.id);
@@ -6825,12 +6826,12 @@
     if (!el) return;
     try {
       const t = (await navigator.clipboard.readText()).trim();
-      if (!t) { log('SYS', 'warn', '剪贴板为空'); return; }
+      if (!t) { log('SYS', 'warn', t('log.clipEmpty')); return; }
       setFieldText(el, t);
       el.focus();
-      log('SYS', 'info', '已粘贴订阅链接');
+      log('SYS', 'info', t('log.clipPasted'));
     } catch (_) {
-      log('SYS', 'warn', '无法读取剪贴板，请手动粘贴');
+      log('SYS', 'warn', t('log.clipReadFail'));
       el.focus();
     }
   });
@@ -6850,7 +6851,7 @@
       if (!g) return;
       g.autoUpdate = btn.classList.contains('on') || btn.getAttribute('aria-pressed') === 'true';
       if (typeof saveCatalog === 'function') saveCatalog();
-      log('SYS', 'info', '「' + g.name + '」自动更新订阅：' + (g.autoUpdate ? '开' : '关'));
+      log('SYS', 'info', t('log.groupAutoUp', { name: g.name, state: g.autoUpdate ? t('log.on') : t('log.off') }));
     });
   });
   // clear placeholder on focus/input handled by existing field helpers; ensure sync when opening 订阅 panel
@@ -7115,7 +7116,7 @@
   document.getElementById('adblockSwitch')?.addEventListener('click', () => {
     setTimeout(() => {
       const on = document.getElementById('adblockSwitch')?.classList.contains('on');
-      log('SYS', 'info', on ? '已启用 AdBlock' : '已关闭 AdBlock');
+      log('SYS', 'info', on ? t('log.adblockOn') : t('log.adblockOff'));
     }, 0);
   });
 
@@ -7405,6 +7406,169 @@
       'edit.user': '用户名',
       'log.clear': '清除',
       'log.filterAll': '全部',
+      'log.busy': '连接操作进行中…',
+      'log.startProfile': 'Start 配置档 <span class="node">{name}</span>',
+      'log.badShare': '节点分享链接无效（伪 vmess/非 UUID）— 请「更新」订阅或导入含 uuid 的真实链接；系统代理仅在 Start 成功后写入',
+      'log.noCreds': '选定节点无连接配置（订阅解析未保存凭证）— 请点「更新」重新拉取订阅',
+      'log.noRealLink': '选定节点无真实分享链接（演示节点无法成隧道）— 请导入订阅或粘贴 vless/trojan/ss/vmess 链接',
+      'log.backendDown': '后端未就绪，无法启动隧道',
+      'log.startFail': 'Start 失败: {error}',
+      'log.startNoOk': 'Start 未成功',
+      'log.tunnelOn': '隧道已启动 · mixed 127.0.0.1:{port} · {name}',
+      'log.stopProfile': 'Stop 配置档 <span class="node">{name}</span>',
+      'log.stopped': '已断开（Stop）',
+      'log.selectedN': '已全选 {n} 个节点',
+      'log.notConnected': '当前未连接',
+      'log.noNode': '未选定节点',
+      'log.deletedN': '已删除 {n} 个节点',
+      'log.resetTraffic': '已重置流量 · {n} 个节点',
+      'log.cloned': '已克隆：{name}',
+      'log.copiedLinkNamed': '已复制链接 · {name}',
+      'log.linkIs': '链接：{link}',
+      'log.noDupes': '无重复节点',
+      'log.deduped': '已去除重复节点 · {n} 个',
+      'log.tunOn': '已开启 Tun 模式',
+      'log.tunOff': '已关闭 Tun 模式',
+      'log.removed0': '{label} · 0 个',
+      'log.removedN': '{label} · {n} 个',
+      'log.remove': '移除',
+      'log.removed': '已移除',
+      'log.testBusy': '测速进行中…（可点停止）',
+      'log.noTestTargets': '无可测试节点（缺 host:port）',
+      'log.testStart': '{label} · {n} 个节点 · TCP 直连 RTT（非代理路径）…',
+      'log.probeUnavailable': 'net_tcp_probe 不可用：{error}',
+      'log.testDone': '{label}完成 · 通 {ok} · 失败 {fail}{extra}',
+      'log.testStopped': '（已停止）',
+      'log.testNote': '说明：当前为 TCP 连通 RTT（直连服务器），非代理路径 URL 测试；Core Test RPC 待 Start() 后接入',
+      'log.exitIpBusy': '出口 IP 解析进行中…',
+      'log.noValidAddr': '选定行无有效地址',
+      'log.exitIpStart': '解析出口 IP · {n} 个…',
+      'log.exitIpFail': '解析失败 · {id}：{error}',
+      'log.noAddr': '无地址',
+      'log.exitIpFallback': '批量解析不可用，回退逐条…',
+      'log.exitIpDone': '出口 IP 完成 · 替换 {replaced} · 失败 {fail} · 共 {done}',
+      'log.noTestJob': '当前无测速任务',
+      'log.stoppingTest': '正在停止测速…',
+      'log.clearedTests': '已清理测试结果',
+      'log.subBusy': '订阅更新进行中…',
+      'log.groupsNotReady': '分组数据未就绪',
+      'log.noGroups': '无可用分组',
+      'log.noSubUrl': '当前分组无订阅链接（设置 → 订阅 中填写，或编辑分组）',
+      'log.subUpdating': '正在更新订阅：{name}…',
+      'log.subUpdated': '「{name}」已更新 · +{add} −{del} · 共 {total}',
+      'log.subFailKeep': '「{name}」更新失败：{error} · 保留 {n} 节点',
+      'log.subFail': '订阅更新失败',
+      'log.subAllDone': '全部订阅更新完成 · {summary}',
+      'log.subException': '订阅更新异常：{error}',
+      'log.logCleared': '日志已清空',
+      'log.nodeSaved': '已保存节点：{name}',
+      'log.qrFail': '二维码生成失败：{error}',
+      'log.noLinkCopy': '无真实链接可复制',
+      'log.linkCopied': '已复制链接',
+      'log.subStoreFail': '订阅写入 store 失败：{error}',
+      'log.subRestored': '已恢复订阅 · {groups} 组 · {n} 节点{src}{stripped}',
+      'log.demoStripped': ' · 已清空演示节点',
+      'log.blockLoadFail': '读取拦截列表失败：{error}',
+      'log.blockRefuseDel': '拦截列表未加载，拒绝删除以免清空',
+      'log.blockRemoved': '已移除拦截项',
+      'log.blockSavedLater': '连接操作进行中，拦截列表已保存，稍后手动重连以生效',
+      'log.blockSavedManual': '已记录但配置未生效，请手动重连',
+      'log.blockApply': '应用拦截列表 · 重载配置',
+      'log.blockApplied': '拦截规则已应用',
+      'log.blockSavedManualErr': '已记录但配置未生效，请手动重连：{error}',
+      'log.blockRefuseWrite': '拦截列表未加载，拒绝写入以免清空',
+      'log.blockBackendDown': '后端未就绪，无法保存拦截列表',
+      'log.blockSaveFail': '保存拦截列表失败',
+      'log.blockSaveFailErr': '保存拦截列表失败：{error}',
+      'log.invalidAddr': '无效地址',
+      'log.invalidProc': '无效进程路径',
+      'log.invalidBlock': '无效拦截项',
+      'log.blockRefuseAdd': '拦截列表未加载，拒绝添加以免清空',
+      'log.blockAlready1': '已在拦截列表：{label}',
+      'log.blockAlreadyN': '已在拦截列表（{n}）',
+      'log.blockAdded1': '已添加拦截：{label}',
+      'log.blockAddedN': '本次新增 {n}{skip}',
+      'log.blockSkip': ' · 已有跳过 {n}',
+      'log.subSwitched': '已切换订阅：{name}',
+      'log.keepOneGroup': '至少保留一个分组',
+      'log.groupDeleted': '已删除分组：{name}',
+      'log.nothingCopy': '无可复制内容',
+      'log.logCopied': '已复制日志',
+      'log.copyFail': '复制失败',
+      'log.logSelectAll': '已全选日志',
+      'log.procPathWait': t('log.procPathWait'),
+      'log.procPathWaitAlt': t('log.procPathWaitAlt'),
+      'log.copiedHost1': '已复制域名/IP：{host}',
+      'log.copiedHostN': '已复制 {n} 个域名/IP',
+      'log.copiedHost': '已复制域名/IP',
+      'log.noConnCopy': '无可复制连接',
+      'log.copiedRow1': '已复制整行：{line}',
+      'log.copiedRowN': '已复制 {n} 行',
+      'log.copiedRow': '已复制整行',
+      'log.skippedRows': '已跳过 {n} 行（字段未就绪）',
+      'log.runtimeRefreshed': '已刷新运行状态',
+      'log.previewExported': '已导出 Core generate_preview',
+      'log.previewFail': 'generate_preview 失败：{error}',
+      'log.previewLocal': '导出为本地草图（非 Core）',
+      'log.sbCopied': '已复制 Sing-box 配置',
+      'log.groupNameEmpty': '分组名称不能为空',
+      'log.groupNameDup': '已存在同名分组',
+      'log.groupCreated': '已新建分组：{name}',
+      'log.groupRenamed': '已重命名：{name}',
+      'log.groupSaved': '已保存分组：{name}{url}',
+      'log.subUrlHttp': '订阅链接需以 http(s):// 开头',
+      'log.subUrlSaved': '已保存订阅链接 → {name}',
+      'log.subUrlCleared': '已清空「{name}」订阅链接',
+      'log.clipEmpty': '剪贴板为空',
+      'log.clipPasted': '已粘贴订阅链接',
+      'log.clipReadFail': '无法读取剪贴板，请手动粘贴',
+      'log.adblockOn': '已启用 AdBlock',
+      'log.adblockOff': '已关闭 AdBlock',
+      'log.importNone': '未解析到节点（{src}）',
+      'log.importSrc': '导入',
+      'log.importedN': '已导入 {n} 个节点',
+      'log.clipIsSub': '剪贴板为订阅链接，开始更新…',
+      'log.clipFail': '无法读取剪贴板',
+      'log.fileIsSub': '文件为订阅链接，开始更新…',
+      'log.fileReadFail': '读取文件失败：{error}',
+      'log.imagePicked': '已选择图片「{name}」（骨架未含解码库，请改用剪贴板分享链接）',
+      'log.hiddenMenu': '已隐藏到菜单栏',
+      'log.hideFail': '隐藏失败: {error}',
+      'log.hiddenTray': '窗口已隐藏到托盘',
+      'log.showMain': '显示主窗口',
+      'log.dlChina': '下载配置档 · China（未接线）',
+      'log.dlIran': '下载配置档 · Iran（未接线）',
+      'log.dlRussia': '下载配置档 · Russia（未接线）',
+      'log.autostartOn': '已开启随系统启动',
+      'log.autostartOff': '已关闭随系统启动',
+      'log.proxyOn': '已开启系统代理',
+      'log.proxyOff': '已关闭系统代理',
+      'log.proxyErr': '系统代理: {error}',
+      'log.proxyPac': '系统代理：PAC 模式',
+      'log.tunNicOn': '已开启虚拟网卡',
+      'log.restartingCore': '正在重启核心…',
+      'log.restartingApp': '正在重启程序…',
+      'log.backendId': '后端 {id} · {phase}',
+      'log.backendOffline': '后端未连接',
+      'log.localCfg': '本地配置 {n} 节点 · Tun {tun} · 系统代理 {proxy}',
+      'log.on': '开',
+      'log.off': '关',
+      'log.syncState': '已同步连接状态 · {bits}',
+      'log.tunnelStill': '隧道仍在',
+      'log.quitting': '正在断开隧道并退出…',
+      'log.quitFail': '退出失败: {error}',
+      'log.quitOffline': '退出（离线）',
+      'log.tunSwitchFail': 'Tun 切换失败',
+      'log.tunNoCfg': 'Tun 已记录，但当前节点无连接配置 — 请重新连接以应用',
+      'log.tunRestartOn': 'Tun 开启 · 重新 Start…',
+      'log.tunRestartOff': 'Tun 关闭 · 重新 Start…',
+      'log.tunRestartFail': 'Tun re-Start 失败: {error}',
+      'log.tunApplied': 'Tun 隧道已应用',
+      'log.tunBackProxy': '已切回系统代理模式',
+      'log.groupAutoUp': '「{name}」自动更新订阅：{state}',
+      'log.importedNExtra': '已导入 {n} 个节点{dedupe} · {src}',
+      'log.importDedupe': '（去重 {n}）',
+      'log.blockSavedManualMaybe': '已记录但配置未生效，请手动重连{error}',
       'menu.addClip': '从剪贴板添加配置',
       'menu.addFile': '从文件添加配置',
       'menu.allowLan': '允许局域网连接',
@@ -7801,6 +7965,169 @@
       'edit.user': 'Username',
       'log.clear': 'Clear',
       'log.filterAll': 'All',
+      'log.busy': 'Connection operation in progress…',
+      'log.startProfile': 'Start profile <span class="node">{name}</span>',
+      'log.badShare': 'Invalid node share link (fake vmess/non-UUID) — Update the subscription or import a real link with uuid; system proxy is written only after a successful Start',
+      'log.noCreds': 'Selected node has no connection config (credentials not saved) — click Update to re-fetch the subscription',
+      'log.noRealLink': 'Selected node has no real share link (demo nodes cannot tunnel) — import a subscription or paste a vless/trojan/ss/vmess link',
+      'log.backendDown': 'Backend not ready; cannot start tunnel',
+      'log.startFail': 'Start failed: {error}',
+      'log.startNoOk': 'Start did not succeed',
+      'log.tunnelOn': 'Tunnel started · mixed 127.0.0.1:{port} · {name}',
+      'log.stopProfile': 'Stop profile <span class="node">{name}</span>',
+      'log.stopped': 'Disconnected (Stop)',
+      'log.selectedN': 'Selected all {n} nodes',
+      'log.notConnected': 'Not connected',
+      'log.noNode': 'No node selected',
+      'log.deletedN': 'Deleted {n} nodes',
+      'log.resetTraffic': 'Traffic reset · {n} nodes',
+      'log.cloned': 'Cloned: {name}',
+      'log.copiedLinkNamed': 'Copied link · {name}',
+      'log.linkIs': 'Link: {link}',
+      'log.noDupes': 'No duplicate nodes',
+      'log.deduped': 'Removed duplicate nodes · {n}',
+      'log.tunOn': 'Tun mode on',
+      'log.tunOff': 'Tun mode off',
+      'log.removed0': '{label} · 0',
+      'log.removedN': '{label} · {n}',
+      'log.remove': 'Remove',
+      'log.removed': 'Removed',
+      'log.testBusy': 'Latency test running… (Stop available)',
+      'log.noTestTargets': 'No testable nodes (missing host:port)',
+      'log.testStart': '{label} · {n} nodes · TCP direct RTT (not proxy path)…',
+      'log.probeUnavailable': 'net_tcp_probe unavailable: {error}',
+      'log.testDone': '{label} done · ok {ok} · fail {fail}{extra}',
+      'log.testStopped': ' (stopped)',
+      'log.testNote': 'Note: TCP reachability RTT (direct to server), not proxy-path URL test; Core Test RPC after Start()',
+      'log.exitIpBusy': 'Resolving exit IP…',
+      'log.noValidAddr': 'Selected row has no valid address',
+      'log.exitIpStart': 'Resolving exit IP · {n}…',
+      'log.exitIpFail': 'Resolve failed · {id}: {error}',
+      'log.noAddr': 'no address',
+      'log.exitIpFallback': 'Batch resolve unavailable; falling back per-node…',
+      'log.exitIpDone': 'Exit IP done · replaced {replaced} · fail {fail} · total {done}',
+      'log.noTestJob': 'No latency test running',
+      'log.stoppingTest': 'Stopping latency test…',
+      'log.clearedTests': 'Test results cleared',
+      'log.subBusy': 'Subscription update in progress…',
+      'log.groupsNotReady': 'Group data not ready',
+      'log.noGroups': 'No groups available',
+      'log.noSubUrl': 'Current group has no subscription URL (Settings → Subscription, or edit group)',
+      'log.subUpdating': 'Updating subscription: {name}…',
+      'log.subUpdated': '“{name}” updated · +{add} −{del} · total {total}',
+      'log.subFailKeep': '“{name}” update failed: {error} · keeping {n} nodes',
+      'log.subFail': 'Subscription update failed',
+      'log.subAllDone': 'All subscriptions updated · {summary}',
+      'log.subException': 'Subscription update exception: {error}',
+      'log.logCleared': 'Log cleared',
+      'log.nodeSaved': 'Node saved: {name}',
+      'log.qrFail': 'QR generation failed: {error}',
+      'log.noLinkCopy': 'No real link to copy',
+      'log.linkCopied': 'Link copied',
+      'log.subStoreFail': 'Failed to write subscription to store: {error}',
+      'log.subRestored': 'Subscription restored · {groups} groups · {n} nodes{src}{stripped}',
+      'log.demoStripped': ' · demo nodes cleared',
+      'log.blockLoadFail': 'Failed to load blocklist: {error}',
+      'log.blockRefuseDel': 'Blocklist not loaded; refuse delete to avoid wipe',
+      'log.blockRemoved': 'Blocklist entry removed',
+      'log.blockSavedLater': 'Connect busy; blocklist saved — reconnect later to apply',
+      'log.blockSavedManual': 'Saved but not applied; reconnect manually',
+      'log.blockApply': 'Applying blocklist · reloading config',
+      'log.blockApplied': 'Block rules applied',
+      'log.blockSavedManualErr': 'Saved but not applied; reconnect manually: {error}',
+      'log.blockRefuseWrite': 'Blocklist not loaded; refuse write to avoid wipe',
+      'log.blockBackendDown': 'Backend not ready; cannot save blocklist',
+      'log.blockSaveFail': 'Failed to save blocklist',
+      'log.blockSaveFailErr': 'Failed to save blocklist: {error}',
+      'log.invalidAddr': 'Invalid address',
+      'log.invalidProc': 'Invalid process path',
+      'log.invalidBlock': 'Invalid block entry',
+      'log.blockRefuseAdd': 'Blocklist not loaded; refuse add to avoid wipe',
+      'log.blockAlready1': 'Already on blocklist: {label}',
+      'log.blockAlreadyN': 'Already on blocklist ({n})',
+      'log.blockAdded1': 'Blocked: {label}',
+      'log.blockAddedN': 'Added {n} this time{skip}',
+      'log.blockSkip': ' · skipped existing {n}',
+      'log.subSwitched': 'Switched subscription: {name}',
+      'log.keepOneGroup': 'Keep at least one group',
+      'log.groupDeleted': 'Deleted group: {name}',
+      'log.nothingCopy': 'Nothing to copy',
+      'log.logCopied': 'Log copied',
+      'log.copyFail': 'Copy failed',
+      'log.logSelectAll': 'Log fully selected',
+      'log.procPathWait': 'Full process path not ready; try again shortly',
+      'log.procPathWaitAlt': 'Full process path not ready; wait or use “Block target · all processes”',
+      'log.copiedHost1': 'Copied domain/IP: {host}',
+      'log.copiedHostN': 'Copied {n} domains/IPs',
+      'log.copiedHost': 'Domain/IP copied',
+      'log.noConnCopy': 'No connections to copy',
+      'log.copiedRow1': 'Copied row: {line}',
+      'log.copiedRowN': 'Copied {n} rows',
+      'log.copiedRow': 'Row copied',
+      'log.skippedRows': 'Skipped {n} rows (fields not ready)',
+      'log.runtimeRefreshed': 'Runtime status refreshed',
+      'log.previewExported': 'Exported Core generate_preview',
+      'log.previewFail': 'generate_preview failed: {error}',
+      'log.previewLocal': 'Exported as local sketch (not Core)',
+      'log.sbCopied': 'Sing-box config copied',
+      'log.groupNameEmpty': 'Group name cannot be empty',
+      'log.groupNameDup': 'A group with this name already exists',
+      'log.groupCreated': 'Created group: {name}',
+      'log.groupRenamed': 'Renamed: {name}',
+      'log.groupSaved': 'Saved group: {name}{url}',
+      'log.subUrlHttp': 'Subscription URL must start with http(s)://',
+      'log.subUrlSaved': 'Saved subscription URL → {name}',
+      'log.subUrlCleared': 'Cleared subscription URL for “{name}”',
+      'log.clipEmpty': 'Clipboard is empty',
+      'log.clipPasted': 'Subscription URL pasted',
+      'log.clipReadFail': 'Cannot read clipboard; paste manually',
+      'log.adblockOn': 'AdBlock enabled',
+      'log.adblockOff': 'AdBlock disabled',
+      'log.importNone': 'No nodes parsed ({src})',
+      'log.importSrc': 'import',
+      'log.importedN': 'Imported {n} nodes',
+      'log.clipIsSub': 'Clipboard is a subscription URL; updating…',
+      'log.clipFail': 'Cannot read clipboard',
+      'log.fileIsSub': 'File is a subscription URL; updating…',
+      'log.fileReadFail': 'Failed to read file: {error}',
+      'log.imagePicked': 'Picked image “{name}” (no decoder in skeleton; use clipboard share links)',
+      'log.hiddenMenu': 'Hidden to menu bar',
+      'log.hideFail': 'Hide failed: {error}',
+      'log.hiddenTray': 'Window hidden to tray',
+      'log.showMain': 'Show main window',
+      'log.dlChina': 'Download profile · China (not wired)',
+      'log.dlIran': 'Download profile · Iran (not wired)',
+      'log.dlRussia': 'Download profile · Russia (not wired)',
+      'log.autostartOn': 'Launch at login on',
+      'log.autostartOff': 'Launch at login off',
+      'log.proxyOn': 'System proxy on',
+      'log.proxyOff': 'System proxy off',
+      'log.proxyErr': 'System proxy: {error}',
+      'log.proxyPac': 'System proxy: PAC mode',
+      'log.tunNicOn': 'Virtual NIC on',
+      'log.restartingCore': 'Restarting core…',
+      'log.restartingApp': 'Restarting app…',
+      'log.backendId': 'Backend {id} · {phase}',
+      'log.backendOffline': 'Backend not connected',
+      'log.localCfg': 'Local config {n} nodes · Tun {tun} · system proxy {proxy}',
+      'log.on': 'on',
+      'log.off': 'off',
+      'log.syncState': 'Connection state synced · {bits}',
+      'log.tunnelStill': 'tunnel still up',
+      'log.quitting': 'Disconnecting tunnel and quitting…',
+      'log.quitFail': 'Quit failed: {error}',
+      'log.quitOffline': 'Quit (offline)',
+      'log.tunSwitchFail': 'Tun switch failed',
+      'log.tunNoCfg': 'Tun saved, but current node has no config — reconnect to apply',
+      'log.tunRestartOn': 'Tun on · re-Start…',
+      'log.tunRestartOff': 'Tun off · re-Start…',
+      'log.tunRestartFail': 'Tun re-Start failed: {error}',
+      'log.tunApplied': 'Tun tunnel applied',
+      'log.tunBackProxy': 'Switched back to system proxy mode',
+      'log.groupAutoUp': '“{name}” auto-update subscription: {state}',
+      'log.importedNExtra': 'Imported {n} nodes{dedupe} · {src}',
+      'log.importDedupe': ' (deduped {n})',
+      'log.blockSavedManualMaybe': 'Saved but not applied; reconnect manually{error}',
       'menu.addClip': 'Add from Clipboard',
       'menu.addFile': 'Add from File',
       'menu.allowLan': 'Allow LAN',
@@ -8197,6 +8524,169 @@
       'edit.user': 'Имя пользователя',
       'log.clear': 'Очистить',
       'log.filterAll': 'Все',
+      'log.busy': 'Выполняется операция подключения…',
+      'log.startProfile': 'Start профиль <span class="node">{name}</span>',
+      'log.badShare': 'Недействительная ссылка узла (поддельный vmess/не UUID) — обновите подписку или импортируйте реальную ссылку с uuid; системный прокси пишется только после успешного Start',
+      'log.noCreds': 'У выбранного узла нет конфигурации (учётные данные не сохранены) — нажмите «Обновить» для повторной загрузки подписки',
+      'log.noRealLink': 'У выбранного узла нет реальной ссылки (демо-узлы не строят туннель) — импортируйте подписку или вставьте ссылку vless/trojan/ss/vmess',
+      'log.backendDown': 'Бэкенд не готов; нельзя запустить туннель',
+      'log.startFail': 'Start не удался: {error}',
+      'log.startNoOk': 'Start не выполнен',
+      'log.tunnelOn': 'Туннель запущен · mixed 127.0.0.1:{port} · {name}',
+      'log.stopProfile': 'Stop профиль <span class="node">{name}</span>',
+      'log.stopped': 'Отключено (Stop)',
+      'log.selectedN': 'Выбрано все {n} узлов',
+      'log.notConnected': 'Не подключено',
+      'log.noNode': 'Узел не выбран',
+      'log.deletedN': 'Удалено {n} узлов',
+      'log.resetTraffic': 'Трафик сброшен · {n} узлов',
+      'log.cloned': 'Клонировано: {name}',
+      'log.copiedLinkNamed': 'Ссылка скопирована · {name}',
+      'log.linkIs': 'Ссылка: {link}',
+      'log.noDupes': 'Нет дубликатов узлов',
+      'log.deduped': 'Дубликаты удалены · {n}',
+      'log.tunOn': 'Режим Tun включён',
+      'log.tunOff': 'Режим Tun выключен',
+      'log.removed0': '{label} · 0',
+      'log.removedN': '{label} · {n}',
+      'log.remove': 'Удалить',
+      'log.removed': 'Удалено',
+      'log.testBusy': 'Идёт тест задержки… (можно остановить)',
+      'log.noTestTargets': 'Нет узлов для теста (нет host:port)',
+      'log.testStart': '{label} · {n} узлов · TCP RTT напрямую (не через прокси)…',
+      'log.probeUnavailable': 'net_tcp_probe недоступен: {error}',
+      'log.testDone': '{label} готов · ok {ok} · fail {fail}{extra}',
+      'log.testStopped': ' (остановлено)',
+      'log.testNote': 'Примечание: TCP RTT напрямую до сервера, не URL-тест через прокси; Core Test RPC после Start()',
+      'log.exitIpBusy': 'Определение exit IP…',
+      'log.noValidAddr': 'В выбранной строке нет адреса',
+      'log.exitIpStart': 'Определение exit IP · {n}…',
+      'log.exitIpFail': 'Ошибка · {id}: {error}',
+      'log.noAddr': 'нет адреса',
+      'log.exitIpFallback': 'Пакетное определение недоступно; по одному…',
+      'log.exitIpDone': 'Exit IP готов · заменено {replaced} · fail {fail} · всего {done}',
+      'log.noTestJob': 'Нет активного теста',
+      'log.stoppingTest': 'Остановка теста…',
+      'log.clearedTests': 'Результаты теста очищены',
+      'log.subBusy': 'Обновление подписки…',
+      'log.groupsNotReady': 'Данные групп не готовы',
+      'log.noGroups': 'Нет доступных групп',
+      'log.noSubUrl': 'У группы нет URL подписки (Настройки → Подписка или правка группы)',
+      'log.subUpdating': 'Обновление подписки: {name}…',
+      'log.subUpdated': '«{name}» обновлена · +{add} −{del} · всего {total}',
+      'log.subFailKeep': '«{name}» ошибка: {error} · оставлено {n} узлов',
+      'log.subFail': 'Ошибка обновления подписки',
+      'log.subAllDone': 'Все подписки обновлены · {summary}',
+      'log.subException': 'Исключение обновления подписки: {error}',
+      'log.logCleared': 'Журнал очищен',
+      'log.nodeSaved': 'Узел сохранён: {name}',
+      'log.qrFail': 'Ошибка QR: {error}',
+      'log.noLinkCopy': 'Нет реальной ссылки для копирования',
+      'log.linkCopied': 'Ссылка скопирована',
+      'log.subStoreFail': 'Не удалось записать подписку в store: {error}',
+      'log.subRestored': 'Подписка восстановлена · {groups} групп · {n} узлов{src}{stripped}',
+      'log.demoStripped': ' · демо-узлы очищены',
+      'log.blockLoadFail': 'Не удалось загрузить блоклист: {error}',
+      'log.blockRefuseDel': 'Блоклист не загружен; удаление отклонено',
+      'log.blockRemoved': 'Запись блоклиста удалена',
+      'log.blockSavedLater': 'Идёт подключение; блоклист сохранён — переподключитесь позже',
+      'log.blockSavedManual': 'Сохранено, но не применено; переподключитесь вручную',
+      'log.blockApply': 'Применение блоклиста · перезагрузка',
+      'log.blockApplied': 'Правила блокировки применены',
+      'log.blockSavedManualErr': 'Сохранено, но не применено; переподключитесь: {error}',
+      'log.blockRefuseWrite': 'Блоклист не загружен; запись отклонена',
+      'log.blockBackendDown': 'Бэкенд не готов; нельзя сохранить блоклист',
+      'log.blockSaveFail': 'Не удалось сохранить блоклист',
+      'log.blockSaveFailErr': 'Не удалось сохранить блоклист: {error}',
+      'log.invalidAddr': 'Недействительный адрес',
+      'log.invalidProc': 'Недействительный путь процесса',
+      'log.invalidBlock': 'Недействительная запись блокировки',
+      'log.blockRefuseAdd': 'Блоклист не загружен; добавление отклонено',
+      'log.blockAlready1': 'Уже в блоклисте: {label}',
+      'log.blockAlreadyN': 'Уже в блоклисте ({n})',
+      'log.blockAdded1': 'Заблокировано: {label}',
+      'log.blockAddedN': 'Добавлено {n}{skip}',
+      'log.blockSkip': ' · пропущено существующих {n}',
+      'log.subSwitched': 'Подписка переключена: {name}',
+      'log.keepOneGroup': 'Оставьте хотя бы одну группу',
+      'log.groupDeleted': 'Группа удалена: {name}',
+      'log.nothingCopy': 'Нечего копировать',
+      'log.logCopied': 'Журнал скопирован',
+      'log.copyFail': 'Ошибка копирования',
+      'log.logSelectAll': 'Журнал выделен',
+      'log.procPathWait': 'Полный путь процесса ещё не готов; повторите',
+      'log.procPathWaitAlt': 'Путь процесса не готов; подождите или «Блок цели · все процессы»',
+      'log.copiedHost1': 'Скопирован домен/IP: {host}',
+      'log.copiedHostN': 'Скопировано {n} доменов/IP',
+      'log.copiedHost': 'Домен/IP скопирован',
+      'log.noConnCopy': 'Нет соединений для копирования',
+      'log.copiedRow1': 'Скопирована строка: {line}',
+      'log.copiedRowN': 'Скопировано {n} строк',
+      'log.copiedRow': 'Строка скопирована',
+      'log.skippedRows': 'Пропущено {n} строк (поля не готовы)',
+      'log.runtimeRefreshed': 'Статус выполнения обновлён',
+      'log.previewExported': 'Экспортирован Core generate_preview',
+      'log.previewFail': 'generate_preview ошибка: {error}',
+      'log.previewLocal': 'Экспорт локального черновика (не Core)',
+      'log.sbCopied': 'Конфиг Sing-box скопирован',
+      'log.groupNameEmpty': 'Имя группы не может быть пустым',
+      'log.groupNameDup': 'Группа с таким именем уже есть',
+      'log.groupCreated': 'Создана группа: {name}',
+      'log.groupRenamed': 'Переименовано: {name}',
+      'log.groupSaved': 'Группа сохранена: {name}{url}',
+      'log.subUrlHttp': 'URL подписки должен начинаться с http(s)://',
+      'log.subUrlSaved': 'URL подписки сохранён → {name}',
+      'log.subUrlCleared': 'URL подписки «{name}» очищен',
+      'log.clipEmpty': 'Буфер обмена пуст',
+      'log.clipPasted': 'URL подписки вставлен',
+      'log.clipReadFail': 'Не удалось прочитать буфер; вставьте вручную',
+      'log.adblockOn': 'AdBlock включён',
+      'log.adblockOff': 'AdBlock выключен',
+      'log.importNone': 'Узлы не разобраны ({src})',
+      'log.importSrc': 'импорт',
+      'log.importedN': 'Импортировано {n} узлов',
+      'log.clipIsSub': 'В буфере URL подписки; обновление…',
+      'log.clipFail': 'Не удалось прочитать буфер',
+      'log.fileIsSub': 'Файл — URL подписки; обновление…',
+      'log.fileReadFail': 'Не удалось прочитать файл: {error}',
+      'log.imagePicked': 'Выбрано изображение «{name}» (декодера нет; используйте ссылки из буфера)',
+      'log.hiddenMenu': 'Скрыто в строку меню',
+      'log.hideFail': 'Скрыть не удалось: {error}',
+      'log.hiddenTray': 'Окно скрыто в трей',
+      'log.showMain': 'Показать главное окно',
+      'log.dlChina': 'Скачать профиль · China (не подключено)',
+      'log.dlIran': 'Скачать профиль · Iran (не подключено)',
+      'log.dlRussia': 'Скачать профиль · Russia (не подключено)',
+      'log.autostartOn': 'Автозапуск включён',
+      'log.autostartOff': 'Автозапуск выключен',
+      'log.proxyOn': 'Системный прокси включён',
+      'log.proxyOff': 'Системный прокси выключен',
+      'log.proxyErr': 'Системный прокси: {error}',
+      'log.proxyPac': 'Системный прокси: режим PAC',
+      'log.tunNicOn': 'Виртуальный NIC включён',
+      'log.restartingCore': 'Перезапуск ядра…',
+      'log.restartingApp': 'Перезапуск приложения…',
+      'log.backendId': 'Бэкенд {id} · {phase}',
+      'log.backendOffline': 'Бэкенд не подключён',
+      'log.localCfg': 'Локальная конфигурация {n} узлов · Tun {tun} · системный прокси {proxy}',
+      'log.on': 'вкл',
+      'log.off': 'выкл',
+      'log.syncState': 'Состояние синхронизировано · {bits}',
+      'log.tunnelStill': 'туннель ещё активен',
+      'log.quitting': 'Отключение туннеля и выход…',
+      'log.quitFail': 'Выход не удался: {error}',
+      'log.quitOffline': 'Выход (офлайн)',
+      'log.tunSwitchFail': 'Сбой переключения Tun',
+      'log.tunNoCfg': 'Tun сохранён, но у узла нет конфигурации — переподключитесь',
+      'log.tunRestartOn': 'Tun вкл · повторный Start…',
+      'log.tunRestartOff': 'Tun выкл · повторный Start…',
+      'log.tunRestartFail': 'Tun re-Start ошибка: {error}',
+      'log.tunApplied': 'Туннель Tun применён',
+      'log.tunBackProxy': 'Возврат к системному прокси',
+      'log.groupAutoUp': '«{name}» автообновление подписки: {state}',
+      'log.importedNExtra': 'Импортировано {n} узлов{dedupe} · {src}',
+      'log.importDedupe': ' (без дублей {n})',
+      'log.blockSavedManualMaybe': 'Сохранено, но не применено; переподключитесь вручную{error}',
       'menu.addClip': 'Добавить из буфера',
       'menu.addFile': 'Добавить из файла',
       'menu.allowLan': 'Разрешить LAN',
@@ -8593,6 +9083,169 @@
       'edit.user': '使用者名稱',
       'log.clear': '清除',
       'log.filterAll': '全部',
+      'log.busy': '連線操作進行中…',
+      'log.startProfile': 'Start 設定檔 <span class="node">{name}</span>',
+      'log.badShare': '節點分享連結無效（偽 vmess/非 UUID）— 請「更新」訂閱或匯入含 uuid 的真實連結；系統代理僅在 Start 成功後寫入',
+      'log.noCreds': '選定節點無連線設定（訂閱解析未儲存憑證）— 請點「更新」重新拉取訂閱',
+      'log.noRealLink': '選定節點無真實分享連結（示範節點無法成隧道）— 請匯入訂閱或貼上 vless/trojan/ss/vmess 連結',
+      'log.backendDown': '後端未就緒，無法啟動隧道',
+      'log.startFail': 'Start 失敗：{error}',
+      'log.startNoOk': 'Start 未成功',
+      'log.tunnelOn': '隧道已啟動 · mixed 127.0.0.1:{port} · {name}',
+      'log.stopProfile': 'Stop 設定檔 <span class="node">{name}</span>',
+      'log.stopped': '已中斷（Stop）',
+      'log.selectedN': '已全選 {n} 個節點',
+      'log.notConnected': '目前未連線',
+      'log.noNode': '未選定節點',
+      'log.deletedN': '已刪除 {n} 個節點',
+      'log.resetTraffic': '已重設流量 · {n} 個節點',
+      'log.cloned': '已複製：{name}',
+      'log.copiedLinkNamed': '已複製連結 · {name}',
+      'log.linkIs': '連結：{link}',
+      'log.noDupes': '無重複節點',
+      'log.deduped': '已去除重複節點 · {n} 個',
+      'log.tunOn': '已開啟 Tun 模式',
+      'log.tunOff': '已關閉 Tun 模式',
+      'log.removed0': '{label} · 0 個',
+      'log.removedN': '{label} · {n} 個',
+      'log.remove': '移除',
+      'log.removed': '已移除',
+      'log.testBusy': '測速進行中…（可點停止）',
+      'log.noTestTargets': '無可測試節點（缺 host:port）',
+      'log.testStart': '{label} · {n} 個節點 · TCP 直連 RTT（非代理路徑）…',
+      'log.probeUnavailable': 'net_tcp_probe 不可用：{error}',
+      'log.testDone': '{label}完成 · 通 {ok} · 失敗 {fail}{extra}',
+      'log.testStopped': '（已停止）',
+      'log.testNote': '說明：目前為 TCP 連通 RTT（直連伺服器），非代理路徑 URL 測試；Core Test RPC 待 Start() 後接入',
+      'log.exitIpBusy': '出口 IP 解析進行中…',
+      'log.noValidAddr': '選定列無有效位址',
+      'log.exitIpStart': '解析出口 IP · {n} 個…',
+      'log.exitIpFail': '解析失敗 · {id}：{error}',
+      'log.noAddr': '無位址',
+      'log.exitIpFallback': '批次解析不可用，回退逐條…',
+      'log.exitIpDone': '出口 IP 完成 · 替換 {replaced} · 失敗 {fail} · 共 {done}',
+      'log.noTestJob': '目前無測速任務',
+      'log.stoppingTest': '正在停止測速…',
+      'log.clearedTests': '已清理測試結果',
+      'log.subBusy': '訂閱更新進行中…',
+      'log.groupsNotReady': '分組資料未就緒',
+      'log.noGroups': '無可用分組',
+      'log.noSubUrl': '目前分組無訂閱連結（設定 → 訂閱 中填寫，或編輯分組）',
+      'log.subUpdating': '正在更新訂閱：{name}…',
+      'log.subUpdated': '「{name}」已更新 · +{add} −{del} · 共 {total}',
+      'log.subFailKeep': '「{name}」更新失敗：{error} · 保留 {n} 節點',
+      'log.subFail': '訂閱更新失敗',
+      'log.subAllDone': '全部訂閱更新完成 · {summary}',
+      'log.subException': '訂閱更新異常：{error}',
+      'log.logCleared': '日誌已清空',
+      'log.nodeSaved': '已儲存節點：{name}',
+      'log.qrFail': '二維碼產生失敗：{error}',
+      'log.noLinkCopy': '無真實連結可複製',
+      'log.linkCopied': '已複製連結',
+      'log.subStoreFail': '訂閱寫入 store 失敗：{error}',
+      'log.subRestored': '已恢復訂閱 · {groups} 組 · {n} 節點{src}{stripped}',
+      'log.demoStripped': ' · 已清空示範節點',
+      'log.blockLoadFail': '讀取攔截列表失敗：{error}',
+      'log.blockRefuseDel': '攔截列表未載入，拒絕刪除以免清空',
+      'log.blockRemoved': '已移除攔截項',
+      'log.blockSavedLater': '連線操作進行中，攔截列表已儲存，稍後手動重連以生效',
+      'log.blockSavedManual': '已記錄但設定未生效，請手動重連',
+      'log.blockApply': '套用攔截列表 · 重載設定',
+      'log.blockApplied': '攔截規則已套用',
+      'log.blockSavedManualErr': '已記錄但設定未生效，請手動重連：{error}',
+      'log.blockRefuseWrite': '攔截列表未載入，拒絕寫入以免清空',
+      'log.blockBackendDown': '後端未就緒，無法儲存攔截列表',
+      'log.blockSaveFail': '儲存攔截列表失敗',
+      'log.blockSaveFailErr': '儲存攔截列表失敗：{error}',
+      'log.invalidAddr': '無效位址',
+      'log.invalidProc': '無效行程路徑',
+      'log.invalidBlock': '無效攔截項',
+      'log.blockRefuseAdd': '攔截列表未載入，拒絕新增以免清空',
+      'log.blockAlready1': '已在攔截列表：{label}',
+      'log.blockAlreadyN': '已在攔截列表（{n}）',
+      'log.blockAdded1': '已新增攔截：{label}',
+      'log.blockAddedN': '本次新增 {n}{skip}',
+      'log.blockSkip': ' · 已有跳過 {n}',
+      'log.subSwitched': '已切換訂閱：{name}',
+      'log.keepOneGroup': '至少保留一個分組',
+      'log.groupDeleted': '已刪除分組：{name}',
+      'log.nothingCopy': '無可複製內容',
+      'log.logCopied': '已複製日誌',
+      'log.copyFail': '複製失敗',
+      'log.logSelectAll': '已全選日誌',
+      'log.procPathWait': '完整行程路徑尚未就緒，請稍候再試',
+      'log.procPathWaitAlt': '完整行程路徑尚未就緒，請稍候再試或改用「攔截目標 · 全部行程」',
+      'log.copiedHost1': '已複製網域/IP：{host}',
+      'log.copiedHostN': '已複製 {n} 個網域/IP',
+      'log.copiedHost': '已複製網域/IP',
+      'log.noConnCopy': '無可複製連線',
+      'log.copiedRow1': '已複製整列：{line}',
+      'log.copiedRowN': '已複製 {n} 列',
+      'log.copiedRow': '已複製整列',
+      'log.skippedRows': '已跳過 {n} 列（欄位未就緒）',
+      'log.runtimeRefreshed': '已重新整理執行狀態',
+      'log.previewExported': '已匯出 Core generate_preview',
+      'log.previewFail': 'generate_preview 失敗：{error}',
+      'log.previewLocal': '匯出為本地草圖（非 Core）',
+      'log.sbCopied': '已複製 Sing-box 設定',
+      'log.groupNameEmpty': '分組名稱不能為空',
+      'log.groupNameDup': '已存在同名分組',
+      'log.groupCreated': '已新建分組：{name}',
+      'log.groupRenamed': '已重新命名：{name}',
+      'log.groupSaved': '已儲存分組：{name}{url}',
+      'log.subUrlHttp': '訂閱連結需以 http(s):// 開頭',
+      'log.subUrlSaved': '已儲存訂閱連結 → {name}',
+      'log.subUrlCleared': '已清空「{name}」訂閱連結',
+      'log.clipEmpty': '剪貼簿為空',
+      'log.clipPasted': '已貼上訂閱連結',
+      'log.clipReadFail': '無法讀取剪貼簿，請手動貼上',
+      'log.adblockOn': '已啟用 AdBlock',
+      'log.adblockOff': '已關閉 AdBlock',
+      'log.importNone': '未解析到節點（{src}）',
+      'log.importSrc': '匯入',
+      'log.importedN': '已匯入 {n} 個節點',
+      'log.clipIsSub': '剪貼簿為訂閱連結，開始更新…',
+      'log.clipFail': '無法讀取剪貼簿',
+      'log.fileIsSub': '檔案為訂閱連結，開始更新…',
+      'log.fileReadFail': '讀取檔案失敗：{error}',
+      'log.imagePicked': '已選擇圖片「{name}」（骨架未含解碼庫，請改用剪貼簿分享連結）',
+      'log.hiddenMenu': '已隱藏到選單列',
+      'log.hideFail': '隱藏失敗：{error}',
+      'log.hiddenTray': '視窗已隱藏到匣',
+      'log.showMain': '顯示主視窗',
+      'log.dlChina': '下載設定檔 · China（未接線）',
+      'log.dlIran': '下載設定檔 · Iran（未接線）',
+      'log.dlRussia': '下載設定檔 · Russia（未接線）',
+      'log.autostartOn': '已開啟隨系統啟動',
+      'log.autostartOff': '已關閉隨系統啟動',
+      'log.proxyOn': '已開啟系統代理',
+      'log.proxyOff': '已關閉系統代理',
+      'log.proxyErr': '系統代理：{error}',
+      'log.proxyPac': '系統代理：PAC 模式',
+      'log.tunNicOn': '已開啟虛擬網卡',
+      'log.restartingCore': '正在重新啟動核心…',
+      'log.restartingApp': '正在重新啟動程式…',
+      'log.backendId': '後端 {id} · {phase}',
+      'log.backendOffline': '後端未連線',
+      'log.localCfg': '本地設定 {n} 節點 · Tun {tun} · 系統代理 {proxy}',
+      'log.on': '開',
+      'log.off': '關',
+      'log.syncState': '已同步連線狀態 · {bits}',
+      'log.tunnelStill': '隧道仍在',
+      'log.quitting': '正在中斷隧道並結束…',
+      'log.quitFail': '結束失敗：{error}',
+      'log.quitOffline': '結束（離線）',
+      'log.tunSwitchFail': 'Tun 切換失敗',
+      'log.tunNoCfg': 'Tun 已記錄，但目前節點無連線設定 — 請重新連線以套用',
+      'log.tunRestartOn': 'Tun 開啟 · 重新 Start…',
+      'log.tunRestartOff': 'Tun 關閉 · 重新 Start…',
+      'log.tunRestartFail': 'Tun re-Start 失敗：{error}',
+      'log.tunApplied': 'Tun 隧道已套用',
+      'log.tunBackProxy': '已切回系統代理模式',
+      'log.groupAutoUp': '「{name}」自動更新訂閱：{state}',
+      'log.importedNExtra': '已匯入 {n} 個節點{dedupe} · {src}',
+      'log.importDedupe': '（去重 {n}）',
+      'log.blockSavedManualMaybe': '已記錄但設定未生效，請手動重連{error}',
       'menu.addClip': '從剪貼簿新增設定',
       'menu.addFile': '從檔案新增設定',
       'menu.allowLan': '允許區網連線',
@@ -9284,7 +9937,7 @@
   }
   function addNodesToCurrent(nodes, src) {
     if (!nodes || !nodes.length) {
-      log('SYS', 'warn', '未解析到节点（' + (src || '导入') + '）');
+      log('SYS', 'warn', t('log.importNone', { src: src || t('log.importSrc') }));
       return 0;
     }
     const gid = currentGid();
@@ -9305,13 +9958,13 @@
     if (g) g.count = prof.nodes.length;
     if (typeof renderNodes === 'function') renderNodes(gid);
     if (typeof saveCatalog === 'function') saveCatalog(true);
-    log('SYS', 'ok', `已导入 ${added} 个节点` + (added < nodes.length ? `（去重 ${nodes.length - added}）` : '') + ' · ' + (src || ''));
+    log('SYS', 'ok', t('log.importedNExtra', { n: added, dedupe: added < nodes.length ? t('log.importDedupe', { n: nodes.length - added }) : '', src: src || '' }));
     return added;
   }
   async function importFromClipboard() {
     try {
       const text = (await navigator.clipboard.readText()).trim();
-      if (!text) { log('SYS', 'warn', '剪贴板为空'); return; }
+      if (!text) { log('SYS', 'warn', t('log.clipEmpty')); return; }
       // if looks like subscription URL, AsyncUpdate(url)
       if (/^https?:\/\//i.test(text) && !text.includes('\n') && text.length < 500) {
         const gid = currentGid();
@@ -9320,7 +9973,7 @@
           g.url = text.trim();
           if (typeof saveCatalog === 'function') saveCatalog(true);
           if (typeof syncSubUrlField === 'function') syncSubUrlField();
-          log('SYS', 'info', '剪贴板为订阅链接，开始更新…');
+          log('SYS', 'info', t('log.clipIsSub'));
           await updateSubscription(gid);
           return;
         }
@@ -9328,7 +9981,7 @@
       const nodes = parseShareLines(text);
       addNodesToCurrent(nodes, '剪贴板');
     } catch (_) {
-      log('SYS', 'warn', '无法读取剪贴板');
+      log('SYS', 'warn', t('log.clipFail'));
     }
   }
   function importFromFile() {
@@ -9349,7 +10002,7 @@
           if (g) {
             g.url = text.trim();
             if (typeof saveCatalog === 'function') saveCatalog(true);
-            log('SYS', 'info', '文件为订阅链接，开始更新…');
+            log('SYS', 'info', t('log.fileIsSub'));
             await updateSubscription(gid);
             return;
           }
@@ -9358,7 +10011,7 @@
         let nodes = parseSubscriptionBody(text);
         addNodesToCurrent(nodes, f.name);
       } catch (err) {
-        log('SYS', 'warn', '读取文件失败：' + (err && err.message || err));
+        log('SYS', 'warn', t('log.fileReadFail', { error: err && err.message || err }));
       }
     });
     input.click();
@@ -9374,7 +10027,7 @@
       const f = input.files && input.files[0];
       input.remove();
       if (!f) return;
-      log('SYS', 'info', '已选择图片「' + f.name + '」（骨架未含解码库，请改用剪贴板分享链接）');
+      log('SYS', 'info', t('log.imagePicked', { name: f.name }));
     });
     input.click();
   }
@@ -9385,29 +10038,29 @@
       hide: async () => {
         try {
           const w = window.__TAURI__?.window?.getCurrentWindow?.();
-          if (w) { await w.hide(); log('SYS', 'info', '已隐藏到菜单栏'); return; }
-        } catch (e) { log('SYS', 'warn', '隐藏失败: ' + e); }
-        log('SYS', 'info', '窗口已隐藏到托盘');
+          if (w) { await w.hide(); log('SYS', 'info', t('log.hiddenMenu')); return; }
+        } catch (e) { log('SYS', 'warn', t('log.hideFail', { error: e })); }
+        log('SYS', 'info', t('log.hiddenTray'));
       },
       show: async () => {
         try {
           const w = window.__TAURI__?.window?.getCurrentWindow?.();
           if (w) { await w.show(); await w.setFocus(); return; }
         } catch (_) {}
-        log('SYS', 'info', '显示主窗口');
+        log('SYS', 'info', t('log.showMain'));
       },
       'add-clip': () => { importFromClipboard(); },
       'add-file': () => { importFromFile(); },
       'scan-qr': () => { importScanQr(); },
-      'dl-china': () => log('SYS', 'ok', '下载配置档 · China（未接线）'),
-      'dl-iran': () => log('SYS', 'ok', '下载配置档 · Iran（未接线）'),
-      'dl-russia': () => log('SYS', 'ok', '下载配置档 · Russia（未接线）'),
+      'dl-china': () => log('SYS', 'ok', t('log.dlChina')),
+      'dl-iran': () => log('SYS', 'ok', t('log.dlIran')),
+      'dl-russia': () => log('SYS', 'ok', t('log.dlRussia')),
       'toggle-autostart': () => {
         const item = document.querySelector('[data-act="toggle-autostart"]');
         const on = !item.classList.contains('checked');
         item.classList.toggle('checked', on);
         item.querySelector('.check').textContent = on ? '✓' : '';
-        log('SYS', 'info', on ? '已开启随系统启动' : '已关闭随系统启动');
+        log('SYS', 'info', on ? t('log.autostartOn') : t('log.autostartOff'));
       },
       'toggle-remember': () => {
         const item = document.querySelector('[data-act="toggle-remember"]');
@@ -9425,31 +10078,31 @@
         document.getElementById('sysToggle').checked = true;
         document.getElementById('sysChip').classList.add('on');
         nexusInvoke('set_system_proxy_cmd', { enabled: true }).then(r => {
-          if (r.ok) log('SYS', 'info', String(r.data || '已开启系统代理'));
-          else if (!r.offline && r.error) log('SYS', 'warn', `系统代理: ${r.error}`);
-          else log('SYS', 'info', '已开启系统代理');
+          if (r.ok) log('SYS', 'info', String(r.data || t('log.proxyOn')));
+          else if (!r.offline && r.error) log('SYS', 'warn', t('log.proxyErr', { error: r.error }));
+          else log('SYS', 'info', t('log.proxyOn'));
         });
       },
       'proxy-off': () => {
         document.getElementById('sysToggle').checked = false;
         document.getElementById('sysChip').classList.remove('on');
         nexusInvoke('set_system_proxy_cmd', { enabled: false }).then(r => {
-          if (r.ok) log('SYS', 'info', String(r.data || '已关闭系统代理'));
-          else if (!r.offline && r.error) log('SYS', 'warn', `系统代理: ${r.error}`);
-          else log('SYS', 'info', '已关闭系统代理');
+          if (r.ok) log('SYS', 'info', String(r.data || t('log.proxyOff')));
+          else if (!r.offline && r.error) log('SYS', 'warn', t('log.proxyErr', { error: r.error }));
+          else log('SYS', 'info', t('log.proxyOff'));
         });
       },
-      'proxy-pac': () => log('SYS', 'info', '系统代理：PAC 模式'),
+      'proxy-pac': () => log('SYS', 'info', t('log.proxyPac')),
       'tun-on': () => {
         if (typeof applyTun === 'function') applyTun(true);
         else {
           document.getElementById('tunToggle').checked = true;
           document.getElementById('tunChip').classList.add('on');
-          log('SYS', 'info', '已开启虚拟网卡');
+          log('SYS', 'info', t('log.tunNicOn'));
         }
       },
-      'restart-core': () => log('CORE', 'warn', '正在重启核心…'),
-      'restart-app': () => log('SYS', 'warn', '正在重启程序…'),
+      'restart-core': () => log('CORE', 'warn', t('log.restartingCore')),
+      'restart-app': () => log('SYS', 'warn', t('log.restartingApp')),
       connect: () => powerBtn.click(),
       'open-settings': () => {
         document.querySelectorAll('.sidebar .side-item').forEach(b => {
@@ -9514,8 +10167,8 @@
       }
     } catch (_) {}
     const id = await nexusInvoke('app_identity');
-    if (id.ok) log('SYS', 'info', `后端 ${id.data?.identifier || 'Nexus'} · ${id.data?.phase || ''}`);
-    else log('SYS', 'warn', '后端未连接');
+    if (id.ok) log('SYS', 'info', t('log.backendId', { id: id.data?.identifier || 'Nexus', phase: id.data?.phase || '' }));
+    else log('SYS', 'warn', t('log.backendOffline'));
     const st = await nexusInvoke('store_snapshot');
     if (st.ok) {
       const d = st.data || {};
@@ -9531,7 +10184,7 @@
           if (g && Array.isArray(g.nodes)) n += g.nodes.length;
         }
       }
-      log('SYS', 'info', `本地配置 ${n} 节点 · Tun ${d.tun ? '开' : '关'} · 系统代理 ${d.system_proxy ? '开' : '关'}`);
+      log('SYS', 'info', t('log.localCfg', { n, tun: d.tun ? t('log.on') : t('log.off'), proxy: d.system_proxy ? t('log.on') : t('log.off') }));
     }
     // Power sync: residual Core/mixed/utun after quit/crash → paint 已连接 (not dead chrome).
     try {
@@ -9559,7 +10212,7 @@
         if (d.process_alive) bits.push('Core 进程');
         if (d.mixed_open) bits.push('mixed:2080');
         if (d.rpc_running) bits.push('RPC');
-        log('OK', 'ok', '已同步连接状态 · ' + (bits.join(' · ') || '隧道仍在'));
+        log('OK', 'ok', t('log.syncState', { bits: bits.join(' · ') || t('log.tunnelStill') }));
       }
     } catch (_) {}
     if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
@@ -9594,10 +10247,10 @@
     if (typeof setConnected === 'function') setConnected(false);
     try { localStorage.removeItem('nexus.lastConnected'); } catch (_) {}
     if (typeof stopConnPoll === 'function') stopConnPoll();
-    log('SYS', 'warn', '正在断开隧道并退出…');
+    log('SYS', 'warn', t('log.quitting'));
     const r = await nexusInvoke('app_quit', { force: true });
-    if (r && !r.ok && !r.offline) log('SYS', 'warn', '退出失败: ' + (r.error || ''));
-    else if (r && r.offline) log('SYS', 'warn', '退出（离线）');
+    if (r && !r.ok && !r.offline) log('SYS', 'warn', t('log.quitFail', { error: r.error || '' }));
+    else if (r && r.offline) log('SYS', 'warn', t('log.quitOffline'));
   }
   document.getElementById('quitCancel')?.addEventListener('click', () => {
     const mask = document.getElementById('quitMask');
@@ -9619,7 +10272,7 @@
       if (!r.ok) {
         // elevate cancel / fail → revert chip
         setChipOn('tunToggle', 'tunChip', !on);
-        log('SYS', 'warn', r.error || 'Tun 切换失败');
+        log('SYS', 'warn', r.error || t('log.tunSwitchFail'));
         return;
       }
       const d = r.data;
@@ -9630,10 +10283,10 @@
         const name = (typeof connectedName !== 'undefined' && connectedName) || selectedName;
         const payload = (typeof nodeConnectPayload === 'function') ? nodeConnectPayload(name) : null;
         if (!payload) {
-          log('SYS', 'warn', 'Tun 已记录，但当前节点无连接配置 — 请重新连接以应用');
+          log('SYS', 'warn', t('log.tunNoCfg'));
           return;
         }
-        log('CORE', 'info', on ? 'Tun 开启 · 重新 Start…' : 'Tun 关闭 · 重新 Start…');
+        log('CORE', 'info', on ? t('log.tunRestartOn') : t('log.tunRestartOff'));
         const cr = await nexusInvoke('connect_selected', Object.assign({
           profile_id: 1,
           tun: !!on,
@@ -9641,7 +10294,7 @@
         }, payload));
         if (!cr || cr.offline) return;
         if (!cr.ok) {
-          log('CORE', 'warn', `Tun re-Start 失败: ${cr.error}`);
+          log('CORE', 'warn', t('log.tunRestartFail', { error: cr.error }));
           return;
         }
         if (cr.data?.start_error) {
@@ -9653,7 +10306,7 @@
           // Core box recreated — re-baseline QueryStats; keep per-node totals.
           _coreBaseUp = null;
           _coreBaseDown = null;
-          log('OK', 'ok', on ? 'Tun 隧道已应用' : '已切回系统代理模式');
+          log('OK', 'ok', on ? t('log.tunApplied') : t('log.tunBackProxy'));
           if (cr.data?.proxy_note) log('SYS', 'info', cr.data.proxy_note);
         }
       }
@@ -9664,7 +10317,7 @@
     document.getElementById('sysChip')?.classList.toggle('on', on);
     nexusInvoke('set_system_proxy_cmd', { enabled: on }).then(r => {
       if (r.ok) log('SYS', 'info', String(r.data));
-      else if (!r.offline && r.error) log('SYS', 'warn', `系统代理: ${r.error}`);
+      else if (!r.offline && r.error) log('SYS', 'warn', t('log.proxyErr', { error: r.error }));
       if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
     });
   });

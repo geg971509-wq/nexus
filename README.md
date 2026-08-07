@@ -7,7 +7,7 @@ Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box 
 | Item | Value |
 |------|--------|
 | Product | Nexus |
-| Version | 0.2.2 |
+| Version | 0.2.3 |
 | Bundle ID | `app.nexus.desktop` |
 | Deeplink | `nexus://` |
 | Core binary | `NexusCore` (framed IPC) |
@@ -78,7 +78,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 cd app && npm run tauri dev
 ```
 
-## Capabilities (0.2.2)
+## Capabilities (0.2.3)
 
 - Connect: selected node → generate → Core `Start` (share link or outbound JSON)
 - Tun chip + system proxy; exit clears OS proxy on `:2080` and stops Core
@@ -87,9 +87,14 @@ cd app && npm run tauri dev
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled 连通 (not proxy path test)
 - **拦截:** sidebar list + connection right-click three scopes (目标·全部进程 / 目标·仅此应用 / 应用·全部连接 by full executable path); multi-select bulk block (one put / one reconnect); store → `domain_suffix` / IP / process-only reject on generate; apply reconnects when connected
 - Connection table: merge by Core id, multi-select like nodes (bulk block / copy), process + PID columns
+- **i18n:** UI chrome + runtime log panel in `zh-CN` / `en` / `ru` / `zh-TW` (live language switch)
 - Advanced routing/DNS settings hidden until generate is wired to them
 - Windows: elevated shell, no console flash on helper spawns
 
 ## Status
 
 Operational for **macOS arm64** and **Windows x86_64** internal use. Not a notarized App Store / public-download build.
+
+## License
+
+Proprietary — use and modify allowed; **redistribution / re-release is not permitted**. See [`LICENSE`](LICENSE).
