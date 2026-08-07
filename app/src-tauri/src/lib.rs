@@ -545,6 +545,7 @@ async fn query_connections() -> Result<serde_json::Value, String> {
                     "created_at": r.created_at,
                     "process": r.process,
                     "process_path": r.process_path,
+                    "process_id": r.process_id,
                     "dest": r.dest,
                     "domain": r.domain,
                     "network": r.network,

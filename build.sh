@@ -101,6 +101,8 @@ log "building NexusCore macOS (go · tags=$CORE_TAGS_MAC)…"
   cd "$CORE_SRC"
   go mod download
   go mod verify
+  # throng darwin searcher had pid but left ConnectionOwner.ProcessID=0
+  python3 "$ROOT/script/patches/sing-box-darwin-process-id.py" || true
 
   VERSION_SINGBOX="$(go list -m -f '{{.Version}}' github.com/sagernet/sing-box)"
   [[ -n "$VERSION_SINGBOX" ]] || die "could not resolve github.com/sagernet/sing-box version from go.mod"

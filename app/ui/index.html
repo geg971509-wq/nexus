@@ -2978,7 +2978,7 @@
   <div class="confirm-mask" id="exportMask" role="dialog" aria-modal="true" aria-labelledby="exportTitle" hidden>
     <div class="confirm-card wide">
       <h3 id="exportTitle">导出 Sing-box 配置</h3>
-      <p style="margin:0 0 8px;font-size:12.5px;color:var(--secondary)">当前运行配置预览（示意，可复制）</p>
+      <p style="margin:0 0 8px;font-size:12.5px;color:var(--secondary)">当前运行配置预览（可复制）</p>
       <pre class="export-pre" id="exportPre"></pre>
       <div class="confirm-actions">
         <button type="button" class="btn-ghost" id="exportClose">关闭</button>
@@ -3631,7 +3631,7 @@
         },
         'copy-link': () => {
           const link = nodeShareLink(one);
-          copyText(link).then(() => log('SYS', 'ok', '已复制链接 · ' + one)).catch(() => log('SYS', 'ok', '链接（示意）：' + link));
+          copyText(link).then(() => log('SYS', 'ok', '已复制链接 · ' + one)).catch(() => log('SYS', 'ok', '链接：' + link));
         },
         'show-qr': () => openQrDialog(one),
         dedupe: () => {
@@ -5740,7 +5740,7 @@
           ? sel.toString()
           : logPlainText(logPanel);
         if (!text) { log('SYS', 'info', '无可复制内容'); return; }
-        copyText(text).then(() => log('SYS', 'ok', '已复制日志')).catch(() => log('SYS', 'info', '复制失败（示意）'));
+        copyText(text).then(() => log('SYS', 'ok', '已复制日志')).catch(() => log('SYS', 'info', '复制失败'));
       } else if (act === 'select-all') {
         const range = document.createRange();
         range.selectNodeContents(logPanel);
@@ -5849,12 +5849,12 @@
         const host = hostFromConnRow(connCtxRow);
         if (!host) { log('SYS', 'warn', '无效地址'); return; }
         copyText(host).then(() => log('SYS', 'ok', '已复制域名/IP：' + host))
-          .catch(() => log('SYS', 'ok', '已复制域名/IP（示意）'));
+          .catch(() => log('SYS', 'ok', '已复制域名/IP'));
       } else if (act === 'copy-row') {
         const text = connRowText(connCtxRow);
         if (!text) { log('SYS', 'info', '无可复制连接'); return; }
         copyText(text).then(() => log('SYS', 'ok', '已复制整行：' + text.replace(/\t/g, ' · ')))
-          .catch(() => log('SYS', 'ok', '已复制整行（示意）'));
+          .catch(() => log('SYS', 'ok', '已复制整行'));
       } else if (act === 'block-any' || act === 'block-proc') {
         const host = hostFromConnRow(connCtxRow);
         if (!host) {
@@ -5899,6 +5899,8 @@
   // ——— connection table: Core QueryConnections → rows ———
   let connSortKey = null, connSortDir = 1;
   let connPollTimer = null;
+  // empty snapshots during Core Stop/Start can be brief; require 2 in a row while connected
+  let connEmptyStreak = 0;
   function fmtBytes(n) {
     n = Number(n) || 0;
     if (n < 1024) return n + ' B';
@@ -5919,35 +5921,96 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
   }
+  /** Stable row key: Core connection id; composite fallback if id missing. */
+  function connRowKey(c) {
+    const id = String(c?.id ?? '').trim();
+    if (id) return id;
+    const pid = Number(c?.process_id) || 0;
+    return `_${Number(c?.created_at) || 0}|${c?.domain || c?.dest || ''}|${c?.process || ''}|${pid}|${c?.network || ''}|${c?.protocol || ''}|${c?.outbound || ''}`;
+  }
+  function paintConnRow(tr, c, key) {
+    const tms = Number(c.created_at) || 0;
+    const time = fmtConnTime(tms);
+    const base = c.process || '—';
+    const pid = Number(c.process_id) || 0;
+    // show OS PID so multi-instance same basename is distinguishable
+    const app = pid > 0 ? `${base} · ${pid}` : base;
+    const procPath = (c.process_path && String(c.process_path).trim()) || '';
+    const dest = c.domain || c.dest || '—';
+    let proto = c.network || '';
+    if (c.protocol) proto = proto ? `${proto} (${c.protocol})` : c.protocol;
+    if (!proto) proto = '—';
+    const out = c.outbound || '—';
+    const up = Number(c.upload) || 0;
+    const down = Number(c.download) || 0;
+    const flow = `${fmtBytes(up)}↑ ${fmtBytes(down)}↓`;
+    const flowBytes = up + down;
+    tr.dataset.id = key;
+    tr.dataset.time = String(tms);
+    tr.dataset.app = app;
+    tr.dataset.pid = pid > 0 ? String(pid) : '';
+    tr.dataset.proc = procPath;
+    tr.dataset.dest = dest;
+    tr.dataset.proto = proto;
+    tr.dataset.out = out;
+    tr.dataset.flow = String(flowBytes);
+    tr.title = procPath
+      ? (pid > 0 ? `${procPath} (pid ${pid})` : procPath)
+      : (pid > 0 ? `${base} (pid ${pid})` : base);
+    if (tr.cells.length !== 6) {
+      tr.innerHTML =
+        `<td class="time">${escHtml(time)}</td>` +
+        `<td class="app">${escHtml(app)}</td>` +
+        `<td>${escHtml(dest)}</td>` +
+        `<td>${escHtml(proto)}</td>` +
+        `<td class="rule">${escHtml(out)}</td>` +
+        `<td>${escHtml(flow)}</td>`;
+      return;
+    }
+    const put = (i, text) => {
+      if (tr.cells[i].textContent !== text) tr.cells[i].textContent = text;
+    };
+    put(0, time);
+    put(1, app);
+    put(2, dest);
+    put(3, proto);
+    put(4, out);
+    put(5, flow);
+  }
+  /**
+   * Diff/merge connection table by stable id:
+   * add new, update existing in place, remove missing, never full wipe-rebuild.
+   * Empty snapshot → clear (truthful). Query failure must not call this.
+   */
   function renderConnections(list) {
     const tb = document.getElementById('connTable');
     if (!tb) return;
-    const rows = Array.isArray(list) ? list : [];
-    if (!rows.length) {
-      tb.innerHTML = '';
+    const raw = Array.isArray(list) ? list : [];
+    // last-wins dedupe so Core/active+closed never paints two rows for one id
+    const byKey = new Map();
+    for (const c of raw) byKey.set(connRowKey(c), c);
+    if (!byKey.size) {
+      if (tb.rows.length) tb.innerHTML = '';
       return;
     }
-    tb.innerHTML = rows.map(c => {
-      const tms = Number(c.created_at) || 0;
-      const time = fmtConnTime(tms);
-      const app = c.process || '—';
-      const procPath = (c.process_path && String(c.process_path).trim()) || '';
-      const dest = c.domain || c.dest || '—';
-      let proto = c.network || '';
-      if (c.protocol) proto = proto ? `${proto} (${c.protocol})` : c.protocol;
-      if (!proto) proto = '—';
-      const out = c.outbound || '—';
-      const flow = `${fmtBytes(c.upload)}↑ ${fmtBytes(c.download)}↓`;
-      const flowBytes = (Number(c.upload) || 0) + (Number(c.download) || 0);
-      return `<tr data-id="${escHtml(c.id || '')}" data-time="${tms}" data-app="${escHtml(app)}" data-proc="${escHtml(procPath)}" data-dest="${escHtml(dest)}" data-proto="${escHtml(proto)}" data-out="${escHtml(out)}" data-flow="${flowBytes}" title="${escHtml(procPath || app)}">
-        <td class="time">${escHtml(time)}</td>
-        <td class="app">${escHtml(app)}</td>
-        <td>${escHtml(dest)}</td>
-        <td>${escHtml(proto)}</td>
-        <td class="rule">${escHtml(out)}</td>
-        <td>${escHtml(flow)}</td>
-      </tr>`;
-    }).join('');
+    const prev = new Map();
+    for (const tr of tb.querySelectorAll('tr')) {
+      const k = tr.dataset.id || '';
+      if (k) prev.set(k, tr);
+    }
+    const seen = new Set();
+    const frag = document.createDocumentFragment();
+    for (const [key, c] of byKey) {
+      seen.add(key);
+      let tr = prev.get(key);
+      if (!tr) tr = document.createElement('tr');
+      paintConnRow(tr, c, key);
+      frag.appendChild(tr);
+    }
+    for (const [key, tr] of prev) {
+      if (!seen.has(key)) tr.remove();
+    }
+    tb.appendChild(frag);
     if (connSortKey) sortConnTable(connSortKey, connSortDir);
   }
   /**
@@ -6037,6 +6100,7 @@
   }
   async function refreshConnections() {
     if (!connected) {
+      connEmptyStreak = 0;
       renderConnections([]);
       return;
     }
@@ -6047,10 +6111,30 @@
         // table body only when conn dock visible
         const open = dock?.classList.contains('open');
         const onConn = document.querySelector('.dock-tab.active')?.dataset?.panel === 'conn';
-        if (open && onConn) renderConnections(list);
+        const empty = !Array.isArray(list) || list.length === 0;
+        if (empty) {
+          connEmptyStreak += 1;
+          // hold last paint for one empty poll (~1.5s) during Core re-Start
+          if (open && onConn && connEmptyStreak >= 2) renderConnections([]);
+        } else {
+          connEmptyStreak = 0;
+          if (open && onConn) renderConnections(list);
+        }
         const st = document.getElementById('stConn');
-        if (st) st.textContent = String(r.data.count ?? list.length);
+        // count unique keys (same rule as table), not raw array length
+        let n = 0;
+        if (!empty && Array.isArray(list)) {
+          const ks = new Set();
+          for (const c of list) ks.add(connRowKey(c));
+          n = ks.size;
+        } else if (empty && connEmptyStreak < 2) {
+          n = document.getElementById('connTable')?.rows?.length || 0;
+        } else {
+          n = 0;
+        }
+        if (st) st.textContent = String(n);
       }
+      // mid-restart / core down: keep previous rows (do not wipe on throw or !ok)
       // Node 流量: Core QueryStats deltas → per-node cumulative (survives switch).
       try {
         const st = await nexusInvoke('query_stats');
@@ -6058,10 +6142,11 @@
           applyNodeFlow(st.data.upload, st.data.download);
         }
       } catch (_) { /* QueryStats optional if core mid-stop */ }
-    } catch (_) { /* offline / core down */ }
+    } catch (_) { /* offline / core down — keep last table */ }
   }
   function startConnPoll() {
-    stopConnPoll();
+    // restart timer only — do not wipe table (reconnect / setConnected re-entry)
+    if (connPollTimer) { clearInterval(connPollTimer); connPollTimer = null; }
     // Re-baseline Core only — never wipe per-node totals on switch/reconnect.
     _coreBaseUp = null;
     _coreBaseDown = null;
@@ -6073,7 +6158,8 @@
   }
   function stopConnPoll() {
     if (connPollTimer) { clearInterval(connPollTimer); connPollTimer = null; }
-    renderConnections([]);
+    connEmptyStreak = 0;
+    renderConnections([]); // real disconnect only
   }
   function parseConnFlow(row) {
     const t = row.dataset.flow;
@@ -6242,7 +6328,7 @@
   document.getElementById('exportClose')?.addEventListener('click', () => closeDialog('exportMask'));
   document.getElementById('exportCopy')?.addEventListener('click', () => {
     const t = document.getElementById('exportPre').textContent || '';
-    copyText(t).then(() => log('SYS', 'ok', '已复制 Sing-box 配置')).catch(() => log('SYS', 'info', '复制失败（示意）'));
+    copyText(t).then(() => log('SYS', 'ok', '已复制 Sing-box 配置')).catch(() => log('SYS', 'info', '复制失败'));
   });
   document.getElementById('exportMask')?.addEventListener('click', e => {
     if (e.target.id === 'exportMask') closeDialog('exportMask');
@@ -8244,7 +8330,7 @@
           const w = window.__TAURI__?.window?.getCurrentWindow?.();
           if (w) { await w.hide(); log('SYS', 'info', '已隐藏到菜单栏'); return; }
         } catch (e) { log('SYS', 'warn', '隐藏失败: ' + e); }
-        log('SYS', 'info', '窗口已隐藏到托盘（示意）');
+        log('SYS', 'info', '窗口已隐藏到托盘');
       },
       show: async () => {
         try {
@@ -8256,9 +8342,9 @@
       'add-clip': () => { importFromClipboard(); },
       'add-file': () => { importFromFile(); },
       'scan-qr': () => { importScanQr(); },
-      'dl-china': () => log('SYS', 'ok', '下载配置档 · China（示意）'),
-      'dl-iran': () => log('SYS', 'ok', '下载配置档 · Iran（示意）'),
-      'dl-russia': () => log('SYS', 'ok', '下载配置档 · Russia（示意）'),
+      'dl-china': () => log('SYS', 'ok', '下载配置档 · China（未接线）'),
+      'dl-iran': () => log('SYS', 'ok', '下载配置档 · Iran（未接线）'),
+      'dl-russia': () => log('SYS', 'ok', '下载配置档 · Russia（未接线）'),
       'toggle-autostart': () => {
         const item = document.querySelector('[data-act="toggle-autostart"]');
         const on = !item.classList.contains('checked');
@@ -8454,7 +8540,7 @@
     log('SYS', 'warn', '正在断开隧道并退出…');
     const r = await nexusInvoke('app_quit', { force: true });
     if (r && !r.ok && !r.offline) log('SYS', 'warn', '退出失败: ' + (r.error || ''));
-    else if (r && r.offline) log('SYS', 'warn', '退出（示意）');
+    else if (r && r.offline) log('SYS', 'warn', '退出（离线）');
   }
   document.getElementById('quitCancel')?.addEventListener('click', () => {
     const mask = document.getElementById('quitMask');

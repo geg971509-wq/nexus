@@ -625,6 +625,10 @@ func connMetaToProto(c *trafficontrol.TrackerMetadata) *gen.ConnectionMetaData {
 	if !c.ClosedAt.IsZero() {
 		closedAt = c.ClosedAt.UnixMilli()
 	}
+	var processID uint32
+	if c != nil && c.Metadata.ProcessInfo != nil {
+		processID = c.Metadata.ProcessInfo.ProcessID
+	}
 	return &gen.ConnectionMetaData{
 		Id:          To(c.ID.String()),
 		CreatedAt:   To(c.CreatedAt.UnixMilli()),
@@ -639,6 +643,7 @@ func connMetaToProto(c *trafficontrol.TrackerMetadata) *gen.ConnectionMetaData {
 		ProcessPath: To(processPath),
 		Chain:       c.Chain,
 		ClosedAt:    To(closedAt),
+		ProcessId:   To(processID),
 	}
 }
 

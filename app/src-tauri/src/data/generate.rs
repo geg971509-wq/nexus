@@ -128,7 +128,8 @@ fn reject_rule_for_host(host: &str, process_path: Option<&str>) -> Option<Value>
     } else if h.parse::<std::net::Ipv6Addr>().is_ok() {
         json!({"ip_cidr": [format!("{h}/128")], "action": "reject"})
     } else {
-        json!({"domain": [h], "action": "reject"})
+        // domain_suffix: listed host + its subdomains (release 0.2.1)
+        json!({"domain_suffix": [h], "action": "reject"})
     };
     if let Some(p) = process_path.filter(|s| !s.is_empty()) {
         if let Some(obj) = rule.as_object_mut() {
@@ -821,7 +822,7 @@ mod tests {
         assert_eq!(rules[1].get("protocol"), Some(&json!("dns")));
         assert!(rules.iter().any(|r| {
             r.get("action") == Some(&json!("reject"))
-                && r.get("domain")
+                && r.get("domain_suffix")
                     .and_then(|d| d.as_array())
                     .map(|a| a.iter().any(|x| x == "telemetry.evil"))
                     .unwrap_or(false)
@@ -836,7 +837,7 @@ mod tests {
         }));
         assert!(rules.iter().any(|r| {
             r.get("action") == Some(&json!("reject"))
-                && r.get("domain")
+                && r.get("domain_suffix")
                     .and_then(|d| d.as_array())
                     .map(|a| a.iter().any(|x| x == "scoped.evil"))
                     .unwrap_or(false)

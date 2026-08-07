@@ -151,6 +151,8 @@ pub struct ConnRow {
     pub process: String,
     /// Full executable path when Core enricher resolved it (may be empty).
     pub process_path: String,
+    /// OS process id when Core enricher resolved it (0 if unknown).
+    pub process_id: u32,
     pub dest: String,
     pub domain: String,
     pub network: String,
@@ -300,6 +302,12 @@ fn decode_conn_meta(data: &[u8]) -> ConnRow {
                 } else {
                     break;
                 }
+            }
+            (14, 0) => {
+                // process_id — OS PID
+                let (v, ni) = read_varint(data, i);
+                i = ni;
+                row.process_id = v as u32;
             }
             (_, 0) => {
                 let (_, ni) = read_varint(data, i);
