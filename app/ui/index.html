@@ -1066,6 +1066,13 @@
     width: 4.5em;
   }
   .conn-table td.app { font-family: var(--font); color: var(--label); font-weight: 500; max-width: 100px; }
+  .conn-table td.pid {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    width: 4.5em;
+    max-width: 5em;
+    text-align: right;
+  }
   .conn-table td.rule { color: var(--blue); font-family: var(--font); font-size: 11px; }
   .conn-table tbody tr { cursor: default; }
   .conn-table tbody tr:hover td { background: var(--fill); }
@@ -2241,6 +2248,7 @@
                 <tr>
                   <th class="sortable" data-csort="time" role="columnheader" tabindex="0" title="连接建立时间">时间</th>
                   <th class="sortable" data-csort="app" role="columnheader" tabindex="0">进程</th>
+                  <th class="sortable" data-csort="pid" role="columnheader" tabindex="0" title="操作系统进程编号">PID</th>
                   <th class="sortable" data-csort="dest" role="columnheader" tabindex="0">目标</th>
                   <th class="sortable" data-csort="proto" role="columnheader" tabindex="0">协议</th>
                   <th class="sortable" data-csort="out" role="columnheader" tabindex="0">出站</th>
@@ -2276,7 +2284,7 @@
                       <input type="search" id="blockFilterInput" placeholder="过滤域名 / IP" title="按域名或 IP 筛选" autocomplete="off" />
                     </div>
                   </div>
-                  <div id="blockEmpty" class="block-empty" hidden>暂无拦截项。<br/>在底部「连接」表右键目标 → Block，或在上方手动添加。</div>
+                  <div id="blockEmpty" class="block-empty" hidden>暂无拦截项。<br/>在底部「连接」表右键：拦截目标 / 拦截应用，或在上方手动添加域名。</div>
                   <div id="blockFilterEmpty" class="block-empty" hidden>无匹配项</div>
                   <ul id="blockList" class="block-list" aria-label="拦截域名与 IP"></ul>
                 </div>
@@ -2846,11 +2854,14 @@
       <span class="grow">复制整行</span>
     </button>
     <div class="menu-sep"></div>
-    <button class="menu-item danger" data-conn-ctx="block-any" role="menuitem" title="所有进程访问该域名/IP 均拦截">
-      <span class="grow">拦截 · 任意进程</span>
+    <button class="menu-item danger" data-conn-ctx="block-any" role="menuitem" title="拦截该目标：任意进程访问此域名/IP 均拒绝">
+      <span class="grow">拦截目标 · 全部进程</span>
     </button>
-    <button class="menu-item danger" data-conn-ctx="block-proc" role="menuitem" title="仅当前进程访问该域名/IP 时拦截（需完整进程路径）">
-      <span class="grow">拦截 · 当前进程</span>
+    <button class="menu-item danger" data-conn-ctx="block-proc" role="menuitem" title="拦截该目标：仅此应用访问此域名/IP 时拒绝（需完整进程路径）">
+      <span class="grow">拦截目标 · 仅此应用</span>
+    </button>
+    <button class="menu-item danger" data-conn-ctx="block-app" role="menuitem" title="拦截该应用：此进程的全部网络连接均拒绝（需完整进程路径）">
+      <span class="grow">拦截应用 · 全部连接</span>
     </button>
   </div>
 
@@ -5295,7 +5306,7 @@
   let blocklistItems = [];
   let blocklistLoaded = false;
 
-  /** Normalize store/UI entry → {host, process_path?} */
+  /** Normalize store/UI entry → {host, process_path?} ; process-only uses empty host. */
   function coerceBlockEntry(raw) {
     if (raw == null) return null;
     if (typeof raw === 'string') {
@@ -5304,8 +5315,9 @@
     }
     if (typeof raw === 'object') {
       const host = String(raw.host || '').trim();
-      if (!host) return null;
       const pp = raw.process_path != null ? String(raw.process_path).trim() : '';
+      if (!host && !pp) return null;
+      if (!host && pp) return { host: '', process_path: pp };
       return { host, process_path: pp || null };
     }
     return null;
@@ -5314,12 +5326,17 @@
   function blockEntryKey(ent) {
     const e = coerceBlockEntry(ent);
     if (!e) return '';
+    if (!e.host && e.process_path) return `\0${e.process_path}`;
     return e.process_path ? `${e.host.toLowerCase()}\0${e.process_path}` : e.host.toLowerCase();
   }
 
   function blockEntryLabel(ent) {
     const e = coerceBlockEntry(ent);
     if (!e) return '';
+    if (!e.host && e.process_path) {
+      const base = e.process_path.split(/[/\\]/).filter(Boolean).pop() || e.process_path;
+      return `应用 · ${base}`;
+    }
     if (!e.process_path) return e.host;
     const base = e.process_path.split(/[/\\]/).filter(Boolean).pop() || e.process_path;
     return `${e.host} · ${base}`;
@@ -5415,15 +5432,31 @@
     if (!ul) return;
     const list = (Array.isArray(items) ? items : []).map(coerceBlockEntry).filter(Boolean);
     ul.innerHTML = list.map((e) => {
-      const scopeLabel = e.process_path
+      const base = e.process_path
         ? (e.process_path.split(/[/\\]/).filter(Boolean).pop() || e.process_path)
-        : '任意进程';
-      const scope = e.process_path
-        ? `<span class="block-scope proc" title="${escHtml(e.process_path)}">${escHtml(scopeLabel)}</span>`
-        : `<span class="block-scope">任意进程</span>`;
-      const filter = [e.host, e.process_path || '', scopeLabel, e.process_path ? '进程' : '任意进程'].join(' ');
+        : '';
+      const hostOnly = !!e.host && !e.process_path;
+      const hostProc = !!e.host && !!e.process_path;
+      const procOnly = !e.host && !!e.process_path;
+      // left = subject (domain/IP or process basename); right = scope modifier
+      const hostLabel = procOnly ? base : e.host;
+      const scopeLabel = hostOnly ? '全部进程' : (hostProc ? base : (procOnly ? '全部目标' : '—'));
+      const scopeTitle = e.process_path
+        ? e.process_path
+        : (hostOnly ? '任意进程访问该目标' : '');
+      const hostTitle = procOnly
+        ? (e.process_path || base)
+        : (e.host || '');
+      const scopeCls = hostProc ? ' block-scope proc' : ' block-scope';
+      const scope = `<span class="${scopeCls.trim()}" title="${escHtml(scopeTitle)}">${escHtml(scopeLabel)}</span>`;
+      const filter = [
+        e.host, e.process_path || '', base, hostLabel, scopeLabel,
+        procOnly ? '应用 全部目标' : '',
+        hostOnly ? '全部进程' : '',
+        hostProc ? '仅此应用' : '',
+      ].join(' ');
       return `<li class="block-row" data-host="${escHtml(e.host)}" data-proc="${escHtml(e.process_path || '')}" data-filter="${escHtml(filter)}">
-        <span class="block-host" title="${escHtml(e.host)}">${escHtml(e.host)}</span>
+        <span class="block-host" title="${escHtml(hostTitle)}">${escHtml(hostLabel)}</span>
         ${scope}
         <button type="button" class="tb-btn" data-block-del title="从拦截列表移除">删除</button>
       </li>`;
@@ -5433,7 +5466,7 @@
         const row = btn.closest('.block-row');
         const host = row?.dataset.host || '';
         const proc = row?.dataset.proc || '';
-        if (!host) return;
+        if (!host && !proc) return;
         if (!blocklistLoaded) await loadBlocklist();
         if (!blocklistLoaded) {
           log('SYS', 'warn', '拦截列表未加载，拒绝删除以免清空');
@@ -5520,19 +5553,28 @@
     }
   }
 
-  /** host = domain/IP; processPath null/empty = any process */
+  /**
+   * Add reject entry.
+   * - host + null process → 拦截目标 · 全部进程
+   * - host + processPath → 拦截目标 · 仅此应用
+   * - empty host + processPath → 拦截应用 · 全部连接
+   */
   async function addBlockHost(raw, processPath) {
     const host = String(raw || '').trim();
-    if (!host) {
-      log('SYS', 'warn', '无效地址');
-      return false;
-    }
-    if (host.includes('://') || host.includes('/') || /\s/.test(host)) {
-      log('SYS', 'warn', '无效地址');
-      return false;
-    }
     const pp = processPath != null ? String(processPath).trim() : '';
+    if (!host && !pp) {
+      log('SYS', 'warn', '无效拦截项');
+      return false;
+    }
+    if (host && (host.includes('://') || host.includes('/') || /\s/.test(host))) {
+      log('SYS', 'warn', '无效地址');
+      return false;
+    }
     if (pp && (pp.includes('\0') || /[\r\n]/.test(pp))) {
+      log('SYS', 'warn', '无效进程路径');
+      return false;
+    }
+    if (!host && !pp) {
       log('SYS', 'warn', '无效进程路径');
       return false;
     }
@@ -5541,7 +5583,11 @@
       log('SYS', 'warn', '拦截列表未加载，拒绝添加以免清空');
       return false;
     }
-    const entry = { host, process_path: pp || null };
+    const entry = { host: host || '', process_path: pp || null };
+    if (!entry.host && !entry.process_path) {
+      log('SYS', 'warn', '无效拦截项');
+      return false;
+    }
     const key = blockEntryKey(entry);
     if (blocklistItems.some(x => blockEntryKey(x) === key)) {
       log('SYS', 'info', '已在拦截列表：' + blockEntryLabel(entry));
@@ -5786,15 +5832,79 @@
     if (!row) return '';
     return [...row.cells].map(td => td.innerText.trim()).filter(Boolean).join('\t');
   }
+  // progressive selection: click = single; ⌘/Ctrl = toggle; Shift = range from anchor
+  let selectAnchorConnRow = null;
+  function visibleConnRows() {
+    return connTable ? [...connTable.querySelectorAll('tr')] : [];
+  }
+  function resolveConnSelectAnchor(rows) {
+    if (selectAnchorConnRow && rows.includes(selectAnchorConnRow)) return selectAnchorConnRow;
+    const id = selectAnchorConnRow?.dataset?.id;
+    if (id) {
+      const byId = rows.find(r => r.dataset.id === id);
+      if (byId) {
+        selectAnchorConnRow = byId;
+        return byId;
+      }
+    }
+    const sel = rows.find(r => r.classList.contains('selected'));
+    if (sel) {
+      selectAnchorConnRow = sel;
+      return sel;
+    }
+    return null;
+  }
+  function selectConnRow(row, { multi, range } = {}) {
+    if (!row || !connTable) return;
+    const rows = visibleConnRows();
+    if (range) {
+      const anchor = resolveConnSelectAnchor(rows) || row;
+      const a = rows.indexOf(anchor);
+      const b = rows.indexOf(row);
+      if (a >= 0 && b >= 0) {
+        const lo = Math.min(a, b), hi = Math.max(a, b);
+        if (!multi) rows.forEach(r => r.classList.remove('selected'));
+        for (let i = lo; i <= hi; i++) rows[i].classList.add('selected');
+        if (!selectAnchorConnRow || !rows.includes(selectAnchorConnRow)) selectAnchorConnRow = anchor;
+      } else {
+        if (!multi) rows.forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        selectAnchorConnRow = row;
+      }
+    } else if (multi) {
+      row.classList.toggle('selected');
+      selectAnchorConnRow = row;
+    } else {
+      rows.forEach(r => r.classList.remove('selected'));
+      row.classList.add('selected');
+      selectAnchorConnRow = row;
+    }
+  }
+  // Kill native text selection in the conn list (Shift otherwise selects glyphs, not rows)
+  if (connTable) {
+    connTable.addEventListener('selectstart', (e) => { e.preventDefault(); }, true);
+    connTable.addEventListener('dragstart', (e) => { e.preventDefault(); }, true);
+    connTable.addEventListener('mousedown', (e) => {
+      if (!e.target.closest('tr')) return;
+      e.preventDefault();
+      clearDomTextSelection();
+    }, true);
+    connTable.addEventListener('click', (e) => {
+      const row = e.target.closest('tr');
+      if (!row || !connTable.contains(row)) return;
+      if (e.shiftKey || e.metaKey || e.ctrlKey) clearDomTextSelection();
+      selectConnRow(row, { multi: e.metaKey || e.ctrlKey, range: e.shiftKey });
+    });
+  }
   connPanel?.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (!dock.classList.contains('open')) setDockOpen(true);
     setDockPanel('conn');
     const row = e.target.closest('#connTable tr');
-    connTable?.querySelectorAll('tr.selected').forEach(r => r.classList.remove('selected'));
     connCtxRow = row || null;
-    if (row) row.classList.add('selected');
+    // match nodes: right-click already-selected keeps multi; else single-select that row
+    if (row && !row.classList.contains('selected')) selectConnRow(row);
     if (!row) { closeConnCtxMenu(); return; }
     openConnCtxMenu(e.clientX, e.clientY);
   });
@@ -5812,34 +5922,53 @@
     if (!p.includes('/') && !p.includes('\\')) return '';
     return p;
   }
+  function setConnMenuItemState(btn, ready, titleOk, titleNo) {
+    if (!btn) return;
+    btn.disabled = !ready;
+    btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+    btn.title = ready ? titleOk : titleNo;
+    btn.classList.toggle('is-disabled', !ready);
+  }
   function syncConnBlockMenuState() {
     if (!connCtxMenu) return;
     const hostReady = !!hostFromConnRow(connCtxRow);
-    const hostBtn = connCtxMenu.querySelector('[data-conn-ctx="copy-host"]');
-    if (hostBtn) {
-      hostBtn.disabled = !hostReady;
-      hostBtn.setAttribute('aria-disabled', hostReady ? 'false' : 'true');
-      hostBtn.classList.toggle('is-disabled', !hostReady);
-    }
-    const procBtn = connCtxMenu.querySelector('[data-conn-ctx="block-proc"]');
-    if (!procBtn) return;
-    const ready = !!processPathFromConnRow(connCtxRow);
-    procBtn.disabled = !ready;
-    procBtn.setAttribute('aria-disabled', ready ? 'false' : 'true');
-    procBtn.title = ready
-      ? '仅当前进程访问该域名/IP 时拦截'
-      : '完整进程路径尚未就绪，请稍候再试或改用「任意进程」';
-    procBtn.classList.toggle('is-disabled', !ready);
+    const pathReady = !!processPathFromConnRow(connCtxRow);
+    setConnMenuItemState(
+      connCtxMenu.querySelector('[data-conn-ctx="copy-host"]'),
+      hostReady,
+      '仅复制目标域名或 IP',
+      '无效目标地址'
+    );
+    setConnMenuItemState(
+      connCtxMenu.querySelector('[data-conn-ctx="block-any"]'),
+      hostReady,
+      '拦截该目标：任意进程访问此域名/IP 均拒绝',
+      '无效目标地址'
+    );
+    setConnMenuItemState(
+      connCtxMenu.querySelector('[data-conn-ctx="block-proc"]'),
+      hostReady && pathReady,
+      '拦截该目标：仅此应用访问此域名/IP 时拒绝',
+      pathReady ? '无效目标地址' : '完整进程路径尚未就绪，请稍候再试或改用「拦截目标 · 全部进程」'
+    );
+    setConnMenuItemState(
+      connCtxMenu.querySelector('[data-conn-ctx="block-app"]'),
+      pathReady,
+      '拦截该应用：此进程的全部网络连接均拒绝',
+      '完整进程路径尚未就绪，请稍候再试'
+    );
   }
   document.querySelectorAll('#connCtxMenu [data-conn-ctx]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const act = btn.dataset.connCtx;
-      if (act === 'block-proc' && btn.disabled) {
-        log('SYS', 'warn', '完整进程路径尚未就绪，请稍候再试或改用「拦截 · 任意进程」');
+      if ((act === 'block-proc' || act === 'block-app') && btn.disabled) {
+        log('SYS', 'warn', act === 'block-app'
+          ? '完整进程路径尚未就绪，请稍候再试'
+          : '完整进程路径尚未就绪，请稍候再试或改用「拦截目标 · 全部进程」');
         closeConnCtxMenu();
         return;
       }
-      if (act === 'copy-host' && btn.disabled) {
+      if ((act === 'copy-host' || act === 'block-any') && btn.disabled) {
         log('SYS', 'warn', '无效地址');
         closeConnCtxMenu();
         return;
@@ -5855,22 +5984,26 @@
         if (!text) { log('SYS', 'info', '无可复制连接'); return; }
         copyText(text).then(() => log('SYS', 'ok', '已复制整行：' + text.replace(/\t/g, ' · ')))
           .catch(() => log('SYS', 'ok', '已复制整行'));
-      } else if (act === 'block-any' || act === 'block-proc') {
+      } else if (act === 'block-any') {
         const host = hostFromConnRow(connCtxRow);
-        if (!host) {
-          log('SYS', 'warn', '无效地址');
+        if (!host) { log('SYS', 'warn', '无效地址'); return; }
+        if (typeof addBlockHost === 'function') await addBlockHost(host, null);
+      } else if (act === 'block-proc') {
+        const host = hostFromConnRow(connCtxRow);
+        const pp = processPathFromConnRow(connCtxRow);
+        if (!host) { log('SYS', 'warn', '无效地址'); return; }
+        if (!pp) {
+          log('SYS', 'warn', '完整进程路径尚未就绪，请稍候再试或改用「拦截目标 · 全部进程」');
           return;
         }
-        if (act === 'block-proc') {
-          const pp = processPathFromConnRow(connCtxRow);
-          if (!pp) {
-            log('SYS', 'warn', '完整进程路径尚未就绪，请稍候再试或改用「拦截 · 任意进程」');
-            return;
-          }
-          if (typeof addBlockHost === 'function') await addBlockHost(host, pp);
-        } else if (typeof addBlockHost === 'function') {
-          await addBlockHost(host, null);
+        if (typeof addBlockHost === 'function') await addBlockHost(host, pp);
+      } else if (act === 'block-app') {
+        const pp = processPathFromConnRow(connCtxRow);
+        if (!pp) {
+          log('SYS', 'warn', '完整进程路径尚未就绪，请稍候再试');
+          return;
         }
+        if (typeof addBlockHost === 'function') await addBlockHost('', pp);
       }
     });
   });
@@ -5931,10 +6064,9 @@
   function paintConnRow(tr, c, key) {
     const tms = Number(c.created_at) || 0;
     const time = fmtConnTime(tms);
-    const base = c.process || '—';
+    const app = c.process || '—';
     const pid = Number(c.process_id) || 0;
-    // show OS PID so multi-instance same basename is distinguishable
-    const app = pid > 0 ? `${base} · ${pid}` : base;
+    const pidText = pid > 0 ? String(pid) : '—';
     const procPath = (c.process_path && String(c.process_path).trim()) || '';
     const dest = c.domain || c.dest || '—';
     let proto = c.network || '';
@@ -5956,11 +6088,12 @@
     tr.dataset.flow = String(flowBytes);
     tr.title = procPath
       ? (pid > 0 ? `${procPath} (pid ${pid})` : procPath)
-      : (pid > 0 ? `${base} (pid ${pid})` : base);
-    if (tr.cells.length !== 6) {
+      : (pid > 0 ? `${app} (pid ${pid})` : app);
+    if (tr.cells.length !== 7) {
       tr.innerHTML =
         `<td class="time">${escHtml(time)}</td>` +
         `<td class="app">${escHtml(app)}</td>` +
+        `<td class="pid">${escHtml(pidText)}</td>` +
         `<td>${escHtml(dest)}</td>` +
         `<td>${escHtml(proto)}</td>` +
         `<td class="rule">${escHtml(out)}</td>` +
@@ -5972,10 +6105,11 @@
     };
     put(0, time);
     put(1, app);
-    put(2, dest);
-    put(3, proto);
-    put(4, out);
-    put(5, flow);
+    put(2, pidText);
+    put(3, dest);
+    put(4, proto);
+    put(5, out);
+    put(6, flow);
   }
   /**
    * Diff/merge connection table by stable id:
@@ -6181,9 +6315,13 @@
         return Number.isFinite(n) ? n : -1;
       }
       case 'app': return (row.dataset.app || row.cells[1]?.textContent || '').toLowerCase();
-      case 'dest': return (row.dataset.dest || row.cells[2]?.textContent || '').toLowerCase();
-      case 'proto': return (row.dataset.proto || row.cells[3]?.textContent || '').toLowerCase();
-      case 'out': return (row.dataset.out || row.cells[4]?.textContent || '').toLowerCase();
+      case 'pid': {
+        const n = Number(row.dataset.pid);
+        return Number.isFinite(n) && n > 0 ? n : -1;
+      }
+      case 'dest': return (row.dataset.dest || row.cells[3]?.textContent || '').toLowerCase();
+      case 'proto': return (row.dataset.proto || row.cells[4]?.textContent || '').toLowerCase();
+      case 'out': return (row.dataset.out || row.cells[5]?.textContent || '').toLowerCase();
       case 'flow': return parseConnFlow(row);
       default: return '';
     }

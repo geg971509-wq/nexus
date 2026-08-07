@@ -3,11 +3,15 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-/// One reject entry: host for all processes, or host+process_path for that app only.
+/// One reject entry:
+/// - host only → any process hitting that host
+/// - host + process_path → that process hitting that host
+/// - process_path only (host empty) → that process, all destinations
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct BlockEntry {
+    #[serde(default)]
     pub host: String,
-    /// Full executable path when scoping to one process; omit = any process.
+    /// Full executable path; omit = any process (host required then).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub process_path: Option<String>,
 }
@@ -19,6 +23,7 @@ impl<'de> Deserialize<'de> for BlockEntry {
         enum Raw {
             Host(String),
             Obj {
+                #[serde(default)]
                 host: String,
                 #[serde(default)]
                 process_path: Option<String>,

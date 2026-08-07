@@ -94,23 +94,36 @@ pub fn normalize_process_path(raw: &str) -> Result<String, String> {
 }
 
 fn block_entry_key(host: &str, process_path: Option<&str>) -> String {
-    match process_path {
-        Some(p) if !p.is_empty() => format!("{host}\0{p}"),
-        _ => host.to_string(),
+    match (host.is_empty(), process_path) {
+        (true, Some(p)) if !p.is_empty() => format!("\0{p}"),
+        (false, Some(p)) if !p.is_empty() => format!("{host}\0{p}"),
+        (false, _) => host.to_string(),
+        (true, _) => String::new(),
     }
 }
 
-/// Normalize blocklist entries (host-only strings or `{host, process_path?}`).
+/// Normalize blocklist entries: host-only, host+process, or process-only (all dests).
 pub fn normalize_blocklist(items: &[BlockEntry]) -> Result<Vec<BlockEntry>, String> {
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for raw in items {
-        let host = normalize_block_host(&raw.host)?;
+        let host_raw = raw.host.trim();
         let process_path = match raw.process_path.as_deref() {
             Some(p) if !p.trim().is_empty() => Some(normalize_process_path(p)?),
             _ => None,
         };
+        let host = if host_raw.is_empty() {
+            if process_path.is_none() {
+                return Err("empty block entry".into());
+            }
+            String::new()
+        } else {
+            normalize_block_host(host_raw)?
+        };
         let key = block_entry_key(&host, process_path.as_deref());
+        if key.is_empty() {
+            return Err("empty block entry".into());
+        }
         if seen.insert(key) {
             out.push(BlockEntry {
                 host,
@@ -121,7 +134,13 @@ pub fn normalize_blocklist(items: &[BlockEntry]) -> Result<Vec<BlockEntry>, Stri
     Ok(out)
 }
 
-fn reject_rule_for_host(host: &str, process_path: Option<&str>) -> Option<Value> {
+/// Build one reject route rule. Process-only (empty host) → all destinations for that path.
+fn reject_rule_for_entry(host: &str, process_path: Option<&str>) -> Option<Value> {
+    let pp = process_path.filter(|s| !s.is_empty());
+    if host.trim().is_empty() {
+        let p = pp?;
+        return Some(json!({"process_path": [p], "action": "reject"}));
+    }
     let h = normalize_block_host(host).ok()?;
     let mut rule = if h.parse::<std::net::Ipv4Addr>().is_ok() {
         json!({"ip_cidr": [format!("{h}/32")], "action": "reject"})
@@ -131,7 +150,7 @@ fn reject_rule_for_host(host: &str, process_path: Option<&str>) -> Option<Value>
         // domain_suffix: listed host + its subdomains (release 0.2.1)
         json!({"domain_suffix": [h], "action": "reject"})
     };
-    if let Some(p) = process_path.filter(|s| !s.is_empty()) {
+    if let Some(p) = pp {
         if let Some(obj) = rule.as_object_mut() {
             obj.insert("process_path".into(), json!([p]));
         }
@@ -324,9 +343,7 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         json!({"protocol": "dns", "action": "hijack-dns"}),
     ];
     for ent in input.blocklist {
-        if let Some(rule) =
-            reject_rule_for_host(&ent.host, ent.process_path.as_deref())
-        {
+        if let Some(rule) = reject_rule_for_entry(&ent.host, ent.process_path.as_deref()) {
             route_rules.push(rule);
         }
     }
@@ -787,6 +804,29 @@ mod tests {
     }
 
     #[test]
+    fn normalize_blocklist_process_only() {
+        let out = normalize_blocklist(&[
+            BlockEntry {
+                host: "".into(),
+                process_path: Some("/usr/bin/curl".into()),
+            },
+            BlockEntry {
+                host: "  ".into(),
+                process_path: Some("/usr/bin/curl".into()),
+            },
+        ])
+        .unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].host, "");
+        assert_eq!(out[0].process_path.as_deref(), Some("/usr/bin/curl"));
+        assert!(normalize_blocklist(&[BlockEntry {
+            host: "".into(),
+            process_path: None,
+        }])
+        .is_err());
+    }
+
+    #[test]
     fn generate_injects_reject_rules_before_private() {
         let n = sample_node(json!({
             "type": "socks",
@@ -856,6 +896,42 @@ mod tests {
             .expect("reject");
         assert!(first_reject < priv_idx, "reject must be before private direct");
         assert_eq!(v["route"]["final"], "proxy");
+    }
+
+    #[test]
+    fn generate_process_only_reject_all_dests() {
+        let n = sample_node(json!({
+            "type": "socks",
+            "tag": "proxy",
+            "server": "127.0.0.1",
+            "server_port": 1080
+        }));
+        let blocks = vec![BlockEntry {
+            host: String::new(),
+            process_path: Some("/Applications/Telegram.app/Contents/MacOS/Telegram".into()),
+        }];
+        let v = generate_config(&GenerateInput {
+            node: &n,
+            system_proxy_port: 2080,
+            tun: false,
+            mux_default_on: false,
+            mux_protocol: "smux",
+            mux_concurrency: 8,
+            blocklist: &blocks,
+        });
+        let rules = v["route"]["rules"].as_array().expect("rules");
+        assert!(rules.iter().any(|r| {
+            r.get("action") == Some(&json!("reject"))
+                && r.get("domain_suffix").is_none()
+                && r.get("ip_cidr").is_none()
+                && r.get("process_path")
+                    .and_then(|d| d.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .any(|x| x == "/Applications/Telegram.app/Contents/MacOS/Telegram")
+                    })
+                    .unwrap_or(false)
+        }));
     }
 
     #[test]
