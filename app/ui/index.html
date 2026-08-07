@@ -2144,94 +2144,94 @@
         <div class="toolbar-group titlebar-brand">
           <div class="app-name">Nexus</div>
           <div class="menu-wrap">
-            <button class="menu-btn" id="appMenuBtn" title="导入配置、启动项与退出" aria-haspopup="menu" aria-expanded="false">
+            <button class="menu-btn" id="appMenuBtn" title="导入配置、启动项与退出" aria-haspopup="menu" aria-expanded="false" data-i18n-title="title.appMenu">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
             </button>
             <div class="menu" id="appMenu" role="menu">
-              <button class="menu-item" data-act="add-clip" role="menuitem"><span class="grow" title="粘贴分享链接或 URI 导入">从剪贴板添加配置</span></button>
-              <button class="menu-item" data-act="add-file" role="menuitem"><span class="grow" title="选择本地订阅/配置文件">从文件添加配置</span></button>
-              <button class="menu-item" data-act="scan-qr" role="menuitem"><span class="grow" title="从屏幕或图片识别节点二维码">扫描二维码</span></button>
+              <button class="menu-item" data-act="add-clip" role="menuitem"><span class="grow" title="粘贴分享链接或 URI 导入" data-i18n="menu.addClip" data-i18n-title="title.addClip">从剪贴板添加配置</span></button>
+              <button class="menu-item" data-act="add-file" role="menuitem"><span class="grow" title="选择本地订阅/配置文件" data-i18n="menu.addFile" data-i18n-title="title.addFile">从文件添加配置</span></button>
+              <button class="menu-item" data-act="scan-qr" role="menuitem"><span class="grow" title="从屏幕或图片识别节点二维码" data-i18n="menu.scanQr" data-i18n-title="title.scanQr">扫描二维码</span></button>
               <div class="menu-item has-sub" tabindex="0" role="menuitem" aria-haspopup="true">
-                <span class="grow" title="下载地区规则配置档">下载配置档</span><span class="chev">›</span>
+                <span class="grow" title="下载地区规则配置档" data-i18n="menu.dlProfile" data-i18n-title="title.dlProfile">下载配置档</span><span class="chev">›</span>
                 <div class="menu-sub" role="menu">
-                  <button class="menu-item" data-act="dl-china" role="menuitem"><span class="grow" title="中国场景规则集">China</span></button>
-                  <button class="menu-item" data-act="dl-iran" role="menuitem"><span class="grow" title="伊朗场景规则集">Iran</span></button>
-                  <button class="menu-item" data-act="dl-russia" role="menuitem"><span class="grow" title="俄罗斯场景规则集">Russia</span></button>
+                  <button class="menu-item" data-act="dl-china" role="menuitem"><span class="grow" title="中国场景规则集" data-i18n-title="title.dlChina">China</span></button>
+                  <button class="menu-item" data-act="dl-iran" role="menuitem"><span class="grow" title="伊朗场景规则集" data-i18n-title="title.dlIran">Iran</span></button>
+                  <button class="menu-item" data-act="dl-russia" role="menuitem"><span class="grow" title="俄罗斯场景规则集" data-i18n-title="title.dlRussia">Russia</span></button>
                 </div>
               </div>
               <div class="menu-sep"></div>
-              <button class="menu-item" data-act="toggle-autostart" role="menuitem"><span class="check"></span><span class="grow" title="登录系统后自动打开 Nexus">随系统启动</span></button>
-              <button class="menu-item checked" data-act="toggle-remember" role="menuitem"><span class="check">✓</span><span class="grow" title="未接线：当前不会在启动时恢复选中配置">记住配置档</span></button>
-              <button class="menu-item checked" data-act="toggle-lan" role="menuitem"><span class="check">✓</span><span class="grow" title="其它设备可连本机入站端口">允许局域网连接</span></button>
+              <button class="menu-item" data-act="toggle-autostart" role="menuitem"><span class="check"></span><span class="grow" title="登录系统后自动打开 Nexus" data-i18n="menu.autostart" data-i18n-title="title.autostart">随系统启动</span></button>
+              <button class="menu-item checked" data-act="toggle-remember" role="menuitem"><span class="check">✓</span><span class="grow" title="未接线：当前不会在启动时恢复选中配置" data-i18n="menu.remember" data-i18n-title="title.remember">记住配置档</span></button>
+              <button class="menu-item checked" data-act="toggle-lan" role="menuitem"><span class="check">✓</span><span class="grow" title="其它设备可连本机入站端口" data-i18n="menu.allowLan" data-i18n-title="title.allowLan">允许局域网连接</span></button>
               <div class="menu-sep"></div>
-              <button class="menu-item" data-act="manage-groups" role="menuitem"><span class="grow" title="新建、重命名、删除订阅分组">管理分组…</span></button>
-              <button class="menu-item" data-act="runtime-stats" role="menuitem"><span class="grow" title="核心与连接运行摘要">运行状态…</span></button>
-              <button class="menu-item" data-act="export-config" role="menuitem"><span class="grow" title="导出当前节点的 Core 配置">导出配置…</span></button>
-              <button class="menu-item" data-act="hide" role="menuitem"><span class="grow" title="隐藏到菜单栏，不退出">隐藏窗口</span></button>
-              <button class="menu-item" data-act="restart-core" role="menuitem"><span class="grow" title="重新加载代理核心进程">重启核心</span></button>
-              <button class="menu-item" data-act="quit" role="menuitem"><span class="grow" title="退出 Nexus">退出</span></button>
+              <button class="menu-item" data-act="manage-groups" role="menuitem"><span class="grow" title="新建、重命名、删除订阅分组" data-i18n="menu.groups" data-i18n-title="title.groups">管理分组…</span></button>
+              <button class="menu-item" data-act="runtime-stats" role="menuitem"><span class="grow" title="核心与连接运行摘要" data-i18n="menu.stats" data-i18n-title="title.stats">运行状态…</span></button>
+              <button class="menu-item" data-act="export-config" role="menuitem"><span class="grow" title="导出当前节点的 Core 配置" data-i18n="menu.export" data-i18n-title="title.export">导出配置…</span></button>
+              <button class="menu-item" data-act="hide" role="menuitem"><span class="grow" title="隐藏到菜单栏，不退出" data-i18n="menu.hide" data-i18n-title="title.hide">隐藏窗口</span></button>
+              <button class="menu-item" data-act="restart-core" role="menuitem"><span class="grow" title="重新加载代理核心进程" data-i18n="menu.restartCore" data-i18n-title="title.restartCore">重启核心</span></button>
+              <button class="menu-item" data-act="quit" role="menuitem"><span class="grow" title="退出 Nexus" data-i18n="menu.quit" data-i18n-title="title.quit">退出</span></button>
             </div>
           </div>
           <div class="seg" role="tablist" aria-label="订阅" id="subSeg">
-            <button class="active" role="tab" aria-selected="true" data-sub="default" title="当前订阅：Default">Default</button>
-            <button role="tab" aria-selected="false" data-sub="backup" title="切换到备用订阅"><span data-i18n="tb.backup">备用</span></button>
+            <button class="active" role="tab" aria-selected="true" data-sub="default" title="当前订阅：Default" data-i18n-title="title.subDefault">Default</button>
+            <button role="tab" aria-selected="false" data-sub="backup" title="切换到备用订阅" data-i18n-title="title.subBackup"><span data-i18n="tb.backup">备用</span></button>
           </div>
         </div>
         <div class="titlebar-drag" aria-hidden="true"></div>
         <div class="toolbar-group titlebar-actions">
           <div class="menu-wrap test-menu-wrap">
-            <button class="tb-btn" id="testBtn" title="测试菜单" aria-haspopup="menu" aria-expanded="false">
+            <button class="tb-btn" id="testBtn" title="测试菜单" aria-haspopup="menu" aria-expanded="false" data-i18n-title="title.testMenu">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>
               <span data-i18n="tb.test">连通</span>
             </button>
             <div class="menu" id="testMenu" role="menu">
-              <button class="menu-item" data-test="url-selected" role="menuitem"><span class="grow">URL 测试选定项</span></button>
-              <button class="menu-item" data-test="url-group" role="menuitem"><span class="grow">URL 测试当前组</span></button>
+              <button class="menu-item" data-test="url-selected" role="menuitem"><span class="grow" data-i18n="test.urlSelected">URL 测试选定项</span></button>
+              <button class="menu-item" data-test="url-group" role="menuitem"><span class="grow" data-i18n="test.urlGroup">URL 测试当前组</span></button>
               <div class="menu-sep"></div>
-              <button class="menu-item" data-test="stop" role="menuitem"><span class="grow">停止测试</span></button>
-              <button class="menu-item" data-test="clear" role="menuitem"><span class="grow">清理测试结果</span></button>
+              <button class="menu-item" data-test="stop" role="menuitem"><span class="grow" data-i18n="test.stop">停止测试</span></button>
+              <button class="menu-item" data-test="clear" role="menuitem"><span class="grow" data-i18n="test.clear">清理测试结果</span></button>
             </div>
           </div>
-          <button class="tb-btn" id="groupsBtn" title="管理订阅分组">分组</button>
-          <button class="tb-btn solid" id="refreshBtn" title="立即更新订阅节点列表"><span data-i18n="tb.refresh">更新</span></button>
+          <button class="tb-btn" id="groupsBtn" title="管理订阅分组" data-i18n="tb.groups" data-i18n-title="title.manageGroups">分组</button>
+          <button class="tb-btn solid" id="refreshBtn" title="立即更新订阅节点列表" data-i18n-title="title.refresh"><span data-i18n="tb.refresh">更新</span></button>
         </div>
       </div>
     </header>
 
     <div class="body">
       <nav class="sidebar" id="sidebar" aria-label="主导航">
-        <button class="side-item active" data-view="home" aria-current="page" title="节点列表与连接状态">
+        <button class="side-item active" data-view="home" aria-current="page" title="节点列表与连接状态" data-i18n-title="title.navHome">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg></span>
           <span class="side-label" data-i18n="nav.home">节点</span>
         </button>
-        <button class="side-item" data-view="settings" data-settings="routing" title="分流、DNS 与规则">
+        <button class="side-item" data-view="settings" data-settings="routing" title="分流、DNS 与规则" data-i18n-title="title.navRouting">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 18.5V5.5M4.5 18.5h15"/><path d="m8.2 14.8 3.2-4.3 3.1 2.2 4.3-6.2"/></svg></span>
           <span class="side-label" data-i18n="nav.routing">路由</span>
         </button>
-        <button class="side-item" data-view="settings" data-settings="vpn" title="入站、系统代理与 Tun">
+        <button class="side-item" data-view="settings" data-settings="vpn" title="入站、系统代理与 Tun" data-i18n-title="title.navVpn">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 4.5 6.8v4.7c0 4.8 3.2 8.1 7.5 8.8 4.3-.7 7.5-4 7.5-8.8V6.8L12 3.2Z"/><path d="m9.2 12.1 1.9 1.9 3.7-3.8"/></svg></span>
           <span class="side-label" data-i18n="nav.vpn">连接</span>
         </button>
-        <button class="side-item" data-view="settings" data-settings="sub" title="订阅更新与安全">
+        <button class="side-item" data-view="settings" data-settings="sub" title="订阅更新与安全" data-i18n-title="title.navSub">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5h15M4.5 12h15M4.5 16.5h10"/><path d="m16.5 15 2.5 2.5L22 14"/></svg></span>
           <span class="side-label" data-i18n="nav.sub">订阅</span>
         </button>
-        <button class="side-item" data-view="block" title="拦截域名与 IP">
+        <button class="side-item" data-view="block" title="拦截域名与 IP" data-i18n-title="title.navBlock">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.25"/><path d="M6.2 6.2 17.8 17.8"/></svg></span>
           <span class="side-label" data-i18n="nav.block">拦截</span>
         </button>
-        <button class="side-item" data-view="settings" data-settings="basic" title="界面、启动与核心">
+        <button class="side-item" data-view="settings" data-settings="basic" title="界面、启动与核心" data-i18n-title="title.navSettings">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.24.3.4.65.5 1.02.1.36.15.74.15 1.13s-.05.77-.15 1.13c-.1.37-.26.72-.5 1.02Z"/></svg></span>
           <span class="side-label" data-i18n="nav.settings">设置</span>
         </button>
 
         <!-- empty rail: hold & drag window (nav buttons stay no-drag) -->
         <div class="side-spacer" data-tauri-drag-region aria-hidden="true"></div>
-        <button class="side-collapse" id="sideCollapse" title="收窄为图标栏，腾出主区域" aria-label="收窄或展开侧栏" aria-expanded="true" aria-controls="sidebar">
+        <button class="side-collapse" id="sideCollapse" title="收窄为图标栏，腾出主区域" aria-label="收窄或展开侧栏" aria-expanded="true" aria-controls="sidebar" data-i18n-title="title.collapse">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6 9 12l6 6"/></svg>
           <span class="side-label" data-i18n="nav.collapse">收窄</span>
         </button>
-        <div class="side-resizer" id="sideResizer" title="拖动调节侧栏宽度" role="separator" aria-orientation="vertical" aria-label="调节侧栏宽度"></div>
+        <div class="side-resizer" id="sideResizer" title="拖动调节侧栏宽度" role="separator" aria-orientation="vertical" aria-label="调节侧栏宽度" data-i18n-title="title.sideResize"></div>
       </nav>
 
       <main class="main">
@@ -2239,7 +2239,7 @@
 <section class="hero" data-tauri-drag-region="deep">
           <div class="hero-card">
             <div class="hero-left">
-              <button class="power" id="powerBtn" aria-pressed="false" aria-label="连接或断开" title="连接 / 断开当前节点">
+              <button class="power" id="powerBtn" aria-pressed="false" aria-label="连接或断开" title="连接 / 断开当前节点" data-i18n-title="title.power">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <path d="M12 3v9"/>
                   <path d="M7.5 6.5a7 7 0 1 0 9 0"/>
@@ -2257,12 +2257,12 @@
             </div>
             <div class="hero-actions">
               <div class="toggles">
-                <label class="toggle" id="tunChip" title="虚拟网卡：接管本机几乎全部流量（需权限）">
+                <label class="toggle" id="tunChip" title="虚拟网卡：接管本机几乎全部流量（需权限）" data-i18n-title="title.tun">
                   <input type="checkbox" id="tunToggle" />
                   <span class="switch" aria-hidden="true"></span>
                   Tun
                 </label>
-                <label class="toggle on" id="sysChip" title="设置系统 HTTP/HTTPS/SOCKS 代理">
+                <label class="toggle on" id="sysChip" title="设置系统 HTTP/HTTPS/SOCKS 代理" data-i18n-title="title.sysProxy">
                   <input type="checkbox" id="sysToggle" checked />
                   <span class="switch" aria-hidden="true"></span>
                   系统代理
@@ -2277,12 +2277,12 @@
             <table>
               <thead>
                 <tr>
-                  <th class="idx sortable" data-sort="idx" title="点击排序">#</th>
-                  <th class="type sortable" data-sort="type" title="点击排序">类型</th>
-                  <th class="addr sortable" data-sort="addr" title="点击排序">地址</th>
-                  <th class="sortable" data-sort="name" title="点击排序">名称</th>
-                  <th class="lat sortable" data-sort="lat" aria-sort="ascending" title="点击排序">延迟</th>
-                  <th class="flow sortable" data-sort="flow" title="点击排序">流量</th>
+                  <th class="idx sortable" data-sort="idx" title="点击排序" data-i18n-title="title.sort">#</th>
+                  <th class="type sortable" data-sort="type" title="点击排序" data-i18n="th.type" data-i18n-title="title.sort">类型</th>
+                  <th class="addr sortable" data-sort="addr" title="点击排序" data-i18n="th.addr" data-i18n-title="title.sort">地址</th>
+                  <th class="sortable" data-sort="name" title="点击排序" data-i18n="th.name" data-i18n-title="title.sort">名称</th>
+                  <th class="lat sortable" data-sort="lat" aria-sort="ascending" title="点击排序" data-i18n="th.lat" data-i18n-title="title.sort">延迟</th>
+                  <th class="flow sortable" data-sort="flow" title="点击排序" data-i18n="th.flow" data-i18n-title="title.sort">流量</th>
                 </tr>
               </thead>
               <tbody id="nodeTable">
@@ -2293,43 +2293,43 @@
         </section>
 
         <section class="dock" id="dock">
-          <div class="dock-resizer" id="dockResizer" title="拖动调节日志高度" aria-hidden="true"></div>
+          <div class="dock-resizer" id="dockResizer" title="拖动调节日志高度" aria-hidden="true" data-i18n-title="title.dockResize"></div>
           <div class="dock-bar">
-            <button class="dock-tab active" data-panel="log">日志</button>
-            <button class="dock-tab" data-panel="conn">连接</button>
+            <button class="dock-tab active" data-panel="log" data-i18n="dock.log">日志</button>
+            <button class="dock-tab" data-panel="conn" data-i18n="dock.conn">连接</button>
             <div class="dock-actions">
-              <button class="ghost-ico" id="clearLog" title="清空日志内容" aria-label="清空日志">
+              <button class="ghost-ico" id="clearLog" title="清空日志内容" aria-label="清空日志" data-i18n-title="title.logClear">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/></svg>
               </button>
-              <button class="ghost-ico dock-toggle" id="dockToggle" title="展开或收起运行日志" aria-label="展开或收起日志" aria-expanded="false" aria-controls="logPanel">
+              <button class="ghost-ico dock-toggle" id="dockToggle" title="展开或收起运行日志" aria-label="展开或收起日志" aria-expanded="false" aria-controls="logPanel" data-i18n-title="title.dockToggle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
               </button>
             </div>
           </div>
           <div class="log-filter" id="logFilter" hidden>
             <input class="lf-input" id="logFilterInput" type="search" placeholder="过滤日志…" aria-label="过滤日志" />
-            <button type="button" class="lf-chip active" data-llvl="all">全部</button>
+            <button type="button" class="lf-chip active" data-llvl="all" data-i18n="log.filterAll">全部</button>
             <button type="button" class="lf-chip" data-llvl="info">INFO</button>
             <button type="button" class="lf-chip" data-llvl="ok">OK</button>
             <button type="button" class="lf-chip" data-llvl="warn">WARN</button>
           </div>
           <div class="log" id="logPanel" aria-live="polite" hidden>
             <div class="log-line" data-lvl="info"><span class="log-time">08:21:44</span><span class="log-tag info">TEST</span><span class="log-msg">URL test for batch done.</span></div>
-            <div class="log-line" data-lvl="ok"><span class="log-time">08:21:44</span><span class="log-tag ok">OK</span><span class="log-msg">URL 测试完成 · 11 个节点</span></div>
-            <div class="log-line" data-lvl="info"><span class="log-time">08:21:52</span><span class="log-tag info">CORE</span><span class="log-msg">启动配置档 <span class="node">[VLESS] 示例节点</span></span></div>
-            <div class="log-line" data-lvl="warn"><span class="log-time">08:21:53</span><span class="log-tag warn">CORE</span><span class="log-msg">停止配置档 <span class="node">[VLESS] 示例节点</span></span></div>
+            <div class="log-line" data-lvl="ok"><span class="log-time">08:21:44</span><span class="log-tag ok">OK</span><span class="log-msg" data-i18n="demo.urlTestDone">URL 测试完成 · 11 个节点</span></div>
+            <div class="log-line" data-lvl="info"><span class="log-time">08:21:52</span><span class="log-tag info">CORE</span><span class="log-msg">启动配置档 <span class="node" data-i18n="demo.sampleNode">[VLESS] 示例节点</span></span></div>
+            <div class="log-line" data-lvl="warn"><span class="log-time">08:21:53</span><span class="log-tag warn">CORE</span><span class="log-msg">停止配置档 <span class="node" data-i18n="demo.sampleNode">[VLESS] 示例节点</span></span></div>
           </div>
           <div class="conn-panel" id="connPanel" hidden>
             <table class="conn-table" aria-label="活跃连接">
               <thead>
                 <tr>
-                  <th class="sortable" data-csort="time" role="columnheader" tabindex="0" title="连接建立时间">时间</th>
-                  <th class="sortable" data-csort="app" role="columnheader" tabindex="0">进程</th>
-                  <th class="sortable" data-csort="pid" role="columnheader" tabindex="0" title="操作系统进程编号">PID</th>
-                  <th class="sortable" data-csort="dest" role="columnheader" tabindex="0">目标</th>
-                  <th class="sortable" data-csort="proto" role="columnheader" tabindex="0">协议</th>
-                  <th class="sortable" data-csort="out" role="columnheader" tabindex="0">出站</th>
-                  <th class="sortable flow" data-csort="flow" role="columnheader" tabindex="0">流量</th>
+                  <th class="sortable" data-csort="time" role="columnheader" tabindex="0" title="连接建立时间" data-i18n="th.time" data-i18n-title="title.connTime">时间</th>
+                  <th class="sortable" data-csort="app" role="columnheader" tabindex="0" data-i18n="th.proc">进程</th>
+                  <th class="sortable" data-csort="pid" role="columnheader" tabindex="0" title="操作系统进程编号" data-i18n-title="title.connPid">PID</th>
+                  <th class="sortable" data-csort="dest" role="columnheader" tabindex="0" data-i18n="th.dest">目标</th>
+                  <th class="sortable" data-csort="proto" role="columnheader" tabindex="0" data-i18n="th.proto">协议</th>
+                  <th class="sortable" data-csort="out" role="columnheader" tabindex="0" data-i18n="th.outbound">出站</th>
+                  <th class="sortable flow" data-csort="flow" role="columnheader" tabindex="0" data-i18n="th.flow">流量</th>
                 </tr>
               </thead>
               <tbody id="connTable">
@@ -2342,32 +2342,32 @@
 
         <section class="view view-block" id="view-block" hidden>
           <div class="settings">
-            <div class="settings-head" data-tauri-drag-region="deep">拦截列表</div>
+            <div class="settings-head" data-tauri-drag-region="deep" data-i18n="block.title">拦截列表</div>
             <div class="settings-body">
               <div class="block-panel" style="max-width:720px;margin:0 auto;">
                 <div class="set-card">
                   <div class="block-toolbar">
                     <div class="block-add">
-                      <input class="field" type="text" id="blockHostInput" placeholder="域名或 IP" title="例如 ads.example.com 或 1.2.3.4" autocomplete="off" spellcheck="false" />
-                      <button type="button" class="tb-btn solid" id="blockAddBtn">添加</button>
+                      <input class="field" type="text" id="blockHostInput" placeholder="域名或 IP" title="例如 ads.example.com 或 1.2.3.4" autocomplete="off" spellcheck="false" data-i18n-placeholder="ph.blockHost" data-i18n-title="title.blockPh" />
+                      <button type="button" class="tb-btn solid" id="blockAddBtn" data-i18n="block.add">添加</button>
                     </div>
                   </div>
                   <div class="list-head block-list-head" data-tauri-drag-region="deep">
-                    <div class="list-title">已拦截</div>
+                    <div class="list-title" data-i18n="block.count">已拦截</div>
                     <span class="list-count" id="blockCount">0</span>
                     <div class="grow" data-tauri-drag-region aria-hidden="true"></div>
                     <div class="search" data-tauri-drag-region="false">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                      <input type="search" id="blockFilterInput" placeholder="过滤域名 / IP / 应用" title="按域名、IP 或应用筛选" autocomplete="off" />
+                      <input type="search" id="blockFilterInput" placeholder="过滤域名 / IP / 应用" title="按域名、IP 或应用筛选" autocomplete="off" data-i18n-placeholder="ph.blockFilter" data-i18n-title="title.blockSearch" />
                     </div>
                   </div>
                   <div class="block-cols block-colhead" id="blockColHead" aria-hidden="true" hidden>
-                    <span title="* = 任意目标">目标</span>
-                    <span title="* = 任意进程">进程</span>
+                    <span title="* = 任意目标" data-i18n="th.dest" data-i18n-title="title.blockAnyHost">目标</span>
+                    <span title="* = 任意进程" data-i18n="th.proc" data-i18n-title="title.blockAnyProc">进程</span>
                     <span></span>
                   </div>
-                  <div id="blockEmpty" class="block-empty" hidden>暂无拦截项。<br/>在底部「连接」表右键：拦截目标 / 拦截应用（可多选后批量拦截），或在上方手动添加域名。</div>
-                  <div id="blockFilterEmpty" class="block-empty" hidden>无匹配项</div>
+                  <div id="blockEmpty" class="block-empty" hidden data-i18n-html="block.emptyFull">暂无拦截项。<br/>在底部「连接」表右键：拦截目标 / 拦截应用（可多选后批量拦截），或在上方手动添加域名。</div>
+                  <div id="blockFilterEmpty" class="block-empty" hidden data-i18n="block.empty">无匹配项</div>
                   <ul id="blockList" class="block-list" aria-label="拦截域名、IP 与应用"></ul>
                 </div>
               </div>
@@ -2377,7 +2377,7 @@
 
         <section class="view view-settings" id="view-settings" hidden>
           <div class="settings">
-            <div class="settings-head" id="settingsHead">设置</div>
+            <div class="settings-head" id="settingsHead" data-i18n="panel.basic">设置</div>
             <div class="settings-body">
 
               <div class="set-panel active" id="panel-basic">
@@ -2435,7 +2435,7 @@
                     <div class="set-label" data-i18n="label.autoConnect">启动时连接</div>
                     <div class="set-right">
                       <span class="set-hint" data-i18n="hint.autoConnect">未实现：不会在启动时自动连接上次节点</span>
-                      <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false" disabled aria-disabled="true" title="未实现"></button></div>
+                      <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false" disabled aria-disabled="true" title="未实现" data-i18n-title="title.nyi"></button></div>
                     </div>
                   </div>
                   <div class="set-section" data-i18n="sec.core">核心</div>
@@ -2450,7 +2450,7 @@
                     <div class="set-label" data-i18n="label.extraCore">额外核心路径</div>
                     <div class="set-right">
                       <span class="set-hint" data-i18n="hint.extraCore">使用自定义核心二进制时填写</span>
-                      <div class="set-ctrl wide"><div class="path-row"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="可选" data-readonly="false"><span class="ph" data-i18n="ph.optional">可选</span></div><button type="button" class="btn-mini" title="选择核心文件" data-i18n="btn.browse">浏览</button></div></div>
+                      <div class="set-ctrl wide"><div class="path-row"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="可选" data-i18n-placeholder="ph.optional" data-readonly="false"><span class="ph" data-i18n="ph.optional">可选</span></div><button type="button" class="btn-mini" title="选择核心文件" data-i18n="btn.browse" data-i18n-title="title.browseCore">浏览</button></div></div>
                     </div>
                   </div>
                   <div class="set-row">
@@ -2471,14 +2471,14 @@
                     <div class="set-label" data-i18n="label.controllerSecret">控制器密钥</div>
                     <div class="set-right">
                       <span class="set-hint" data-i18n="hint.controllerSecret">API 访问密钥；留空则不校验</span>
-                      <div class="set-ctrl"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="可选" data-readonly="false"><span class="ph" data-i18n="ph.optional">可选</span></div></div>
+                      <div class="set-ctrl"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="可选" data-i18n-placeholder="ph.optional" data-readonly="false"><span class="ph" data-i18n="ph.optional">可选</span></div></div>
                     </div>
                   </div>
                   <div class="set-section" data-i18n="sec.about">关于</div>
                   <div class="set-row">
                     <div class="set-label" data-i18n="label.checkUpdate">检查更新</div>
                     <div class="set-right">
-                      <div class="set-ctrl" data-i18n-skip><button type="button" class="btn-mini" data-i18n="btn.check" title="立即检查新版本">检查</button></div>
+                      <div class="set-ctrl" data-i18n-skip><button type="button" class="btn-mini" data-i18n="btn.check" title="立即检查新版本" data-i18n-title="title.checkUpdate">检查</button></div>
                     </div>
                   </div>
                   <div class="set-row">
@@ -2663,7 +2663,7 @@
                     <div class="set-label" data-i18n="label.customRules">自定义规则</div>
                     <div class="set-right">
                       <span class="set-hint" data-i18n="hint.91337c1a">每行一条，如 domain:example.com 或 geoip:cn</span>
-                      <div class="set-ctrl wide"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="domain: 或 geoip:" data-readonly="false"><span class="ph">domain: 或 geoip:</span></div></div>
+                      <div class="set-ctrl wide"><div class="field placeholder" contenteditable="true" spellcheck="false" role="textbox" data-type="text" data-placeholder="domain: 或 geoip:" data-readonly="false"><span class="ph" data-i18n="ph.ruleMatch">domain: 或 geoip:</span></div></div>
                     </div>
                   </div>
                 </div>
@@ -2784,14 +2784,14 @@
                     </div>
                   </div>
                   <div class="set-note" id="tunCidrNote">
-                    <div class="set-note-body">此 Tun CIDR 与私有网段重叠时，Nexus 会自动从局域网绕过中抠出该子网，确保系统 DNS（Tun+1）仍走 Tun。</div>
-                    <button type="button" class="btn-mini" id="tunResetAddr" title="恢复默认 Tun 地址">恢复默认地址</button>
+                    <div class="set-note-body" data-i18n="tun.cidrNote">此 Tun CIDR 与私有网段重叠时，Nexus 会自动从局域网绕过中抠出该子网，确保系统 DNS（Tun+1）仍走 Tun。</div>
+                    <button type="button" class="btn-mini" id="tunResetAddr" title="恢复默认 Tun 地址" data-i18n="tun.reset" data-i18n-title="title.tunReset">恢复默认地址</button>
                   </div>
                   <div class="set-row">
                     <div class="set-label" data-i18n="label.11d439ac">排除故障</div>
                     <div class="set-right">
                       <span class="set-hint" data-i18n="hint.a1daa533">重置 Tun 相关设置并输出诊断信息</span>
-                      <div class="set-ctrl inline"><button type="button" class="btn-mini" id="tunTroubleshoot">排除故障</button></div>
+                      <div class="set-ctrl inline"><button type="button" class="btn-mini" id="tunTroubleshoot" data-i18n="tun.trouble">排除故障</button></div>
                     </div>
                   </div>
                   </div>
@@ -2809,8 +2809,8 @@
                       <div class="set-ctrl wide">
                         <div class="path-row">
                           <div class="field placeholder" id="subUrlField" contenteditable="true" spellcheck="false" role="textbox" data-type="url" data-placeholder="https://…/sub" data-readonly="false"><span class="ph">https://…/sub</span></div>
-                          <button type="button" class="btn-mini" id="subUrlPaste" title="从剪贴板粘贴">粘贴</button>
-                          <button type="button" class="btn-mini" id="subUrlApply" title="保存到当前分组">应用</button>
+                          <button type="button" class="btn-mini" id="subUrlPaste" title="从剪贴板粘贴" data-i18n="btn.paste" data-i18n-title="title.paste">粘贴</button>
+                          <button type="button" class="btn-mini" id="subUrlApply" title="保存到当前分组" data-i18n="btn.apply" data-i18n-title="title.applySub">应用</button>
                         </div>
                       </div>
                     </div>
@@ -2841,7 +2841,7 @@
                     <div class="set-label" data-i18n="label.1045fbc7">自动更新间隔</div>
                     <div class="set-right">
                       <span class="set-hint" data-i18n="hint.44584962">多久检查一次订阅与规则</span>
-                      <div class="set-ctrl"><div class="unit-field"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="number" data-placeholder="" data-readonly="false">1440</div><span class="unit">分钟</span></div></div>
+                      <div class="set-ctrl"><div class="unit-field"><div class="field" contenteditable="true" spellcheck="false" role="textbox" data-type="number" data-placeholder="" data-readonly="false">1440</div><span class="unit" data-i18n="unit.min">分钟</span></div></div>
                     </div>
                   </div>
                   <div class="set-row">
@@ -2886,64 +2886,64 @@
 
     <footer class="statusbar" data-tauri-drag-region="deep" aria-label="状态栏">
       <div data-tauri-drag-region="deep"><span id="sbStatus" data-i18n="sb.stopped">未在运行</span></div>
-      <div class="sb-c" data-tauri-drag-region="deep" title="本机混合入站监听地址"><span data-i18n="sb.mixed">混合入站</span> · <strong>[::]:2080</strong></div>
+      <div class="sb-c" data-tauri-drag-region="deep" title="本机混合入站监听地址" data-i18n-title="title.sbMixed"><span data-i18n="sb.mixed">混合入站</span> · <strong>[::]:2080</strong></div>
       <div class="sb-r" data-tauri-drag-region="deep">
-        <span title="经代理转发的流量"><span data-i18n="sb.proxy">代理</span> <strong id="sbProxy">—</strong></span>
-        <span title="直连未走代理的流量"><span data-i18n="sb.direct">直连</span> <strong id="sbDirect">—</strong></span>
+        <span title="经代理转发的流量" data-i18n-title="title.sbProxy"><span data-i18n="sb.proxy">代理</span> <strong id="sbProxy">—</strong></span>
+        <span title="直连未走代理的流量" data-i18n-title="title.sbDirect"><span data-i18n="sb.direct">直连</span> <strong id="sbDirect">—</strong></span>
       </div>
     </footer>
   </div>
 
 
   <div class="ctx-menu" id="ctxMenu" role="menu" aria-label="节点菜单" hidden>
-    <button class="menu-item" data-ctx="add-clip" role="menuitem"><span class="grow">添加剪贴板中的配置档</span></button>
-    <button class="menu-item" data-ctx="add-file" role="menuitem"><span class="grow">添加文件中的配置档</span></button>
-    <button class="menu-item" data-ctx="scan-qr" role="menuitem"><span class="grow">扫描二维码</span></button>
+    <button class="menu-item" data-ctx="add-clip" role="menuitem"><span class="grow" data-i18n="ctx.addClip">添加剪贴板中的配置档</span></button>
+    <button class="menu-item" data-ctx="add-file" role="menuitem"><span class="grow" data-i18n="ctx.addFile">添加文件中的配置档</span></button>
+    <button class="menu-item" data-ctx="scan-qr" role="menuitem"><span class="grow" data-i18n="menu.scanQr">扫描二维码</span></button>
     <div class="menu-sep"></div>
-    <button class="menu-item" data-ctx="edit" role="menuitem"><span class="grow">编辑</span></button>
-    <button class="menu-item" data-ctx="start" role="menuitem"><span class="grow">启动</span></button>
-    <button class="menu-item" data-ctx="stop" role="menuitem"><span class="grow">停止</span></button>
-    <button class="menu-item" data-ctx="clone" role="menuitem"><span class="grow">克隆</span></button>
-    <button class="menu-item danger" data-ctx="delete" role="menuitem"><span class="grow">删除</span></button>
+    <button class="menu-item" data-ctx="edit" role="menuitem"><span class="grow" data-i18n="ctx.edit">编辑</span></button>
+    <button class="menu-item" data-ctx="start" role="menuitem"><span class="grow" data-i18n="ctx.start">启动</span></button>
+    <button class="menu-item" data-ctx="stop" role="menuitem"><span class="grow" data-i18n="ctx.stop">停止</span></button>
+    <button class="menu-item" data-ctx="clone" role="menuitem"><span class="grow" data-i18n="ctx.clone">克隆</span></button>
+    <button class="menu-item danger" data-ctx="delete" role="menuitem"><span class="grow" data-i18n="ctx.delete">删除</span></button>
     <div class="menu-sep"></div>
-    <button class="menu-item" data-ctx="copy-link" role="menuitem"><span class="grow">复制链接</span></button>
-    <button class="menu-item" data-ctx="show-qr" role="menuitem"><span class="grow">显示二维码</span></button>
+    <button class="menu-item" data-ctx="copy-link" role="menuitem"><span class="grow" data-i18n="ctx.copyLink">复制链接</span></button>
+    <button class="menu-item" data-ctx="show-qr" role="menuitem"><span class="grow" data-i18n="ctx.showQr">显示二维码</span></button>
     <div class="menu-sep"></div>
-    <button class="menu-item" data-ctx="select-all" role="menuitem"><span class="grow">全选</span></button>
-    <button class="menu-item" data-ctx="refresh-sub" role="menuitem"><span class="grow">更新订阅</span></button>
+    <button class="menu-item" data-ctx="select-all" role="menuitem"><span class="grow" data-i18n="ctx.selectAll">全选</span></button>
+    <button class="menu-item" data-ctx="refresh-sub" role="menuitem"><span class="grow" data-i18n="ctx.refreshSub">更新订阅</span></button>
     <div class="menu-sep"></div>
-    <button class="menu-item" data-ctx="url-test" role="menuitem"><span class="grow">URL 测试选定项</span></button>
-    <button class="menu-item" data-ctx="resolve-ip" role="menuitem"><span class="grow">解析选定的出口 IP</span></button>
-    <button class="menu-item" data-ctx="clear-test" role="menuitem"><span class="grow">清理测试结果</span></button>
-    <button class="menu-item" data-ctx="reset-traffic" role="menuitem"><span class="grow">重置流量</span></button>
+    <button class="menu-item" data-ctx="url-test" role="menuitem"><span class="grow" data-i18n="test.urlSelected">URL 测试选定项</span></button>
+    <button class="menu-item" data-ctx="resolve-ip" role="menuitem"><span class="grow" data-i18n="ctx.resolveIp">解析选定的出口 IP</span></button>
+    <button class="menu-item" data-ctx="clear-test" role="menuitem"><span class="grow" data-i18n="test.clear">清理测试结果</span></button>
+    <button class="menu-item" data-ctx="reset-traffic" role="menuitem"><span class="grow" data-i18n="ctx.resetTraffic">重置流量</span></button>
     <div class="menu-sep"></div>
-    <button class="menu-item" data-ctx="dedupe" role="menuitem"><span class="grow">去除重复节点</span></button>
-    <button class="menu-item" data-ctx="rm-unavailable" role="menuitem"><span class="grow">移除不可用</span></button>
-    <button class="menu-item" data-ctx="rm-failed" role="menuitem"><span class="grow">移除失败/无延迟</span></button>
+    <button class="menu-item" data-ctx="dedupe" role="menuitem"><span class="grow" data-i18n="ctx.dedupe">去除重复节点</span></button>
+    <button class="menu-item" data-ctx="rm-unavailable" role="menuitem"><span class="grow" data-i18n="ctx.rmUnavailable">移除不可用</span></button>
+    <button class="menu-item" data-ctx="rm-failed" role="menuitem"><span class="grow" data-i18n="ctx.rmFailed">移除失败/无延迟</span></button>
   </div>
 
   <div class="ctx-menu" id="logCtxMenu" role="menu" aria-label="日志菜单" hidden>
     <button class="menu-item" data-log-ctx="copy" role="menuitem"><span class="grow">Copy</span></button>
     <button class="menu-item" data-log-ctx="select-all" role="menuitem"><span class="grow">Select All</span></button>
-    <button class="menu-item" data-log-ctx="clear" role="menuitem"><span class="grow">清除</span></button>
+    <button class="menu-item" data-log-ctx="clear" role="menuitem"><span class="grow" data-i18n="log.clear">清除</span></button>
   </div>
 
   <div class="ctx-menu" id="connCtxMenu" role="menu" aria-label="连接菜单" hidden>
-    <button class="menu-item" data-conn-ctx="copy-host" role="menuitem" title="仅复制目标域名或 IP">
-      <span class="grow">复制域名/IP</span>
+    <button class="menu-item" data-conn-ctx="copy-host" role="menuitem" title="仅复制目标域名或 IP" data-i18n-title="title.copyHost">
+      <span class="grow" data-i18n="conn.copyHost">复制域名/IP</span>
     </button>
-    <button class="menu-item" data-conn-ctx="copy-row" role="menuitem" title="复制整行连接信息">
-      <span class="grow">复制整行</span>
+    <button class="menu-item" data-conn-ctx="copy-row" role="menuitem" title="复制整行连接信息" data-i18n-title="title.copyRow">
+      <span class="grow" data-i18n="conn.copyRow">复制整行</span>
     </button>
     <div class="menu-sep"></div>
-    <button class="menu-item danger" data-conn-ctx="block-any" role="menuitem" title="拦截该目标：任意进程访问此域名/IP 均拒绝">
-      <span class="grow">拦截目标 · 全部进程</span>
+    <button class="menu-item danger" data-conn-ctx="block-any" role="menuitem" title="拦截该目标：任意进程访问此域名/IP 均拒绝" data-i18n-title="title.blockAny">
+      <span class="grow" data-i18n="conn.blockAny">拦截目标 · 全部进程</span>
     </button>
-    <button class="menu-item danger" data-conn-ctx="block-proc" role="menuitem" title="拦截该目标：仅此应用访问此域名/IP 时拒绝（需完整进程路径）">
-      <span class="grow">拦截目标 · 仅此应用</span>
+    <button class="menu-item danger" data-conn-ctx="block-proc" role="menuitem" title="拦截该目标：仅此应用访问此域名/IP 时拒绝（需完整进程路径）" data-i18n-title="title.blockProc">
+      <span class="grow" data-i18n="conn.blockProc">拦截目标 · 仅此应用</span>
     </button>
-    <button class="menu-item danger" data-conn-ctx="block-app" role="menuitem" title="拦截该应用：此进程的全部网络连接均拒绝（需完整进程路径）">
-      <span class="grow">拦截应用 · 全部连接</span>
+    <button class="menu-item danger" data-conn-ctx="block-app" role="menuitem" title="拦截该应用：此进程的全部网络连接均拒绝（需完整进程路径）" data-i18n-title="title.blockApp">
+      <span class="grow" data-i18n="conn.blockApp">拦截应用 · 全部连接</span>
     </button>
   </div>
 
@@ -2961,11 +2961,11 @@
 
   <div class="confirm-mask" id="quitMask" role="dialog" aria-modal="true" aria-labelledby="quitTitle" hidden>
     <div class="confirm-card warn">
-      <h3 id="quitTitle">断开并退出？</h3>
-      <p id="quitMsg">当前隧道仍在运行（含 Tun / 系统代理）。退出将停止 Core、关闭系统代理并拆除隧道。</p>
+      <h3 id="quitTitle" data-i18n="quit.title">断开并退出？</h3>
+      <p id="quitMsg" data-i18n="quit.msg">当前隧道仍在运行（含 Tun / 系统代理）。退出将停止 Core、关闭系统代理并拆除隧道。</p>
       <div class="confirm-actions">
-        <button type="button" class="btn-ghost" id="quitCancel">取消</button>
-        <button type="button" class="btn-primary" id="quitConfirm">断开并退出</button>
+        <button type="button" class="btn-ghost" id="quitCancel" data-i18n="btn.cancel">取消</button>
+        <button type="button" class="btn-primary" id="quitConfirm" data-i18n="quit.confirm">断开并退出</button>
       </div>
     </div>
   </div>
@@ -2974,62 +2974,62 @@
 
   <div class="confirm-mask" id="editMask" role="dialog" aria-modal="true" aria-labelledby="editTitle" hidden>
     <div class="confirm-card wide edit-node-card">
-      <h3 id="editTitle">编辑节点</h3>
+      <h3 id="editTitle" data-i18n="edit.title">编辑节点</h3>
       <div class="form-grid" id="editForm">
-        <label>名称<input class="field" id="editName" type="text" autocomplete="off" /></label>
+        <label><span data-i18n="edit.name">名称</span><input class="field" id="editName" type="text" autocomplete="off" /></label>
         <div class="form-row2">
-          <label>类型
+          <label><span data-i18n="edit.type">类型</span>
             <button type="button" class="select" id="editType" data-options="VLESS|Trojan|SS|VMess|HTTP|HTTPS|SOCKS|AnyTLS|TUIC|Hysteria2" data-value="VLESS" style="width:100%"><span class="sel-val">VLESS</span><span class="sel-chev">▾</span></button>
           </label>
-          <label>端口<input class="field" id="editPort" type="text" inputmode="numeric" autocomplete="off" /></label>
+          <label><span data-i18n="edit.port">端口</span><input class="field" id="editPort" type="text" inputmode="numeric" autocomplete="off" /></label>
         </div>
-        <label>服务器地址<input class="field" id="editAddr" type="text" autocomplete="off" /></label>
+        <label><span data-i18n="edit.server">服务器地址</span><input class="field" id="editAddr" type="text" autocomplete="off" /></label>
         <div class="form-row2" data-edit-for="vless vmess tuic">
           <label>UUID<input class="field" id="editUuid" type="text" autocomplete="off" spellcheck="false" /></label>
-          <label data-edit-for="vless">Flow<input class="field" id="editFlow" type="text" placeholder="可选 xtls-rprx-vision" autocomplete="off" /></label>
-          <label data-edit-for="vmess">加密<input class="field" id="editSecurity" type="text" placeholder="auto" autocomplete="off" /></label>
+          <label data-edit-for="vless">Flow<input class="field" id="editFlow" type="text" placeholder="可选 xtls-rprx-vision" data-i18n-placeholder="ph.flow" autocomplete="off" /></label>
+          <label data-edit-for="vmess"><span data-i18n="edit.security">加密</span><input class="field" id="editSecurity" type="text" placeholder="auto" autocomplete="off" /></label>
           <label data-edit-for="vmess">AlterID<input class="field" id="editAlterId" type="text" inputmode="numeric" placeholder="0" autocomplete="off" /></label>
-          <label data-edit-for="tuic">拥塞控制<input class="field" id="editCongest" type="text" placeholder="bbr / cubic" autocomplete="off" /></label>
+          <label data-edit-for="tuic"><span data-i18n="edit.congest">拥塞控制</span><input class="field" id="editCongest" type="text" placeholder="bbr / cubic" autocomplete="off" /></label>
         </div>
         <div class="form-row2" data-edit-for="trojan ss http https socks anytls tuic">
-          <label data-edit-for="http https socks">用户名<input class="field" id="editUser" type="text" autocomplete="off" /></label>
-          <label data-edit-for="trojan ss http https socks anytls tuic">密码<input class="field" id="editPass" type="text" autocomplete="off" spellcheck="false" /></label>
-          <label data-edit-for="ss">加密方法<input class="field" id="editMethod" type="text" placeholder="aes-128-gcm" autocomplete="off" /></label>
+          <label data-edit-for="http https socks"><span data-i18n="edit.user">用户名</span><input class="field" id="editUser" type="text" autocomplete="off" /></label>
+          <label data-edit-for="trojan ss http https socks anytls tuic"><span data-i18n="edit.pass">密码</span><input class="field" id="editPass" type="text" autocomplete="off" spellcheck="false" /></label>
+          <label data-edit-for="ss"><span data-i18n="edit.method">加密方法</span><input class="field" id="editMethod" type="text" placeholder="aes-128-gcm" autocomplete="off" /></label>
           <label data-edit-for="tuic">ALPN<input class="field" id="editAlpn" type="text" placeholder="h3" autocomplete="off" /></label>
         </div>
-        <label data-edit-for="vless vmess trojan https anytls tuic">SNI / server_name<input class="field" id="editSni" type="text" placeholder="可选" autocomplete="off" spellcheck="false" /></label>
+        <label data-edit-for="vless vmess trojan https anytls tuic"><span data-i18n="edit.sni">SNI / server_name</span><input class="field" id="editSni" type="text" placeholder="可选" data-i18n-placeholder="ph.optional" autocomplete="off" spellcheck="false" /></label>
         <div class="form-row2" data-edit-for="vless vmess trojan">
-          <label>传输 network<input class="field" id="editNetwork" type="text" placeholder="tcp / ws / grpc" autocomplete="off" /></label>
-          <label data-edit-for="vless vmess trojan">Host 头<input class="field" id="editHost" type="text" placeholder="可选" autocomplete="off" /></label>
+          <label><span data-i18n="edit.network">传输 network</span><input class="field" id="editNetwork" type="text" placeholder="tcp / ws / grpc" autocomplete="off" /></label>
+          <label data-edit-for="vless vmess trojan"><span data-i18n="edit.host">Host 头</span><input class="field" id="editHost" type="text" placeholder="可选" data-i18n-placeholder="ph.optional" autocomplete="off" /></label>
         </div>
-        <label data-edit-for="vless vmess trojan http https">路径 path<input class="field" id="editPath" type="text" placeholder="可选" autocomplete="off" /></label>
+        <label data-edit-for="vless vmess trojan http https"><span data-i18n="edit.path">路径 path</span><input class="field" id="editPath" type="text" placeholder="可选" data-i18n-placeholder="ph.optional" autocomplete="off" /></label>
         <label data-edit-for="vless vmess trojan https anytls" class="edit-check">
-          <input type="checkbox" id="editTls" /> 启用 TLS / WSS
+          <input type="checkbox" id="editTls" /> <span data-i18n="edit.tls">启用 TLS / WSS</span>
         </label>
         <label data-edit-for="vless vmess trojan https anytls tuic" class="edit-check">
-          <input type="checkbox" id="editInsecure" /> 跳过证书校验 (insecure)
+          <input type="checkbox" id="editInsecure" /> <span data-i18n="edit.insecure">跳过证书校验 (insecure)</span>
         </label>
         <p class="groups-sub" id="editOutboundHint" hidden style="margin:4px 0 0;font-size:12px;opacity:.75"></p>
-        <label>备注<input class="field" id="editNote" type="text" placeholder="可选" autocomplete="off" /></label>
+        <label><span data-i18n="edit.note">备注</span><input class="field" id="editNote" type="text" placeholder="可选" data-i18n-placeholder="ph.optional" autocomplete="off" /></label>
       </div>
       <div class="confirm-actions">
-        <button type="button" class="btn-ghost" id="editCancel">取消</button>
-        <button type="button" class="btn-primary" id="editSave">保存</button>
+        <button type="button" class="btn-ghost" id="editCancel" data-i18n="btn.cancel">取消</button>
+        <button type="button" class="btn-primary" id="editSave" data-i18n="btn.save">保存</button>
       </div>
     </div>
   </div>
 
   <div class="confirm-mask" id="groupsMask" role="dialog" aria-modal="true" aria-labelledby="groupsTitle" hidden>
     <div class="confirm-card groups-card" role="document">
-      <h3 id="groupsTitle">管理分组</h3>
-      <p class="groups-sub">新建、重命名或删除订阅分组；顶栏 Tab 会同步更新。</p>
+      <h3 id="groupsTitle" data-i18n="groups.title">管理分组</h3>
+      <p class="groups-sub" data-i18n="groups.sub">新建、重命名或删除订阅分组；顶栏 Tab 会同步更新。</p>
       <div class="group-list" id="groupList" role="list"></div>
       <p class="groups-status" id="groupUpdateStatus" hidden></p>
       <div class="confirm-actions" style="justify-content:space-between">
-        <button type="button" class="btn-ghost" id="groupAdd">新建分组</button>
+        <button type="button" class="btn-ghost" id="groupAdd" data-i18n="groups.new">新建分组</button>
         <div style="display:flex;gap:8px;align-items:center">
-          <button type="button" class="btn-ghost" id="groupUpdateAll">更新全部</button>
-          <button type="button" class="btn-primary" id="groupsClose">完成</button>
+          <button type="button" class="btn-ghost" id="groupUpdateAll" data-i18n="groups.updateAll">更新全部</button>
+          <button type="button" class="btn-primary" id="groupsClose" data-i18n="groups.done">完成</button>
         </div>
       </div>
     </div>
@@ -3037,64 +3037,64 @@
 
   <div class="confirm-mask" id="qrMask" role="dialog" aria-modal="true" aria-labelledby="qrTitle" hidden>
     <div class="confirm-card qr-card">
-      <h3 id="qrTitle">节点二维码</h3>
+      <h3 id="qrTitle" data-i18n="qr.title">节点二维码</h3>
       <p id="qrName" style="text-align:center;margin:0 0 4px;font-size:13px;color:var(--secondary)"></p>
-      <div class="qr-box" id="qrBox" aria-hidden="true"><span class="qr-empty">生成中…</span></div>
+      <div class="qr-box" id="qrBox" aria-hidden="true"><span class="qr-empty" data-i18n="js.generating">生成中…</span></div>
       <pre id="qrLink" class="qr-link"></pre>
       <div class="confirm-actions">
-        <button type="button" class="btn-ghost" id="qrCopy">复制链接</button>
-        <button type="button" class="btn-primary" id="qrClose">关闭</button>
+        <button type="button" class="btn-ghost" id="qrCopy" data-i18n="ctx.copyLink">复制链接</button>
+        <button type="button" class="btn-primary" id="qrClose" data-i18n="btn.close">关闭</button>
       </div>
     </div>
   </div>
 
   <div class="confirm-mask" id="statsMask" role="dialog" aria-modal="true" aria-labelledby="statsTitle" hidden>
     <div class="confirm-card wide">
-      <h3 id="statsTitle">运行状态</h3>
+      <h3 id="statsTitle" data-i18n="stats.title">运行状态</h3>
       <div class="stats-grid" id="statsGrid">
-        <div class="stats-cell"><div class="k">核心</div><div class="v" id="stCore">—</div></div>
-        <div class="stats-cell"><div class="k">连接</div><div class="v" id="stConn">—</div></div>
+        <div class="stats-cell"><div class="k" data-i18n="stats.core">核心</div><div class="v" id="stCore">—</div></div>
+        <div class="stats-cell"><div class="k" data-i18n="dock.conn">连接</div><div class="v" id="stConn">—</div></div>
         <div class="stats-cell"><div class="k">Proxy</div><div class="v" id="stProxy">—</div></div>
         <div class="stats-cell"><div class="k">Direct</div><div class="v" id="stDirect">—</div></div>
-        <div class="stats-cell"><div class="k">运行时长</div><div class="v" id="stUptime">—</div></div>
-        <div class="stats-cell"><div class="k">出口 IP</div><div class="v mono" id="stOutIp">—</div></div>
-        <div class="stats-cell"><div class="k">国家</div><div class="v" id="stCountry">—</div></div>
-        <div class="stats-cell"><div class="k">下次订阅更新</div><div class="v" id="stNextSub">—</div></div>
+        <div class="stats-cell"><div class="k" data-i18n="stats.uptime">运行时长</div><div class="v" id="stUptime">—</div></div>
+        <div class="stats-cell"><div class="k" data-i18n="stats.exitIp">出口 IP</div><div class="v mono" id="stOutIp">—</div></div>
+        <div class="stats-cell"><div class="k" data-i18n="stats.country">国家</div><div class="v" id="stCountry">—</div></div>
+        <div class="stats-cell"><div class="k" data-i18n="stats.nextSub">下次订阅更新</div><div class="v" id="stNextSub">—</div></div>
       </div>
       <div class="confirm-actions">
-        <button type="button" class="btn-ghost" id="statsRefresh">刷新</button>
-        <button type="button" class="btn-primary" id="statsClose">关闭</button>
+        <button type="button" class="btn-ghost" id="statsRefresh" data-i18n="btn.refresh">刷新</button>
+        <button type="button" class="btn-primary" id="statsClose" data-i18n="btn.close">关闭</button>
       </div>
     </div>
   </div>
 
   <div class="confirm-mask" id="exportMask" role="dialog" aria-modal="true" aria-labelledby="exportTitle" hidden>
     <div class="confirm-card wide">
-      <h3 id="exportTitle">导出 Sing-box 配置</h3>
-      <p style="margin:0 0 8px;font-size:12.5px;color:var(--secondary)">当前运行配置预览（可复制）</p>
+      <h3 id="exportTitle" data-i18n="export.title">导出 Sing-box 配置</h3>
+      <p style="margin:0 0 8px;font-size:12.5px;color:var(--secondary)" data-i18n="export.sub">当前运行配置预览（可复制）</p>
       <pre class="export-pre" id="exportPre"></pre>
       <div class="confirm-actions">
-        <button type="button" class="btn-ghost" id="exportClose">关闭</button>
-        <button type="button" class="btn-primary" id="exportCopy">复制全部</button>
+        <button type="button" class="btn-ghost" id="exportClose" data-i18n="btn.close">关闭</button>
+        <button type="button" class="btn-primary" id="exportCopy" data-i18n="btn.copyAll">复制全部</button>
       </div>
     </div>
   </div>
 
   <div class="confirm-mask" id="groupEditMask" role="dialog" aria-modal="true" aria-labelledby="groupEditTitle" hidden>
     <div class="confirm-card groups-card">
-      <h3 id="groupEditTitle">编辑分组</h3>
-      <p class="groups-sub" id="groupEditSub">修改名称与订阅源；保存后顶栏 Tab 同步。</p>
+      <h3 id="groupEditTitle" data-i18n="groupEdit.title">编辑分组</h3>
+      <p class="groups-sub" id="groupEditSub" data-i18n="groupEdit.sub">修改名称与订阅源；保存后顶栏 Tab 同步。</p>
       <div class="form-grid" style="margin-top:14px">
-        <label>名称<input class="field" id="geName" type="text" autocomplete="off" spellcheck="false" /></label>
-        <label>订阅 URL<input class="field" id="geUrl" type="url" autocomplete="off" spellcheck="false" placeholder="https://…" /></label>
+        <label><span data-i18n="edit.name">名称</span><input class="field" id="geName" type="text" autocomplete="off" spellcheck="false" /></label>
+        <label><span data-i18n="label.728c7d71">订阅 URL</span><input class="field" id="geUrl" type="url" autocomplete="off" spellcheck="false" placeholder="https://…" /></label>
         <label style="display:flex;align-items:center;gap:10px;flex-direction:row;margin-top:2px">
           <button type="button" class="switch-only on" id="geAuto" data-switch aria-pressed="true"></button>
-          <span style="font:500 13px/1.2 var(--font);color:var(--label)">自动更新订阅</span>
+          <span style="font:500 13px/1.2 var(--font);color:var(--label)" data-i18n="groupEdit.auto">自动更新订阅</span>
         </label>
       </div>
       <div class="confirm-actions">
-        <button type="button" class="btn-ghost" id="geCancel">取消</button>
-        <button type="button" class="btn-primary" id="geSave">保存</button>
+        <button type="button" class="btn-ghost" id="geCancel" data-i18n="btn.cancel">取消</button>
+        <button type="button" class="btn-primary" id="geSave" data-i18n="btn.save">保存</button>
       </div>
     </div>
   </div>
@@ -3193,12 +3193,12 @@
         const va = sortValue(a, key);
         const vb = sortValue(b, key);
         if (typeof va === 'number' && typeof vb === 'number') cmp = (va - vb) * dir;
-        else cmp = String(va).localeCompare(String(vb), 'zh-CN', { numeric: true, sensitivity: 'base' }) * dir;
+        else cmp = String(va).localeCompare(String(vb), locale, { numeric: true, sensitivity: 'base' }) * dir;
       }
       if (cmp === 0) {
         const na = a.dataset.name || '';
         const nb = b.dataset.name || '';
-        cmp = na.localeCompare(nb, 'zh-CN');
+        cmp = na.localeCompare(nb, locale);
       }
       return cmp;
     });
@@ -4635,8 +4635,8 @@
     const allBtn = document.getElementById('groupUpdateAll');
     const allPrev = allBtn?.textContent;
     if (btn) btn.disabled = true;
-    if (label) label.textContent = '更新中…';
-    if (allBtn && all) { allBtn.disabled = true; allBtn.textContent = '更新中…'; }
+    if (label) label.textContent = t('js.updating');
+    if (allBtn && all) { allBtn.disabled = true; allBtn.textContent = t('js.updating'); }
     setGroupUpdateStatus(all ? `正在更新 ${targets.length} 个订阅…` : `正在更新「${targets[0].name}」…`, 'info');
 
     return (async () => {
@@ -5117,7 +5117,7 @@
     _qrCopyPayload = link || '';
     document.getElementById('qrName').textContent = n;
     document.getElementById('qrLink').textContent = formatQrDisplay(link);
-    setQrBox('<span class="qr-empty">生成中…</span>');
+    setQrBox('<span class="qr-empty" data-i18n="js.generating">生成中…</span>');
     openDialog('qrMask');
     if (!link) {
       setQrBox('<span class="qr-empty">无可编码内容<br>请用含分享链接的节点，或先「复制链接」检查凭证</span>');
@@ -5134,7 +5134,7 @@
       if (!svg) throw new Error('empty svg');
       setQrBox(svg);
     } catch (e) {
-      setQrBox('<span class="qr-empty">生成失败：' + escHtml(String(e?.message || e)) + '</span>');
+      setQrBox('<span class="qr-empty">' + t('js.qrFail', { err: escHtml(String(e?.message || e)) }) + '</span>');
       log('SYS', 'warn', '二维码生成失败：' + (e?.message || e));
     }
   }
@@ -5519,13 +5519,13 @@
       // * = wildcard: host-only → any process; process-only → any destination
       const destLabel = procOnly ? '*' : e.host;
       const destTitle = procOnly
-        ? '此应用访问任意目标均拒绝'
+        ? t('block.tip.anyDest')
         : (e.host || '');
       const destCls = procOnly ? 'block-host is-any' : 'block-host';
       const procLabel = hostOnly ? '*' : (base || '—');
       const procTitle = e.process_path
         ? e.process_path
-        : (hostOnly ? '任意进程访问该目标' : '');
+        : (hostOnly ? t('block.tip.anyProc') : '');
       const procCls = hostOnly ? 'block-scope is-any' : 'block-scope proc';
       const filter = [
         e.host, e.process_path || '', base, destLabel, procLabel,
@@ -5536,7 +5536,7 @@
       return `<li class="block-row" data-host="${escHtml(e.host)}" data-proc="${escHtml(e.process_path || '')}" data-filter="${escHtml(filter)}">
         <span class="${destCls}" title="${escHtml(destTitle)}">${escHtml(destLabel)}</span>
         <span class="${procCls}" title="${escHtml(procTitle)}">${escHtml(procLabel)}</span>
-        <button type="button" class="tb-btn" data-block-del title="从拦截列表移除">删除</button>
+        <button type="button" class="tb-btn" data-block-del title="${escHtml(t('title.blockRemove'))}">${escHtml(t('ctx.delete'))}</button>
       </li>`;
     }).join('');
     ul.querySelectorAll('[data-block-del]').forEach(btn => {
@@ -5742,6 +5742,13 @@
     return false;
   }
 
+  // stock group labels follow locale; user renames stay as stored
+  const STOCK_BACKUP_NAMES = new Set(['备用', 'Backup', 'Резерв', '備用']);
+  function groupDisplayName(g) {
+    if (!g) return '';
+    if (g.id === 'backup' && STOCK_BACKUP_NAMES.has(g.name)) return t('tb.backup');
+    return g.name;
+  }
   function activeGroupId() {
     return document.querySelector('#subSeg button.active')?.dataset.sub || GROUPS[0]?.id || 'default';
   }
@@ -5774,12 +5781,12 @@
     const activeKey = activeGroupId();
     list.innerHTML = GROUPS.map(g => `
       <div class="group-row${g.id === activeKey ? ' active' : ''}" data-gid="${g.id}" role="listitem" tabindex="0">
-        <span class="g-name" title="${g.name}">${g.name}</span>
-        <span class="g-meta">${g.count} 节点</span>
+        <span class="g-name" title="${groupDisplayName(g)}">${groupDisplayName(g)}</span>
+        <span class="g-meta">${g.count} ${t('js.nodes')}</span>
         <span class="g-acts">
-          <button type="button" class="btn-row" data-gact="edit" data-gid="${g.id}">编辑</button>
-          <button type="button" class="btn-row" data-gact="rename" data-gid="${g.id}">重命名</button>
-          <button type="button" class="btn-row danger" data-gact="del" data-gid="${g.id}">删除</button>
+          <button type="button" class="btn-row" data-gact="edit" data-gid="${g.id}" data-i18n="ctx.edit">编辑</button>
+          <button type="button" class="btn-row" data-gact="rename" data-gid="${g.id}" data-i18n="btn.rename">重命名</button>
+          <button type="button" class="btn-row danger" data-gact="del" data-gid="${g.id}" data-i18n="ctx.delete">删除</button>
         </span>
       </div>`).join('');
 
@@ -5815,7 +5822,7 @@
     const keep = GROUPS.some(g => g.id === cur) ? cur : GROUPS[0]?.id;
     seg.innerHTML = GROUPS.map((g, i) => {
       const on = g.id === keep || (!keep && i === 0);
-      return `<button type="button" data-sub="${g.id}" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'active' : ''}">${g.name}</button>`;
+      return `<button type="button" data-sub="${g.id}" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'active' : ''}" title="${g.id === 'backup' && STOCK_BACKUP_NAMES.has(g.name) ? t('title.subBackup') : ''}">${groupDisplayName(g)}</button>`;
     }).join('');
     seg.querySelectorAll('button[data-sub]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -6500,7 +6507,7 @@
     rows.sort((a, b) => {
       const va = connSortValue(a, key), vb = connSortValue(b, key);
       let cmp = (typeof va === 'number' && typeof vb === 'number') ? va - vb
-        : String(va).localeCompare(String(vb), 'zh-CN', { numeric: true });
+        : String(va).localeCompare(String(vb), locale, { numeric: true });
       return cmp * dir;
     });
     const frag = document.createDocumentFragment();
@@ -6610,7 +6617,7 @@
   }
   async function openExportDialog() {
     const pre = document.getElementById('exportPre');
-    if (pre) pre.textContent = '生成中…';
+    if (pre) pre.textContent = t('js.generating');
     openDialog('exportMask');
     try {
       const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
@@ -6652,8 +6659,8 @@
     const autoLabel = auto?.closest('label');
 
     if (mode === 'create') {
-      if (title) title.textContent = '新建分组';
-      if (sub) sub.textContent = '填写名称与可选订阅 URL；保存后出现在顶栏 Tab。';
+      if (title) title.textContent = t('js.newGroup');
+      if (sub) sub.textContent = t('js.newGroupSub');
       if (nameEl) nameEl.value = '';
       if (urlEl) urlEl.value = '';
       if (auto) { auto.classList.add('on'); auto.setAttribute('aria-pressed', 'true'); }
@@ -6663,14 +6670,14 @@
       const g = GROUPS.find(x => x.id === id);
       if (!g) return;
       if (mode === 'rename') {
-        if (title) title.textContent = '重命名分组';
-        if (sub) sub.textContent = '仅修改显示名称；订阅源与节点数不变。';
+        if (title) title.textContent = t('js.renameGroup');
+        if (sub) sub.textContent = t('js.renameGroupSub');
         if (nameEl) nameEl.value = g.name || '';
         if (urlLabel) urlLabel.style.display = 'none';
         if (autoLabel) autoLabel.style.display = 'none';
       } else {
-        if (title) title.textContent = '编辑分组';
-        if (sub) sub.textContent = '修改名称与订阅源；保存后顶栏 Tab 同步。';
+        if (title) title.textContent = t('js.editGroup');
+        if (sub) sub.textContent = t('js.editGroupSub');
         if (nameEl) nameEl.value = g.name || '';
         if (urlEl) urlEl.value = g.url || '';
         const on = g.autoUpdate !== false;
@@ -7358,7 +7365,191 @@
       'th.enable': '启用',
       'th.match': '匹配',
       'th.outbound': '出站',
-    },
+          'block.add': '添加',
+      'block.count': '已拦截',
+      'block.empty': '无匹配项',
+      'block.title': '拦截列表',
+      'btn.apply': '应用',
+      'btn.cancel': '取消',
+      'btn.paste': '粘贴',
+      'conn.blockAny': '拦截目标 · 全部进程',
+      'conn.blockApp': '拦截应用 · 全部连接',
+      'conn.blockProc': '拦截目标 · 仅此应用',
+      'conn.copyHost': '复制域名/IP',
+      'conn.copyRow': '复制整行',
+      'ctx.addClip': '添加剪贴板中的配置档',
+      'ctx.addFile': '添加文件中的配置档',
+      'ctx.clone': '克隆',
+      'ctx.copyLink': '复制链接',
+      'ctx.dedupe': '去除重复节点',
+      'ctx.delete': '删除',
+      'ctx.edit': '编辑',
+      'ctx.refreshSub': '更新订阅',
+      'ctx.resetTraffic': '重置流量',
+      'ctx.resolveIp': '解析选定的出口 IP',
+      'ctx.rmFailed': '移除失败/无延迟',
+      'ctx.rmUnavailable': '移除不可用',
+      'ctx.selectAll': '全选',
+      'ctx.showQr': '显示二维码',
+      'ctx.start': '启动',
+      'ctx.stop': '停止',
+      'dock.conn': '连接',
+      'dock.log': '日志',
+      'edit.congest': '拥塞控制',
+      'edit.method': '加密方法',
+      'edit.pass': '密码',
+      'edit.port': '端口',
+      'edit.security': '加密',
+      'edit.server': '服务器地址',
+      'edit.title': '编辑节点',
+      'edit.user': '用户名',
+      'log.clear': '清除',
+      'log.filterAll': '全部',
+      'menu.addClip': '从剪贴板添加配置',
+      'menu.addFile': '从文件添加配置',
+      'menu.allowLan': '允许局域网连接',
+      'menu.autostart': '随系统启动',
+      'menu.dlProfile': '下载配置档',
+      'menu.export': '导出配置…',
+      'menu.groups': '管理分组…',
+      'menu.hide': '隐藏窗口',
+      'menu.quit': '退出',
+      'menu.remember': '记住配置档',
+      'menu.restartCore': '重启核心',
+      'menu.scanQr': '扫描二维码',
+      'menu.stats': '运行状态…',
+      'quit.confirm': '断开并退出',
+      'quit.msg': '当前隧道仍在运行（含 Tun / 系统代理）。退出将停止 Core、关闭系统代理并拆除隧道。',
+      'quit.title': '断开并退出？',
+      'tb.groups': '分组',
+      'test.clear': '清理测试结果',
+      'test.stop': '停止测试',
+      'test.urlGroup': 'URL 测试当前组',
+      'test.urlSelected': 'URL 测试选定项',
+      'th.addr': '地址',
+      'th.dest': '目标',
+      'th.flow': '流量',
+      'th.lat': '延迟',
+      'th.name': '名称',
+      'th.proc': '进程',
+      'th.proto': '协议',
+      'th.time': '时间',
+      'th.type': '类型',
+      'title.addClip': '粘贴分享链接或 URI 导入',
+      'title.addFile': '选择本地订阅/配置文件',
+      'title.allowLan': '其它设备可连本机入站端口',
+      'title.appMenu': '导入配置、启动项与退出',
+      'title.applySub': '保存到当前分组',
+      'title.autostart': '登录系统后自动打开 Nexus',
+      'title.blockAny': '拦截该目标：任意进程访问此域名/IP 均拒绝',
+      'title.blockAnyHost': '* = 任意目标',
+      'title.blockAnyProc': '* = 任意进程',
+      'title.blockApp': '拦截该应用：此进程的全部网络连接均拒绝（需完整进程路径）',
+      'title.blockAppShort': '拦截应用 · 全部连接',
+      'title.blockPh': '例如 ads.example.com 或 1.2.3.4',
+      'title.blockProc': '拦截该目标：仅此应用访问此域名/IP 时拒绝（需完整进程路径）',
+      'title.blockRemove': '从拦截列表移除',
+      'title.blockSearch': '按域名、IP 或应用筛选',
+      'title.browseCore': '选择核心文件',
+      'title.checkUpdate': '立即检查新版本',
+      'title.collapse': '收窄为图标栏，腾出主区域',
+      'title.connPid': '操作系统进程编号',
+      'title.connTime': '连接建立时间',
+      'title.copyHost': '仅复制目标域名或 IP',
+      'title.copyRow': '复制整行连接信息',
+      'title.dlChina': '中国场景规则集',
+      'title.dlIran': '伊朗场景规则集',
+      'title.dlProfile': '下载地区规则配置档',
+      'title.dlRussia': '俄罗斯场景规则集',
+      'title.dockResize': '拖动调节日志高度',
+      'title.dockToggle': '展开或收起运行日志',
+      'title.export': '导出当前节点的 Core 配置',
+      'title.groups': '新建、重命名、删除订阅分组',
+      'title.hide': '隐藏到菜单栏，不退出',
+      'title.logClear': '清空日志内容',
+      'title.manageGroups': '管理订阅分组',
+      'title.navBlock': '拦截域名与 IP',
+      'title.navHome': '节点列表与连接状态',
+      'title.navRouting': '分流、DNS 与规则',
+      'title.navSettings': '界面、启动与核心',
+      'title.navSub': '订阅更新与安全',
+      'title.navVpn': '入站、系统代理与 Tun',
+      'title.nyi': '未实现',
+      'title.paste': '从剪贴板粘贴',
+      'title.power': '连接 / 断开当前节点',
+      'title.quit': '退出 Nexus',
+      'title.refresh': '立即更新订阅节点列表',
+      'title.remember': '未接线：当前不会在启动时恢复选中配置',
+      'title.restartCore': '重新加载代理核心进程',
+      'title.sbDirect': '直连未走代理的流量',
+      'title.sbMixed': '本机混合入站监听地址',
+      'title.sbProxy': '经代理转发的流量',
+      'title.scanQr': '从屏幕或图片识别节点二维码',
+      'title.sideResize': '拖动调节侧栏宽度',
+      'title.sort': '点击排序',
+      'title.stats': '核心与连接运行摘要',
+      'title.subBackup': '切换到备用订阅',
+      'title.subDefault': '当前订阅：Default',
+      'title.sysProxy': '设置系统 HTTP/HTTPS/SOCKS 代理',
+      'title.testMenu': '测试菜单',
+      'title.tun': '虚拟网卡：接管本机几乎全部流量（需权限）',
+      'title.tunReset': '恢复默认 Tun 地址',
+      'tun.cidrNote': '此 Tun CIDR 与私有网段重叠时，Nexus 会自动从局域网绕过中抠出该子网，确保系统 DNS（Tun+1）仍走 Tun。',
+      'tun.reset': '恢复默认地址',
+      'tun.trouble': '排除故障',
+      'unit.min': '分钟',
+      'js.editGroup': '编辑分组',
+      'js.editGroupSub': '修改名称与订阅源；保存后顶栏 Tab 同步。',
+      'js.generating': '生成中…',
+      'js.newGroup': '新建分组',
+      'js.newGroupSub': '填写名称与可选订阅 URL；保存后出现在顶栏 Tab。',
+      'js.noSubFoot': '未配置订阅源',
+      'js.renameGroup': '重命名分组',
+      'js.renameGroupSub': '仅修改显示名称；订阅源与节点数不变。',
+      'js.updating': '更新中…',
+      'btn.close': '关闭',
+      'btn.copyAll': '复制全部',
+      'btn.refresh': '刷新',
+      'btn.rename': '重命名',
+      'btn.save': '保存',
+      'demo.sampleNode': '[VLESS] 示例节点',
+      'demo.urlTestDone': 'URL 测试完成 · 11 个节点',
+      'export.sub': '当前运行配置预览（可复制）',
+      'export.title': '导出 Sing-box 配置',
+      'groupEdit.auto': '自动更新订阅',
+      'groupEdit.sub': '修改名称与订阅源；保存后顶栏 Tab 同步。',
+      'groupEdit.title': '编辑分组',
+      'groups.done': '完成',
+      'groups.new': '新建分组',
+      'groups.sub': '新建、重命名或删除订阅分组；顶栏 Tab 会同步更新。',
+      'groups.title': '管理分组',
+      'groups.updateAll': '更新全部',
+      'ph.ruleMatch': 'domain: 或 geoip:',
+      'qr.title': '节点二维码',
+      'stats.core': '核心',
+      'stats.country': '国家',
+      'stats.exitIp': '出口 IP',
+      'stats.nextSub': '下次订阅更新',
+      'stats.title': '运行状态',
+      'stats.uptime': '运行时长',
+      'js.nodes': '节点',
+      'edit.host': 'Host 头',
+      'edit.insecure': '跳过证书校验 (insecure)',
+      'edit.name': '名称',
+      'edit.network': '传输 network',
+      'edit.note': '备注',
+      'edit.path': '路径 path',
+      'edit.sni': 'SNI / server_name',
+      'edit.tls': '启用 TLS / WSS',
+      'edit.type': '类型',
+      'ph.flow': '可选 xtls-rprx-vision',
+      'js.qrFail': '生成失败：{err}',
+      'block.emptyFull': '暂无拦截项。<br/>在底部「连接」表右键：拦截目标 / 拦截应用（可多选后批量拦截），或在上方手动添加域名。',
+      'block.tip.anyDest': '此应用访问任意目标均拒绝',
+      'block.tip.anyProc': '任意进程访问该目标',
+      'ph.blockFilter': '过滤域名 / IP / 应用',
+      'ph.blockHost': '域名或 IP',
+},
     'en': {
       'nav.collapse': 'Collapse',
       'nav.collapseTitle': 'Collapse sidebar',
@@ -7570,7 +7761,191 @@
       'th.enable': 'On',
       'th.match': 'Match',
       'th.outbound': 'Outbound',
-    },
+          'block.add': 'Add',
+      'block.count': 'Blocked',
+      'block.empty': 'No matches',
+      'block.title': 'Blocklist',
+      'btn.apply': 'Apply',
+      'btn.cancel': 'Cancel',
+      'btn.paste': 'Paste',
+      'conn.blockAny': 'Block Destination · All Processes',
+      'conn.blockApp': 'Block App · All Connections',
+      'conn.blockProc': 'Block Destination · This App',
+      'conn.copyHost': 'Copy Domain/IP',
+      'conn.copyRow': 'Copy Row',
+      'ctx.addClip': 'Add Profile from Clipboard',
+      'ctx.addFile': 'Add Profile from File',
+      'ctx.clone': 'Clone',
+      'ctx.copyLink': 'Copy Link',
+      'ctx.dedupe': 'Remove Duplicates',
+      'ctx.delete': 'Delete',
+      'ctx.edit': 'Edit',
+      'ctx.refreshSub': 'Update Subscription',
+      'ctx.resetTraffic': 'Reset Traffic',
+      'ctx.resolveIp': 'Resolve Exit IP',
+      'ctx.rmFailed': 'Remove Failed / No Latency',
+      'ctx.rmUnavailable': 'Remove Unavailable',
+      'ctx.selectAll': 'Select All',
+      'ctx.showQr': 'Show QR',
+      'ctx.start': 'Start',
+      'ctx.stop': 'Stop',
+      'dock.conn': 'Connections',
+      'dock.log': 'Log',
+      'edit.congest': 'Congestion',
+      'edit.method': 'Method',
+      'edit.pass': 'Password',
+      'edit.port': 'Port',
+      'edit.security': 'Security',
+      'edit.server': 'Server',
+      'edit.title': 'Edit Node',
+      'edit.user': 'Username',
+      'log.clear': 'Clear',
+      'log.filterAll': 'All',
+      'menu.addClip': 'Add from Clipboard',
+      'menu.addFile': 'Add from File',
+      'menu.allowLan': 'Allow LAN',
+      'menu.autostart': 'Launch at Login',
+      'menu.dlProfile': 'Download Profile',
+      'menu.export': 'Export Config…',
+      'menu.groups': 'Manage Groups…',
+      'menu.hide': 'Hide Window',
+      'menu.quit': 'Quit',
+      'menu.remember': 'Remember Profile',
+      'menu.restartCore': 'Restart Core',
+      'menu.scanQr': 'Scan QR Code',
+      'menu.stats': 'Runtime Status…',
+      'quit.confirm': 'Disconnect & Quit',
+      'quit.msg': 'A tunnel is still running (including Tun / system proxy). Quitting will stop Core, clear system proxy, and tear down the tunnel.',
+      'quit.title': 'Disconnect and Quit?',
+      'tb.groups': 'Groups',
+      'test.clear': 'Clear Test Results',
+      'test.stop': 'Stop Test',
+      'test.urlGroup': 'URL Test Group',
+      'test.urlSelected': 'URL Test Selected',
+      'th.addr': 'Address',
+      'th.dest': 'Destination',
+      'th.flow': 'Traffic',
+      'th.lat': 'Latency',
+      'th.name': 'Name',
+      'th.proc': 'Process',
+      'th.proto': 'Protocol',
+      'th.time': 'Time',
+      'th.type': 'Type',
+      'title.addClip': 'Paste a share link or URI',
+      'title.addFile': 'Choose a local subscription or config file',
+      'title.allowLan': 'Other devices can use this machine’s inbound port',
+      'title.appMenu': 'Import profiles, startup options, and quit',
+      'title.applySub': 'Save to the current group',
+      'title.autostart': 'Open Nexus when you log in',
+      'title.blockAny': 'Block this destination for all processes',
+      'title.blockAnyHost': '* = any destination',
+      'title.blockAnyProc': '* = any process',
+      'title.blockApp': 'Block all connections for this process (full process path required)',
+      'title.blockAppShort': 'Block app · all connections',
+      'title.blockPh': 'e.g. ads.example.com or 1.2.3.4',
+      'title.blockProc': 'Block this destination for this app only (full process path required)',
+      'title.blockRemove': 'Remove from blocklist',
+      'title.blockSearch': 'Filter by domain, IP, or app',
+      'title.browseCore': 'Choose core binary',
+      'title.checkUpdate': 'Check for updates now',
+      'title.collapse': 'Collapse to icons for more main space',
+      'title.connPid': 'Operating-system process ID',
+      'title.connTime': 'Connection start time',
+      'title.copyHost': 'Copy only the destination domain or IP',
+      'title.copyRow': 'Copy the full connection row',
+      'title.dlChina': 'China rule set',
+      'title.dlIran': 'Iran rule set',
+      'title.dlProfile': 'Download regional rule profiles',
+      'title.dlRussia': 'Russia rule set',
+      'title.dockResize': 'Drag to resize the log dock',
+      'title.dockToggle': 'Expand or collapse the runtime log',
+      'title.export': 'Export Core config for the current node',
+      'title.groups': 'Create, rename, or delete subscription groups',
+      'title.hide': 'Hide to the menu bar without quitting',
+      'title.logClear': 'Clear log contents',
+      'title.manageGroups': 'Manage subscription groups',
+      'title.navBlock': 'Block domains and IPs',
+      'title.navHome': 'Node list and connection status',
+      'title.navRouting': 'Routing, DNS, and rules',
+      'title.navSettings': 'Interface, startup, and core',
+      'title.navSub': 'Subscription updates and security',
+      'title.navVpn': 'Inbound, system proxy, and Tun',
+      'title.nyi': 'Not implemented',
+      'title.paste': 'Paste from clipboard',
+      'title.power': 'Connect / disconnect current node',
+      'title.quit': 'Quit Nexus',
+      'title.refresh': 'Update subscription nodes now',
+      'title.remember': 'Not wired: selected profile is not restored on launch',
+      'title.restartCore': 'Reload the proxy core process',
+      'title.sbDirect': 'Direct traffic not via proxy',
+      'title.sbMixed': 'Local mixed inbound listen address',
+      'title.sbProxy': 'Traffic forwarded via proxy',
+      'title.scanQr': 'Scan a node QR from screen or image',
+      'title.sideResize': 'Drag to resize the sidebar',
+      'title.sort': 'Click to sort',
+      'title.stats': 'Core and connection summary',
+      'title.subBackup': 'Switch to backup subscription',
+      'title.subDefault': 'Current subscription: Default',
+      'title.sysProxy': 'Set system HTTP/HTTPS/SOCKS proxy',
+      'title.testMenu': 'Test menu',
+      'title.tun': 'Virtual NIC: take over almost all traffic (permission required)',
+      'title.tunReset': 'Restore default Tun addresses',
+      'tun.cidrNote': 'If this Tun CIDR overlaps a private range, Nexus carves it out of the LAN bypass so system DNS (Tun+1) still uses Tun.',
+      'tun.reset': 'Reset Addresses',
+      'tun.trouble': 'Troubleshoot',
+      'unit.min': 'min',
+      'js.editGroup': 'Edit Group',
+      'js.editGroupSub': 'Edit name and subscription URL; top tabs sync after save.',
+      'js.generating': 'Generating…',
+      'js.newGroup': 'New Group',
+      'js.newGroupSub': 'Enter a name and optional subscription URL; it appears in the top tabs after save.',
+      'js.noSubFoot': 'No subscription source',
+      'js.renameGroup': 'Rename Group',
+      'js.renameGroupSub': 'Only changes the display name; URL and node count stay the same.',
+      'js.updating': 'Updating…',
+      'btn.close': 'Close',
+      'btn.copyAll': 'Copy All',
+      'btn.refresh': 'Refresh',
+      'btn.rename': 'Rename',
+      'btn.save': 'Save',
+      'demo.sampleNode': '[VLESS] Sample node',
+      'demo.urlTestDone': 'URL test done · 11 nodes',
+      'export.sub': 'Preview of the current running config (copyable)',
+      'export.title': 'Export Sing-box Config',
+      'groupEdit.auto': 'Auto-update subscription',
+      'groupEdit.sub': 'Edit name and subscription URL; top tabs sync after save.',
+      'groupEdit.title': 'Edit Group',
+      'groups.done': 'Done',
+      'groups.new': 'New Group',
+      'groups.sub': 'Create, rename, or delete subscription groups; top tabs stay in sync.',
+      'groups.title': 'Manage Groups',
+      'groups.updateAll': 'Update All',
+      'ph.ruleMatch': 'domain: or geoip:',
+      'qr.title': 'Node QR',
+      'stats.core': 'Core',
+      'stats.country': 'Country',
+      'stats.exitIp': 'Exit IP',
+      'stats.nextSub': 'Next subscription update',
+      'stats.title': 'Runtime Status',
+      'stats.uptime': 'Uptime',
+      'js.nodes': 'nodes',
+      'edit.host': 'Host header',
+      'edit.insecure': 'Skip cert verify (insecure)',
+      'edit.name': 'Name',
+      'edit.network': 'Transport network',
+      'edit.note': 'Note',
+      'edit.path': 'Path',
+      'edit.sni': 'SNI / server_name',
+      'edit.tls': 'Enable TLS / WSS',
+      'edit.type': 'Type',
+      'ph.flow': 'optional xtls-rprx-vision',
+      'js.qrFail': 'Failed: {err}',
+      'block.emptyFull': 'No block rules yet.<br/>Right-click the Connections table below: block destination / block app (multi-select supported), or add a domain above.',
+      'block.tip.anyDest': 'This app is blocked for any destination',
+      'block.tip.anyProc': 'Any process accessing this destination',
+      'ph.blockFilter': 'Filter domain / IP / app',
+      'ph.blockHost': 'Domain or IP',
+},
     'ru': {
       'nav.collapse': 'Свернуть',
       'nav.collapseTitle': 'Свернуть боковую панель',
@@ -7629,7 +8004,7 @@
       'label.1045fbc7': 'Интервал автообновления',
       'label.11d439ac': 'Диагностика',
       'label.1537bbc1': 'Маршруты Tun',
-      'label.19ff32b9': 'Tun IPv6',
+      'label.19ff32b9': 'Tun: включить IPv6',
       'label.1a03f672': 'MTU',
       'label.2ca08bab': 'Автообновление подписок',
       'label.3bed1a91': 'IPv4 CIDR',
@@ -7782,7 +8157,191 @@
       'th.enable': 'Вкл',
       'th.match': 'Совпад.',
       'th.outbound': 'Исходящий',
-    },
+          'block.add': 'Добавить',
+      'block.count': 'В списке',
+      'block.empty': 'Нет совпадений',
+      'block.title': 'Чёрный список',
+      'btn.apply': 'Применить',
+      'btn.cancel': 'Отмена',
+      'btn.paste': 'Вставить',
+      'conn.blockAny': 'Блок. цель · все процессы',
+      'conn.blockApp': 'Блок. приложение · все соединения',
+      'conn.blockProc': 'Блок. цель · это приложение',
+      'conn.copyHost': 'Копировать домен/IP',
+      'conn.copyRow': 'Копировать строку',
+      'ctx.addClip': 'Добавить профиль из буфера',
+      'ctx.addFile': 'Добавить профиль из файла',
+      'ctx.clone': 'Клонировать',
+      'ctx.copyLink': 'Копировать ссылку',
+      'ctx.dedupe': 'Удалить дубликаты',
+      'ctx.delete': 'Удалить',
+      'ctx.edit': 'Изменить',
+      'ctx.refreshSub': 'Обновить подписку',
+      'ctx.resetTraffic': 'Сбросить трафик',
+      'ctx.resolveIp': 'Определить выходной IP',
+      'ctx.rmFailed': 'Удалить сбой / без задержки',
+      'ctx.rmUnavailable': 'Удалить недоступные',
+      'ctx.selectAll': 'Выбрать все',
+      'ctx.showQr': 'Показать QR',
+      'ctx.start': 'Запустить',
+      'ctx.stop': 'Остановить',
+      'dock.conn': 'Соединения',
+      'dock.log': 'Журнал',
+      'edit.congest': 'Контроль перегрузки',
+      'edit.method': 'Метод шифрования',
+      'edit.pass': 'Пароль',
+      'edit.port': 'Порт',
+      'edit.security': 'Шифрование',
+      'edit.server': 'Сервер',
+      'edit.title': 'Изменить узел',
+      'edit.user': 'Имя пользователя',
+      'log.clear': 'Очистить',
+      'log.filterAll': 'Все',
+      'menu.addClip': 'Добавить из буфера',
+      'menu.addFile': 'Добавить из файла',
+      'menu.allowLan': 'Разрешить LAN',
+      'menu.autostart': 'Запуск при входе',
+      'menu.dlProfile': 'Скачать профиль',
+      'menu.export': 'Экспорт конфига…',
+      'menu.groups': 'Группы…',
+      'menu.hide': 'Скрыть окно',
+      'menu.quit': 'Выход',
+      'menu.remember': 'Запомнить профиль',
+      'menu.restartCore': 'Перезапустить ядро',
+      'menu.scanQr': 'Сканировать QR',
+      'menu.stats': 'Состояние…',
+      'quit.confirm': 'Отключить и выйти',
+      'quit.msg': 'Туннель ещё работает (включая Tun / системный прокси). Выход остановит Core, снимет системный прокси и разорвёт туннель.',
+      'quit.title': 'Отключить и выйти?',
+      'tb.groups': 'Группы',
+      'test.clear': 'Очистить результаты',
+      'test.stop': 'Остановить тест',
+      'test.urlGroup': 'URL-тест группы',
+      'test.urlSelected': 'URL-тест выбранных',
+      'th.addr': 'Адрес',
+      'th.dest': 'Назначение',
+      'th.flow': 'Трафик',
+      'th.lat': 'Задержка',
+      'th.name': 'Имя',
+      'th.proc': 'Процесс',
+      'th.proto': 'Протокол',
+      'th.time': 'Время',
+      'th.type': 'Тип',
+      'title.addClip': 'Вставить share-ссылку или URI',
+      'title.addFile': 'Выбрать локальную подписку или конфиг',
+      'title.allowLan': 'Другие устройства могут использовать inbound этого ПК',
+      'title.appMenu': 'Импорт, автозапуск и выход',
+      'title.applySub': 'Сохранить в текущую группу',
+      'title.autostart': 'Открывать Nexus после входа в систему',
+      'title.blockAny': 'Блокировать эту цель для всех процессов',
+      'title.blockAnyHost': '* = любое назначение',
+      'title.blockAnyProc': '* = любой процесс',
+      'title.blockApp': 'Блокировать все соединения этого процесса (нужен полный путь)',
+      'title.blockAppShort': 'Блок. приложение · все соединения',
+      'title.blockPh': 'напр. ads.example.com или 1.2.3.4',
+      'title.blockProc': 'Блокировать эту цель только для этого приложения (нужен полный путь)',
+      'title.blockRemove': 'Удалить из чёрного списка',
+      'title.blockSearch': 'Фильтр по домену, IP или приложению',
+      'title.browseCore': 'Выбрать файл ядра',
+      'title.checkUpdate': 'Проверить обновления',
+      'title.collapse': 'Свернуть в иконки, больше места основной области',
+      'title.connPid': 'PID процесса ОС',
+      'title.connTime': 'Время установления соединения',
+      'title.copyHost': 'Копировать только домен или IP',
+      'title.copyRow': 'Копировать всю строку соединения',
+      'title.dlChina': 'Набор правил для Китая',
+      'title.dlIran': 'Набор правил для Ирана',
+      'title.dlProfile': 'Скачать региональные профили правил',
+      'title.dlRussia': 'Набор правил для России',
+      'title.dockResize': 'Перетащите, чтобы изменить высоту журнала',
+      'title.dockToggle': 'Развернуть или свернуть журнал',
+      'title.export': 'Экспорт Core-конфига текущего узла',
+      'title.groups': 'Создать, переименовать или удалить группы подписок',
+      'title.hide': 'Скрыть в строку меню, не выходя',
+      'title.logClear': 'Очистить журнал',
+      'title.manageGroups': 'Управление группами подписок',
+      'title.navBlock': 'Блокировка доменов и IP',
+      'title.navHome': 'Список узлов и состояние',
+      'title.navRouting': 'Маршрутизация, DNS и правила',
+      'title.navSettings': 'Интерфейс, запуск и ядро',
+      'title.navSub': 'Обновление подписок и безопасность',
+      'title.navVpn': 'Inbound, системный прокси и Tun',
+      'title.nyi': 'Не реализовано',
+      'title.paste': 'Вставить из буфера',
+      'title.power': 'Подключить / отключить текущий узел',
+      'title.quit': 'Выйти из Nexus',
+      'title.refresh': 'Обновить узлы подписки сейчас',
+      'title.remember': 'Не подключено: профиль не восстанавливается при запуске',
+      'title.restartCore': 'Перезагрузить процесс ядра',
+      'title.sbDirect': 'Прямой трафик без прокси',
+      'title.sbMixed': 'Адрес локального mixed inbound',
+      'title.sbProxy': 'Трафик через прокси',
+      'title.scanQr': 'Сканировать QR узла с экрана или изображения',
+      'title.sideResize': 'Перетащите, чтобы изменить ширину боковой панели',
+      'title.sort': 'Нажмите для сортировки',
+      'title.stats': 'Сводка ядра и соединений',
+      'title.subBackup': 'Перейти к резервной подписке',
+      'title.subDefault': 'Текущая подписка: Default',
+      'title.sysProxy': 'Системный HTTP/HTTPS/SOCKS прокси',
+      'title.testMenu': 'Меню тестов',
+      'title.tun': 'Виртуальный NIC: почти весь трафик (нужны права)',
+      'title.tunReset': 'Восстановить адреса Tun по умолчанию',
+      'tun.cidrNote': 'Если Tun CIDR пересекается с частной сетью, Nexus исключит его из LAN-bypass, чтобы системный DNS (Tun+1) шёл через Tun.',
+      'tun.reset': 'Сбросить адреса',
+      'tun.trouble': 'Диагностика',
+      'unit.min': 'мин',
+      'js.editGroup': 'Изменить группу',
+      'js.editGroupSub': 'Имя и URL подписки; вкладки синхронизируются после сохранения.',
+      'js.generating': 'Создание…',
+      'js.newGroup': 'Новая группа',
+      'js.newGroupSub': 'Имя и необязательный URL; появится во вкладках после сохранения.',
+      'js.noSubFoot': 'Источник подписки не задан',
+      'js.renameGroup': 'Переименовать группу',
+      'js.renameGroupSub': 'Меняется только отображаемое имя; URL и число узлов без изменений.',
+      'js.updating': 'Обновление…',
+      'btn.close': 'Закрыть',
+      'btn.copyAll': 'Копировать всё',
+      'btn.refresh': 'Обновить',
+      'btn.rename': 'Переименовать',
+      'btn.save': 'Сохранить',
+      'demo.sampleNode': '[VLESS] Пример узла',
+      'demo.urlTestDone': 'URL-тест · 11 узлов',
+      'export.sub': 'Предпросмотр текущей конфигурации (можно копировать)',
+      'export.title': 'Экспорт конфига Sing-box',
+      'groupEdit.auto': 'Автообновление подписки',
+      'groupEdit.sub': 'Имя и URL подписки; вкладки обновятся после сохранения.',
+      'groupEdit.title': 'Изменить группу',
+      'groups.done': 'Готово',
+      'groups.new': 'Новая группа',
+      'groups.sub': 'Создание, переименование и удаление групп; вкладки синхронизируются.',
+      'groups.title': 'Управление группами',
+      'groups.updateAll': 'Обновить все',
+      'ph.ruleMatch': 'domain: или geoip:',
+      'qr.title': 'QR узла',
+      'stats.core': 'Ядро',
+      'stats.country': 'Страна',
+      'stats.exitIp': 'Выходной IP',
+      'stats.nextSub': 'След. обновление подписки',
+      'stats.title': 'Состояние',
+      'stats.uptime': 'Аптайм',
+      'js.nodes': 'узлов',
+      'edit.host': 'Host-заголовок',
+      'edit.insecure': 'Не проверять сертификат (insecure)',
+      'edit.name': 'Имя',
+      'edit.network': 'Транспорт (network)',
+      'edit.note': 'Заметка',
+      'edit.path': 'Путь (path)',
+      'edit.sni': 'SNI / server_name',
+      'edit.tls': 'Включить TLS / WSS',
+      'edit.type': 'Тип',
+      'ph.flow': 'необязательно xtls-rprx-vision',
+      'js.qrFail': 'Ошибка: {err}',
+      'block.emptyFull': 'Список блокировок пуст.<br/>ПКМ по таблице «Соединения»: блок. цель / блок. приложение (можно несколько), или добавьте домен сверху.',
+      'block.tip.anyDest': 'Это приложение блокируется для любых целей',
+      'block.tip.anyProc': 'Любой процесс к этой цели',
+      'ph.blockFilter': 'Фильтр: домен / IP / приложение',
+      'ph.blockHost': 'Домен или IP',
+},
     'zh-TW': {
       'nav.collapse': '收窄',
       'nav.collapseTitle': '收窄側欄',
@@ -7994,7 +8553,191 @@
       'th.enable': '啟用',
       'th.match': '匹配',
       'th.outbound': '出站',
-    },
+          'block.add': '新增',
+      'block.count': '已封鎖',
+      'block.empty': '無符合項目',
+      'block.title': '攔截清單',
+      'btn.apply': '套用',
+      'btn.cancel': '取消',
+      'btn.paste': '貼上',
+      'conn.blockAny': '攔截目標 · 全部程序',
+      'conn.blockApp': '攔截應用 · 全部連線',
+      'conn.blockProc': '攔截目標 · 僅此應用',
+      'conn.copyHost': '複製網域/IP',
+      'conn.copyRow': '複製整列',
+      'ctx.addClip': '從剪貼簿新增設定檔',
+      'ctx.addFile': '從檔案新增設定檔',
+      'ctx.clone': '複製節點',
+      'ctx.copyLink': '複製連結',
+      'ctx.dedupe': '移除重複節點',
+      'ctx.delete': '刪除',
+      'ctx.edit': '編輯',
+      'ctx.refreshSub': '更新訂閱',
+      'ctx.resetTraffic': '重設流量',
+      'ctx.resolveIp': '解析選定出口 IP',
+      'ctx.rmFailed': '移除失敗/無延遲',
+      'ctx.rmUnavailable': '移除不可用',
+      'ctx.selectAll': '全選',
+      'ctx.showQr': '顯示 QR',
+      'ctx.start': '啟動',
+      'ctx.stop': '停止',
+      'dock.conn': '連線',
+      'dock.log': '日誌',
+      'edit.congest': '擁塞控制',
+      'edit.method': '加密方法',
+      'edit.pass': '密碼',
+      'edit.port': '連接埠',
+      'edit.security': '加密',
+      'edit.server': '伺服器位址',
+      'edit.title': '編輯節點',
+      'edit.user': '使用者名稱',
+      'log.clear': '清除',
+      'log.filterAll': '全部',
+      'menu.addClip': '從剪貼簿新增設定',
+      'menu.addFile': '從檔案新增設定',
+      'menu.allowLan': '允許區網連線',
+      'menu.autostart': '隨系統啟動',
+      'menu.dlProfile': '下載設定檔',
+      'menu.export': '匯出設定…',
+      'menu.groups': '管理分組…',
+      'menu.hide': '隱藏視窗',
+      'menu.quit': '結束',
+      'menu.remember': '記住設定檔',
+      'menu.restartCore': '重新啟動核心',
+      'menu.scanQr': '掃描 QR',
+      'menu.stats': '執行狀態…',
+      'quit.confirm': '中斷並結束',
+      'quit.msg': '目前通道仍在執行（含 Tun / 系統代理）。結束將停止 Core、關閉系統代理並拆除通道。',
+      'quit.title': '中斷並結束？',
+      'tb.groups': '分組',
+      'test.clear': '清除測試結果',
+      'test.stop': '停止測試',
+      'test.urlGroup': 'URL 測試目前群組',
+      'test.urlSelected': 'URL 測試選定項目',
+      'th.addr': '位址',
+      'th.dest': '目標',
+      'th.flow': '流量',
+      'th.lat': '延遲',
+      'th.name': '名稱',
+      'th.proc': '程序',
+      'th.proto': '協定',
+      'th.time': '時間',
+      'th.type': '類型',
+      'title.addClip': '貼上分享連結或 URI 匯入',
+      'title.addFile': '選擇本機訂閱/設定檔',
+      'title.allowLan': '其他裝置可連本機入站連接埠',
+      'title.appMenu': '匯入設定、啟動項目與結束',
+      'title.applySub': '儲存到目前分組',
+      'title.autostart': '登入系統後自動開啟 Nexus',
+      'title.blockAny': '攔截此目標：任何程序存取此網域/IP 皆拒絕',
+      'title.blockAnyHost': '* = 任意目標',
+      'title.blockAnyProc': '* = 任意程序',
+      'title.blockApp': '攔截此應用：此程序的全部網路連線皆拒絕（需完整程序路徑）',
+      'title.blockAppShort': '攔截應用 · 全部連線',
+      'title.blockPh': '例如 ads.example.com 或 1.2.3.4',
+      'title.blockProc': '攔截此目標：僅此應用存取此網域/IP 時拒絕（需完整程序路徑）',
+      'title.blockRemove': '從攔截清單移除',
+      'title.blockSearch': '依網域、IP 或應用篩選',
+      'title.browseCore': '選擇核心檔案',
+      'title.checkUpdate': '立即檢查新版本',
+      'title.collapse': '收合為圖示列，騰出主區域',
+      'title.connPid': '作業系統程序編號',
+      'title.connTime': '連線建立時間',
+      'title.copyHost': '僅複製目標網域或 IP',
+      'title.copyRow': '複製整列連線資訊',
+      'title.dlChina': '中國場景規則集',
+      'title.dlIran': '伊朗場景規則集',
+      'title.dlProfile': '下載地區規則設定檔',
+      'title.dlRussia': '俄羅斯場景規則集',
+      'title.dockResize': '拖曳調整日誌高度',
+      'title.dockToggle': '展開或收合執行日誌',
+      'title.export': '匯出目前節點的 Core 設定',
+      'title.groups': '新建、重新命名、刪除訂閱分組',
+      'title.hide': '隱藏到選單列，不結束',
+      'title.logClear': '清空日誌內容',
+      'title.manageGroups': '管理訂閱分組',
+      'title.navBlock': '攔截網域與 IP',
+      'title.navHome': '節點列表與連線狀態',
+      'title.navRouting': '分流、DNS 與規則',
+      'title.navSettings': '介面、啟動與核心',
+      'title.navSub': '訂閱更新與安全',
+      'title.navVpn': '入站、系統代理與 Tun',
+      'title.nyi': '尚未實作',
+      'title.paste': '從剪貼簿貼上',
+      'title.power': '連線 / 中斷目前節點',
+      'title.quit': '結束 Nexus',
+      'title.refresh': '立即更新訂閱節點列表',
+      'title.remember': '尚未接線：啟動時不會還原選取設定',
+      'title.restartCore': '重新載入代理核心程序',
+      'title.sbDirect': '直連未走代理的流量',
+      'title.sbMixed': '本機 mixed 入站監聽位址',
+      'title.sbProxy': '經代理轉發的流量',
+      'title.scanQr': '從螢幕或圖片辨識節點 QR',
+      'title.sideResize': '拖曳調整側欄寬度',
+      'title.sort': '點擊排序',
+      'title.stats': '核心與連線執行摘要',
+      'title.subBackup': '切換到備用訂閱',
+      'title.subDefault': '目前訂閱：Default',
+      'title.sysProxy': '設定系統 HTTP/HTTPS/SOCKS 代理',
+      'title.testMenu': '測試選單',
+      'title.tun': '虛擬網卡：接管本機幾乎全部流量（需權限）',
+      'title.tunReset': '還原預設 Tun 位址',
+      'tun.cidrNote': '若此 Tun CIDR 與私有網段重疊，Nexus 會自動從區網繞過中排除該子網，確保系統 DNS（Tun+1）仍走 Tun。',
+      'tun.reset': '還原預設位址',
+      'tun.trouble': '疑難排解',
+      'unit.min': '分鐘',
+      'js.editGroup': '編輯分組',
+      'js.editGroupSub': '修改名稱與訂閱來源；儲存後頂端分頁會同步。',
+      'js.generating': '產生中…',
+      'js.newGroup': '新建分組',
+      'js.newGroupSub': '填寫名稱與可選訂閱 URL；儲存後會出現在頂端分頁。',
+      'js.noSubFoot': '未設定訂閱來源',
+      'js.renameGroup': '重新命名分組',
+      'js.renameGroupSub': '僅修改顯示名稱；訂閱來源與節點數不變。',
+      'js.updating': '更新中…',
+      'btn.close': '關閉',
+      'btn.copyAll': '複製全部',
+      'btn.refresh': '重新整理',
+      'btn.rename': '重新命名',
+      'btn.save': '儲存',
+      'demo.sampleNode': '[VLESS] 範例節點',
+      'demo.urlTestDone': 'URL 測試完成 · 11 個節點',
+      'export.sub': '目前執行設定預覽（可複製）',
+      'export.title': '匯出 Sing-box 設定',
+      'groupEdit.auto': '自動更新訂閱',
+      'groupEdit.sub': '修改名稱與訂閱來源；儲存後頂端分頁會同步。',
+      'groupEdit.title': '編輯分組',
+      'groups.done': '完成',
+      'groups.new': '新建分組',
+      'groups.sub': '新建、重新命名或刪除訂閱分組；頂端分頁會同步更新。',
+      'groups.title': '管理分組',
+      'groups.updateAll': '全部更新',
+      'ph.ruleMatch': 'domain: 或 geoip:',
+      'qr.title': '節點 QR',
+      'stats.core': '核心',
+      'stats.country': '國家',
+      'stats.exitIp': '出口 IP',
+      'stats.nextSub': '下次訂閱更新',
+      'stats.title': '執行狀態',
+      'stats.uptime': '執行時長',
+      'js.nodes': '節點',
+      'edit.host': 'Host 標頭',
+      'edit.insecure': '略過憑證驗證 (insecure)',
+      'edit.name': '名稱',
+      'edit.network': '傳輸 network',
+      'edit.note': '備註',
+      'edit.path': '路徑 path',
+      'edit.sni': 'SNI / server_name',
+      'edit.tls': '啟用 TLS / WSS',
+      'edit.type': '類型',
+      'ph.flow': '可選 xtls-rprx-vision',
+      'js.qrFail': '產生失敗：{err}',
+      'block.emptyFull': '尚無攔截項目。<br/>在底部「連線」表右鍵：攔截目標 / 攔截應用（可多選後批量攔截），或在上方手動新增網域。',
+      'block.tip.anyDest': '此應用存取任意目標均拒絕',
+      'block.tip.anyProc': '任意程序存取此目標',
+      'ph.blockFilter': '篩選網域 / IP / 應用',
+      'ph.blockHost': '網域或 IP',
+},
   };
   let locale = 'zh-CN';
   let settingsDirty = false;
@@ -8042,6 +8785,24 @@
       if (!key) return;
       el.innerHTML = t(key);
     });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+      const key = el.getAttribute('data-i18n-title');
+      if (!key) return;
+      el.title = t(key);
+      if (el.hasAttribute('aria-label') && /[\u4e00-\u9fff]/.test(el.getAttribute('aria-label') || '')) {
+        el.setAttribute('aria-label', t(key));
+      }
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      if (!key) return;
+      el.setAttribute('placeholder', t(key));
+    });
+    document.querySelectorAll('[data-i18n-html]').forEach(el => {
+      const key = el.getAttribute('data-i18n-html');
+      if (!key) return;
+      el.innerHTML = t(key);
+    });
     // dynamic status strings (connected hero ≠ list selection)
     if (typeof refreshHeroStatus === 'function') refreshHeroStatus();
     else {
@@ -8064,6 +8825,11 @@
     }
     // language option display stays native names; optional localized in log
     if (typeof refreshSelectLabels === 'function') refreshSelectLabels();
+    if (typeof renderBlocklist === 'function' && typeof blocklistItems !== 'undefined') {
+      renderBlocklist(blocklistItems);
+    }
+    if (typeof syncSubSegFromGroups === 'function') syncSubSegFromGroups();
+    if (typeof renderGroupList === 'function') renderGroupList();
     const sc = document.getElementById('sideCollapse');
     if (sc) {
       const collapsed = document.getElementById('window')?.classList.contains('sidebar-collapsed')
@@ -8395,12 +9161,12 @@
   let SUB_PROFILES = {
     default: {
       label: 'Default',
-      foot: '未配置订阅源',
+      foot: t('js.noSubFoot'),
       nodes: []
     },
     backup: {
       label: '备用',
-      foot: '未配置订阅源',
+      foot: t('js.noSubFoot'),
       nodes: []
     }
   };
