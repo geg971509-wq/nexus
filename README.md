@@ -16,7 +16,7 @@ Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box 
 | Target | Arch | Shell / install | Core |
 |--------|------|-----------------|------|
 | macOS | arm64 | `.app` (unsigned internal) | `NexusCore` (CGO) |
-| Windows | x86_64 | `nexus.exe` + NSIS setup | `NexusCore.exe` (purego cross) |
+| Windows | x86_64 | `nexus.exe` (compile only) | `NexusCore.exe` (purego cross) |
 
 ### Data directories
 
@@ -59,11 +59,11 @@ Produces:
 
 Requires: macOS, Xcode CLT, `go`, `cargo`/`rustc`, `npm`.
 
-### Windows shell / NSIS (on a Windows machine)
+### Windows shell (on a Windows machine)
 
-1. Place sources + prebuilt `NexusCore.exe` under a build root (e.g. `NexusBuild`).
+1. Place sources + prebuilt `NexusCore.exe` under a build root (e.g. `NexusBuild`). Include `app/src-tauri/windows/app.manifest`.
 2. Run `script/build_windows_remote.ps1 -NexusRoot <root>` (or your local equivalent).
-3. Artifacts: `app/src-tauri/target/release/nexus.exe` and NSIS under Tauri bundle output.
+3. Artifact: `app/src-tauri/target/release/nexus.exe` only (`--no-bundle`; no NSIS).
 
 Rust + MSVC + npm required on Windows. Mac cannot fully cross the Tauri GUI.
 

@@ -265,7 +265,7 @@ if [[ -f "$WIN_PASS_FILE" ]] && command -v sshpass >/dev/null 2>&1; then
     --exclude='._*' --exclude='.DS_Store' --exclude='.omc' --exclude='**/.omc/**' \
     app/package.json app/package-lock.json app/ui \
     app/src-tauri/src app/src-tauri/Cargo.toml app/src-tauri/Cargo.lock \
-    app/src-tauri/tauri.conf.json app/src-tauri/build.rs \
+    app/src-tauri/tauri.conf.json app/src-tauri/build.rs app/src-tauri/windows \
     app/src-tauri/capabilities app/src-tauri/permissions app/src-tauri/icons \
     script/build_windows_remote.ps1 script/install_rust_windows.ps1
   "${SCP_BASE[@]}" "$PACK" "${WIN_USER}@${WIN_HOST}:C:/Users/${WIN_USER}/nexus-win-src.tgz"
@@ -283,9 +283,6 @@ if [[ -f "$WIN_PASS_FILE" ]] && command -v sshpass >/dev/null 2>&1; then
     "${SCP_BASE[@]}" \
       "${WIN_USER}@${WIN_HOST}:${REMOTE_DIR}/app/src-tauri/target/release/nexus.exe" \
       "$WIN_DIST/nexus.exe" && ok "pulled nexus.exe"
-    "${SCP_BASE[@]}" \
-      "${WIN_USER}@${WIN_HOST}:${REMOTE_DIR}/app/src-tauri/target/release/bundle/nsis/Nexus_0.2.0_x64-setup.exe" \
-      "$WIN_DIST/Nexus_0.2.0_x64-setup.exe" 2>/dev/null && ok "pulled nsis" || true
   fi
 else
   log "skip remote Windows shell (need sshpass + $WIN_PASS_FILE); Core-only package at $WIN_DIST"

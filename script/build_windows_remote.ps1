@@ -62,12 +62,13 @@ if (Test-Path (Join-Path $NexusRoot "app\ui\assets")) {
 }
 
 $ov = Join-Path $NexusRoot "app\src-tauri\tauri.release-ui.json"
-$json = '{"build":{"frontendDist":"./ui-release-dist"},"bundle":{"targets":["nsis"]}}'
+# Compile only — no NSIS/installer (user runs nexus.exe directly).
+$json = '{"build":{"frontendDist":"./ui-release-dist"},"bundle":{"active":false}}'
 [System.IO.File]::WriteAllText($ov, $json)
 
 $env:NEXUS_CORE_BIN = (Resolve-Path $coreDest).Path
-Write-Host "tauri build..."
-npx tauri build --config $ov
+Write-Host "tauri build (no-bundle)..."
+npx tauri build --no-bundle --config $ov
 if ($LASTEXITCODE -ne 0) { throw "tauri build failed: $LASTEXITCODE" }
 
 $exe = Join-Path $NexusRoot "app\src-tauri\target\release\nexus.exe"

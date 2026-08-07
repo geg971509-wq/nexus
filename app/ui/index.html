@@ -1091,9 +1091,99 @@
   .view-home.active {
     grid-template-rows: auto minmax(0, 1fr) auto;
   }
-  .view-settings.active {
+  .view-settings.active,
+  .view-block.active {
     grid-template-rows: minmax(0, 1fr);
   }
+
+  /* Blocklist — same chrome as settings + list-head search like 节点 */
+  .block-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 14px 16px 12px;
+    border-bottom: 0.5px solid var(--separator);
+  }
+  .block-toolbar .block-add {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+  }
+  .block-toolbar .field {
+    flex: 1 1 auto;
+    width: auto; /* override .field width:100% so 添加 is not crushed */
+    min-width: 0;
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12.5px;
+  }
+  .block-toolbar .tb-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-width: 52px;
+  }
+  .block-list-head {
+    padding: 10px 16px 8px;
+  }
+  .block-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 8px 10px;
+    max-height: min(52vh, 520px);
+    overflow: auto;
+  }
+  .block-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(88px, 0.55fr) auto;
+    align-items: center;
+    column-gap: 12px;
+    min-height: 36px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    transition: background .12s var(--ease);
+  }
+  .block-row:hover { background: var(--row-hover); }
+  .block-row .block-host {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--label);
+    letter-spacing: -0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .block-row .block-scope {
+    font-size: 11.5px;
+    color: var(--tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    text-align: left;
+  }
+  .block-row .block-scope.proc {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--secondary);
+  }
+  .block-row .tb-btn {
+    justify-self: end;
+    color: var(--secondary);
+  }
+  .block-row .tb-btn:hover { color: var(--red, #ff3b30); }
+  .block-empty {
+    padding: 28px 20px 32px;
+    text-align: center;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--tertiary);
+  }
+  .block-empty[hidden] { display: none !important; }
 
   /* Settings — macOS Preferences style */
   .settings-head {
@@ -2167,15 +2257,29 @@
 
         <section class="view view-block" id="view-block" hidden>
           <div class="settings">
-            <div class="settings-head">拦截列表</div>
+            <div class="settings-head" data-tauri-drag-region="deep">拦截列表</div>
             <div class="settings-body">
-              <div class="set-card" style="padding:16px 18px;">
-                <div class="block-add-row" style="display:flex;gap:8px;margin-bottom:12px;">
-                  <input type="text" id="blockHostInput" placeholder="域名或 IP" title="例如 ads.example.com 或 1.2.3.4" style="flex:1;min-width:0;" />
-                  <button type="button" class="tb-btn solid" id="blockAddBtn">添加</button>
+              <div class="block-panel" style="max-width:720px;margin:0 auto;">
+                <div class="set-card">
+                  <div class="block-toolbar">
+                    <div class="block-add">
+                      <input class="field" type="text" id="blockHostInput" placeholder="域名或 IP" title="例如 ads.example.com 或 1.2.3.4" autocomplete="off" spellcheck="false" />
+                      <button type="button" class="tb-btn solid" id="blockAddBtn">添加</button>
+                    </div>
+                  </div>
+                  <div class="list-head block-list-head" data-tauri-drag-region="deep">
+                    <div class="list-title">已拦截</div>
+                    <span class="list-count" id="blockCount">0</span>
+                    <div class="grow" data-tauri-drag-region aria-hidden="true"></div>
+                    <div class="search" data-tauri-drag-region="false">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                      <input type="search" id="blockFilterInput" placeholder="过滤域名 / IP" title="按域名或 IP 筛选" autocomplete="off" />
+                    </div>
+                  </div>
+                  <div id="blockEmpty" class="block-empty" hidden>暂无拦截项。<br/>在底部「连接」表右键目标 → Block，或在上方手动添加。</div>
+                  <div id="blockFilterEmpty" class="block-empty" hidden>无匹配项</div>
+                  <ul id="blockList" class="block-list" aria-label="拦截域名与 IP"></ul>
                 </div>
-                <div id="blockEmpty" class="set-hint" hidden>暂无拦截项。可在底部「连接」表右键目标 → Block。</div>
-                <ul id="blockList" class="block-list" style="list-style:none;margin:0;padding:0;"></ul>
               </div>
             </div>
           </div>
@@ -2735,8 +2839,19 @@
   </div>
 
   <div class="ctx-menu" id="connCtxMenu" role="menu" aria-label="连接菜单" hidden>
-    <button class="menu-item" data-conn-ctx="copy" role="menuitem"><span class="grow">复制</span></button>
-    <button class="menu-item danger" data-conn-ctx="block" role="menuitem"><span class="grow">Block</span></button>
+    <button class="menu-item" data-conn-ctx="copy-host" role="menuitem" title="仅复制目标域名或 IP">
+      <span class="grow">复制域名/IP</span>
+    </button>
+    <button class="menu-item" data-conn-ctx="copy-row" role="menuitem" title="复制整行连接信息">
+      <span class="grow">复制整行</span>
+    </button>
+    <div class="menu-sep"></div>
+    <button class="menu-item danger" data-conn-ctx="block-any" role="menuitem" title="所有进程访问该域名/IP 均拦截">
+      <span class="grow">拦截 · 任意进程</span>
+    </button>
+    <button class="menu-item danger" data-conn-ctx="block-proc" role="menuitem" title="仅当前进程访问该域名/IP 时拦截（需完整进程路径）">
+      <span class="grow">拦截 · 当前进程</span>
+    </button>
   </div>
 
   <div class="confirm-mask" id="confirmMask" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden>
@@ -5180,50 +5295,156 @@
   let blocklistItems = [];
   let blocklistLoaded = false;
 
-  async function loadBlocklist() {
-    try {
-      const r = await nexusInvoke('blocklist_get');
-      if (r && r.offline) return blocklistItems;
-      if (!r || !r.ok) {
-        if (r && r.error) log('SYS', 'warn', '读取拦截列表失败：' + r.error);
-        return blocklistItems;
-      }
-      const items = (r.data && Array.isArray(r.data.items)) ? r.data.items : [];
-      blocklistItems = items.slice();
-      blocklistLoaded = true;
-      renderBlocklist(blocklistItems);
-      return blocklistItems;
-    } catch (e) {
-      try { log('SYS', 'warn', '读取拦截列表失败：' + (e && e.message || e)); } catch (_) {}
-      return blocklistItems;
+  /** Normalize store/UI entry → {host, process_path?} */
+  function coerceBlockEntry(raw) {
+    if (raw == null) return null;
+    if (typeof raw === 'string') {
+      const host = String(raw).trim();
+      return host ? { host, process_path: null } : null;
     }
+    if (typeof raw === 'object') {
+      const host = String(raw.host || '').trim();
+      if (!host) return null;
+      const pp = raw.process_path != null ? String(raw.process_path).trim() : '';
+      return { host, process_path: pp || null };
+    }
+    return null;
+  }
+
+  function blockEntryKey(ent) {
+    const e = coerceBlockEntry(ent);
+    if (!e) return '';
+    return e.process_path ? `${e.host.toLowerCase()}\0${e.process_path}` : e.host.toLowerCase();
+  }
+
+  function blockEntryLabel(ent) {
+    const e = coerceBlockEntry(ent);
+    if (!e) return '';
+    if (!e.process_path) return e.host;
+    const base = e.process_path.split(/[/\\]/).filter(Boolean).pop() || e.process_path;
+    return `${e.host} · ${base}`;
+  }
+
+  function extractBlocklistItems(data) {
+    if (!data) return null;
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data.items)) return data.items;
+    if (Array.isArray(data.blocklist)) return data.blocklist;
+    return null;
+  }
+
+  let blocklistLoadPromise = null;
+  async function loadBlocklist() {
+    // share in-flight get; if it finished offline, callers may re-enter after finally
+    if (blocklistLoadPromise) return blocklistLoadPromise;
+    blocklistLoadPromise = (async () => {
+      try {
+        let items = null;
+        const r = await nexusInvoke('blocklist_get');
+        if (r && r.offline) {
+          if (blocklistItems.length) renderBlocklist(blocklistItems);
+          else applyBlocklistFilter();
+          return blocklistItems;
+        }
+        if (r && r.ok) items = extractBlocklistItems(r.data);
+        if (items == null) {
+          // fallback: store_snapshot also carries blocklist (older/partial get shapes)
+          try {
+            const st = await nexusInvoke('store_snapshot');
+            if (st && st.ok) items = extractBlocklistItems(st.data);
+          } catch (_) {}
+        }
+        if (items == null) {
+          if (r && r.error) log('SYS', 'warn', '读取拦截列表失败：' + r.error);
+          if (blocklistItems.length) renderBlocklist(blocklistItems);
+          else applyBlocklistFilter();
+          return blocklistItems;
+        }
+        blocklistItems = items.map(coerceBlockEntry).filter(Boolean);
+        blocklistLoaded = true;
+        renderBlocklist(blocklistItems);
+        return blocklistItems;
+      } catch (e) {
+        try { log('SYS', 'warn', '读取拦截列表失败：' + (e && e.message || e)); } catch (_) {}
+        if (blocklistItems.length) renderBlocklist(blocklistItems);
+        else applyBlocklistFilter();
+        return blocklistItems;
+      } finally {
+        blocklistLoadPromise = null;
+      }
+    })();
+    return blocklistLoadPromise;
+  }
+
+  /** Tab enter: paint cache, then get; one retry if first attempt was offline. */
+  async function ensureBlocklistOnView() {
+    if (blocklistItems.length) renderBlocklist(blocklistItems);
+    else applyBlocklistFilter();
+    await loadBlocklist();
+    if (!blocklistLoaded) await loadBlocklist();
+  }
+
+  function blockFilterQuery() {
+    return (document.getElementById('blockFilterInput')?.value || '').trim().toLowerCase();
+  }
+
+  function applyBlocklistFilter() {
+    const ul = document.getElementById('blockList');
+    const empty = document.getElementById('blockEmpty');
+    const filterEmpty = document.getElementById('blockFilterEmpty');
+    const countEl = document.getElementById('blockCount');
+    if (!ul) return;
+    const q = blockFilterQuery();
+    const rows = ul.querySelectorAll('.block-row');
+    let shown = 0;
+    rows.forEach((row) => {
+      const hay = (row.dataset.filter || row.textContent || '').toLowerCase();
+      const show = !q || hay.includes(q);
+      row.hidden = !show;
+      if (show) shown++;
+    });
+    const total = rows.length;
+    if (countEl) countEl.textContent = q ? `${shown}/${total}` : String(total);
+    if (empty) empty.hidden = total > 0;
+    if (filterEmpty) filterEmpty.hidden = !(total > 0 && shown === 0);
+    ul.hidden = total === 0;
   }
 
   function renderBlocklist(items) {
     const ul = document.getElementById('blockList');
-    const empty = document.getElementById('blockEmpty');
     if (!ul) return;
-    const list = Array.isArray(items) ? items : [];
-    if (empty) empty.hidden = list.length > 0;
-    ul.innerHTML = list.map((h) => (
-      `<li class="block-row" data-host="${escHtml(h)}" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--separator);">
-        <span class="grow" style="font-family:var(--mono);font-size:12.5px;">${escHtml(h)}</span>
-        <button type="button" class="tb-btn" data-block-del>删除</button>
-      </li>`
-    )).join('');
+    const list = (Array.isArray(items) ? items : []).map(coerceBlockEntry).filter(Boolean);
+    ul.innerHTML = list.map((e) => {
+      const scopeLabel = e.process_path
+        ? (e.process_path.split(/[/\\]/).filter(Boolean).pop() || e.process_path)
+        : '任意进程';
+      const scope = e.process_path
+        ? `<span class="block-scope proc" title="${escHtml(e.process_path)}">${escHtml(scopeLabel)}</span>`
+        : `<span class="block-scope">任意进程</span>`;
+      const filter = [e.host, e.process_path || '', scopeLabel, e.process_path ? '进程' : '任意进程'].join(' ');
+      return `<li class="block-row" data-host="${escHtml(e.host)}" data-proc="${escHtml(e.process_path || '')}" data-filter="${escHtml(filter)}">
+        <span class="block-host" title="${escHtml(e.host)}">${escHtml(e.host)}</span>
+        ${scope}
+        <button type="button" class="tb-btn" data-block-del title="从拦截列表移除">删除</button>
+      </li>`;
+    }).join('');
     ul.querySelectorAll('[data-block-del]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const host = btn.closest('[data-host]')?.dataset.host || '';
+        const row = btn.closest('.block-row');
+        const host = row?.dataset.host || '';
+        const proc = row?.dataset.proc || '';
         if (!host) return;
         if (!blocklistLoaded) await loadBlocklist();
         if (!blocklistLoaded) {
           log('SYS', 'warn', '拦截列表未加载，拒绝删除以免清空');
           return;
         }
-        const next = blocklistItems.filter(x => x !== host);
+        const key = blockEntryKey({ host, process_path: proc || null });
+        const next = blocklistItems.filter(x => blockEntryKey(x) !== key);
         await saveBlocklist(next, { reason: 'delete' });
       });
     });
+    applyBlocklistFilter();
   }
 
   let blocklistApplyBusy = false;
@@ -5270,7 +5491,15 @@
         log('SYS', 'warn', '拦截列表未加载，拒绝写入以免清空');
         return false;
       }
-      const r = await nexusInvoke('blocklist_put', { items });
+      const payload = (Array.isArray(items) ? items : [])
+        .map(coerceBlockEntry)
+        .filter(Boolean)
+        .map((e) => {
+          const o = { host: e.host };
+          if (e.process_path) o.process_path = e.process_path;
+          return o;
+        });
+      const r = await nexusInvoke('blocklist_put', { items: payload });
       if (r && r.offline) {
         log('SYS', 'warn', '后端未就绪，无法保存拦截列表');
         return false;
@@ -5279,7 +5508,7 @@
         log('SYS', 'warn', '保存拦截列表失败' + (r && r.error ? ('：' + r.error) : ''));
         return false;
       }
-      blocklistItems = r.data.items;
+      blocklistItems = r.data.items.map(coerceBlockEntry).filter(Boolean);
       blocklistLoaded = true;
       renderBlocklist(blocklistItems);
       log('SYS', 'ok', reason === 'delete' ? '已移除拦截项' : '拦截列表已更新');
@@ -5291,7 +5520,8 @@
     }
   }
 
-  async function addBlockHost(raw) {
+  /** host = domain/IP; processPath null/empty = any process */
+  async function addBlockHost(raw, processPath) {
     const host = String(raw || '').trim();
     if (!host) {
       log('SYS', 'warn', '无效地址');
@@ -5301,16 +5531,23 @@
       log('SYS', 'warn', '无效地址');
       return false;
     }
+    const pp = processPath != null ? String(processPath).trim() : '';
+    if (pp && (pp.includes('\0') || /[\r\n]/.test(pp))) {
+      log('SYS', 'warn', '无效进程路径');
+      return false;
+    }
     if (!blocklistLoaded) await loadBlocklist();
     if (!blocklistLoaded) {
       log('SYS', 'warn', '拦截列表未加载，拒绝添加以免清空');
       return false;
     }
-    if (blocklistItems.some(x => String(x).toLowerCase() === host.toLowerCase())) {
-      log('SYS', 'info', '已在拦截列表：' + host);
+    const entry = { host, process_path: pp || null };
+    const key = blockEntryKey(entry);
+    if (blocklistItems.some(x => blockEntryKey(x) === key)) {
+      log('SYS', 'info', '已在拦截列表：' + blockEntryLabel(entry));
       return true;
     }
-    return saveBlocklist(blocklistItems.concat([host]), { reason: 'add' });
+    return saveBlocklist(blocklistItems.concat([entry]), { reason: 'add' });
   }
 
   document.getElementById('blockAddBtn')?.addEventListener('click', () => {
@@ -5323,6 +5560,7 @@
       document.getElementById('blockAddBtn')?.click();
     }
   });
+  document.getElementById('blockFilterInput')?.addEventListener('input', () => applyBlocklistFilter());
 
   async function hydrateCatalogOnBoot() {
     // store first; migrate LS → store once if store empty
@@ -5521,7 +5759,7 @@
     if (!e.target.closest('#connCtxMenu')) closeConnCtxMenu?.();
   });
 
-  // ——— connection row right-click: 复制整行 ———
+  // ——— connection row right-click: 复制域名/IP · 复制整行 · 拦截 ———
   const connPanel = document.getElementById('connPanel');
   const connTable = document.getElementById('connTable');
   const connCtxMenu = document.getElementById('connCtxMenu');
@@ -5538,6 +5776,7 @@
     closeLogCtxMenu();
     connCtxMenu.hidden = false;
     connCtxMenu.classList.add('open');
+    syncConnBlockMenuState();
     const w = connCtxMenu.offsetWidth || 120;
     const h = connCtxMenu.offsetHeight || 40;
     connCtxMenu.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
@@ -5565,28 +5804,73 @@
     if (!raw || raw === '—') return '';
     return raw;
   }
+  function processPathFromConnRow(row) {
+    if (!row) return '';
+    const p = (row.dataset.proc || '').trim();
+    if (!p || p === '—') return '';
+    // basename-only is not enough for sing-box process_path match
+    if (!p.includes('/') && !p.includes('\\')) return '';
+    return p;
+  }
+  function syncConnBlockMenuState() {
+    if (!connCtxMenu) return;
+    const hostReady = !!hostFromConnRow(connCtxRow);
+    const hostBtn = connCtxMenu.querySelector('[data-conn-ctx="copy-host"]');
+    if (hostBtn) {
+      hostBtn.disabled = !hostReady;
+      hostBtn.setAttribute('aria-disabled', hostReady ? 'false' : 'true');
+      hostBtn.classList.toggle('is-disabled', !hostReady);
+    }
+    const procBtn = connCtxMenu.querySelector('[data-conn-ctx="block-proc"]');
+    if (!procBtn) return;
+    const ready = !!processPathFromConnRow(connCtxRow);
+    procBtn.disabled = !ready;
+    procBtn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+    procBtn.title = ready
+      ? '仅当前进程访问该域名/IP 时拦截'
+      : '完整进程路径尚未就绪，请稍候再试或改用「任意进程」';
+    procBtn.classList.toggle('is-disabled', !ready);
+  }
   document.querySelectorAll('#connCtxMenu [data-conn-ctx]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const act = btn.dataset.connCtx;
+      if (act === 'block-proc' && btn.disabled) {
+        log('SYS', 'warn', '完整进程路径尚未就绪，请稍候再试或改用「拦截 · 任意进程」');
+        closeConnCtxMenu();
+        return;
+      }
+      if (act === 'copy-host' && btn.disabled) {
+        log('SYS', 'warn', '无效地址');
+        closeConnCtxMenu();
+        return;
+      }
       closeConnCtxMenu();
-      if (act === 'copy') {
+      if (act === 'copy-host') {
+        const host = hostFromConnRow(connCtxRow);
+        if (!host) { log('SYS', 'warn', '无效地址'); return; }
+        copyText(host).then(() => log('SYS', 'ok', '已复制域名/IP：' + host))
+          .catch(() => log('SYS', 'ok', '已复制域名/IP（示意）'));
+      } else if (act === 'copy-row') {
         const text = connRowText(connCtxRow);
         if (!text) { log('SYS', 'info', '无可复制连接'); return; }
-        copyText(text).then(() => log('SYS', 'ok', '已复制连接：' + text.replace(/\t/g, ' · ')))
-          .catch(() => log('SYS', 'ok', '已复制连接（示意）'));
-      } else if (act === 'block') {
+        copyText(text).then(() => log('SYS', 'ok', '已复制整行：' + text.replace(/\t/g, ' · ')))
+          .catch(() => log('SYS', 'ok', '已复制整行（示意）'));
+      } else if (act === 'block-any' || act === 'block-proc') {
         const host = hostFromConnRow(connCtxRow);
         if (!host) {
           log('SYS', 'warn', '无效地址');
           return;
         }
-        const key = host.toLowerCase();
-        if (typeof blocklistItems !== 'undefined' && Array.isArray(blocklistItems)
-          && blocklistItems.some(x => String(x).toLowerCase() === key || String(x) === host)) {
-          log('SYS', 'info', '已在拦截列表：' + host);
-          return;
+        if (act === 'block-proc') {
+          const pp = processPathFromConnRow(connCtxRow);
+          if (!pp) {
+            log('SYS', 'warn', '完整进程路径尚未就绪，请稍候再试或改用「拦截 · 任意进程」');
+            return;
+          }
+          if (typeof addBlockHost === 'function') await addBlockHost(host, pp);
+        } else if (typeof addBlockHost === 'function') {
+          await addBlockHost(host, null);
         }
-        if (typeof addBlockHost === 'function') await addBlockHost(host);
       }
     });
   });
@@ -5647,6 +5931,7 @@
       const tms = Number(c.created_at) || 0;
       const time = fmtConnTime(tms);
       const app = c.process || '—';
+      const procPath = (c.process_path && String(c.process_path).trim()) || '';
       const dest = c.domain || c.dest || '—';
       let proto = c.network || '';
       if (c.protocol) proto = proto ? `${proto} (${c.protocol})` : c.protocol;
@@ -5654,7 +5939,7 @@
       const out = c.outbound || '—';
       const flow = `${fmtBytes(c.upload)}↑ ${fmtBytes(c.download)}↓`;
       const flowBytes = (Number(c.upload) || 0) + (Number(c.download) || 0);
-      return `<tr data-id="${escHtml(c.id || '')}" data-time="${tms}" data-app="${escHtml(app)}" data-dest="${escHtml(dest)}" data-proto="${escHtml(proto)}" data-out="${escHtml(out)}" data-flow="${flowBytes}">
+      return `<tr data-id="${escHtml(c.id || '')}" data-time="${tms}" data-app="${escHtml(app)}" data-proc="${escHtml(procPath)}" data-dest="${escHtml(dest)}" data-proto="${escHtml(proto)}" data-out="${escHtml(out)}" data-flow="${flowBytes}" title="${escHtml(procPath || app)}">
         <td class="time">${escHtml(time)}</td>
         <td class="app">${escHtml(app)}</td>
         <td>${escHtml(dest)}</td>
@@ -6381,7 +6666,8 @@
       const panel = settingsPanel || 'basic';
       const map = { general: 'basic', subscription: 'sub', advanced: 'sub', connection: 'vpn', core: 'basic', system: 'basic', about: 'basic' };
       const key = map[panel] || panel;
-      document.querySelectorAll('.set-panel').forEach(p => {
+      // scope to settings only — block view must not share .set-panel
+      document.querySelectorAll('#view-settings .set-panel').forEach(p => {
         p.classList.toggle('active', p.id === `panel-${key}`);
       });
       const head = document.getElementById('settingsHead');
@@ -6403,7 +6689,9 @@
         showView(view, btn.dataset.settings || 'basic', btn.dataset.focus || null);
         if (view === 'settings') beginSettingsSession();
         else setDirty(false);
-        if (view === 'block' && typeof loadBlocklist === 'function') loadBlocklist();
+        if (view === 'block' && typeof ensureBlocklistOnView === 'function') {
+          ensureBlocklistOnView();
+        }
       };
       const nextView = btn.dataset.view || 'home';
       const leavingSettings = document.getElementById('view-settings')?.classList.contains('active')
@@ -7806,9 +8094,9 @@
   });
 
   // boot: store catalog first (LS migrate); hide unwired routing/DNS for release UI
+  // blocklist loads in nexusBoot after invoke is live (early call often offline → blank 拦截)
   if (typeof hideUnwiredSettings === 'function') hideUnwiredSettings();
   hydrateCatalogOnBoot();
-  if (typeof loadBlocklist === 'function') loadBlocklist();
   window.addEventListener('pagehide', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
   window.addEventListener('beforeunload', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
 
@@ -8132,6 +8420,8 @@
       }
     } catch (_) {}
     if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
+    // after bridge proven live (app_identity/store_snapshot above)
+    if (typeof loadBlocklist === 'function') loadBlocklist();
   }
 
   // Policy A: quit = full teardown; warn when tunnel may still be live.

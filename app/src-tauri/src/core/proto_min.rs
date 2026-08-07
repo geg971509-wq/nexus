@@ -149,6 +149,8 @@ pub struct ConnRow {
     /// Unix ms from Core `created_at` (0 if absent).
     pub created_at: i64,
     pub process: String,
+    /// Full executable path when Core enricher resolved it (may be empty).
+    pub process_path: String,
     pub dest: String,
     pub domain: String,
     pub network: String,
@@ -285,6 +287,15 @@ fn decode_conn_meta(data: &[u8]) -> ConnRow {
             (10, 2) => {
                 if let Some((s, ni)) = read_len_str(data, i) {
                     row.process = s;
+                    i = ni;
+                } else {
+                    break;
+                }
+            }
+            (11, 2) => {
+                // process_path — full path for process-scoped block
+                if let Some((s, ni)) = read_len_str(data, i) {
+                    row.process_path = s;
                     i = ni;
                 } else {
                     break;

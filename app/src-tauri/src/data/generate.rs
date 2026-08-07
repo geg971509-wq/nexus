@@ -1,4 +1,5 @@
 //! Pure generate: outbound + flags → sing-box JSON.
+use crate::data::store::BlockEntry;
 use serde_json::{json, Map, Value};
 
 /// Generate-time node handle (not persisted; catalog is store truth).
@@ -16,8 +17,8 @@ pub struct GenerateInput<'a> {
     pub mux_default_on: bool,
     pub mux_protocol: &'a str,
     pub mux_concurrency: i64,
-    /// Hostnames/IPs to reject (already normalized preferred).
-    pub blocklist: &'a [String],
+    /// Reject entries (host ± process_path).
+    pub blocklist: &'a [BlockEntry],
 }
 
 /// Normalize a single user/conn host for the blocklist (strip port; domain lowercased).
@@ -80,15 +81,61 @@ pub fn normalize_block_host(raw: &str) -> Result<String, String> {
     Ok(lower)
 }
 
-pub fn normalize_blocklist(items: &[String]) -> Result<Vec<String>, String> {
+/// Full process path for process-scoped reject (trim; reject empty / control chars).
+pub fn normalize_process_path(raw: &str) -> Result<String, String> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return Err("empty process path".into());
+    }
+    if s.chars().any(|c| c.is_control() || c == '\n' || c == '\r') {
+        return Err("invalid process path".into());
+    }
+    Ok(s.to_string())
+}
+
+fn block_entry_key(host: &str, process_path: Option<&str>) -> String {
+    match process_path {
+        Some(p) if !p.is_empty() => format!("{host}\0{p}"),
+        _ => host.to_string(),
+    }
+}
+
+/// Normalize blocklist entries (host-only strings or `{host, process_path?}`).
+pub fn normalize_blocklist(items: &[BlockEntry]) -> Result<Vec<BlockEntry>, String> {
     let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for raw in items {
-        let h = normalize_block_host(raw)?;
-        if !out.iter().any(|x| x == &h) {
-            out.push(h);
+        let host = normalize_block_host(&raw.host)?;
+        let process_path = match raw.process_path.as_deref() {
+            Some(p) if !p.trim().is_empty() => Some(normalize_process_path(p)?),
+            _ => None,
+        };
+        let key = block_entry_key(&host, process_path.as_deref());
+        if seen.insert(key) {
+            out.push(BlockEntry {
+                host,
+                process_path,
+            });
         }
     }
     Ok(out)
+}
+
+fn reject_rule_for_host(host: &str, process_path: Option<&str>) -> Option<Value> {
+    let h = normalize_block_host(host).ok()?;
+    let mut rule = if h.parse::<std::net::Ipv4Addr>().is_ok() {
+        json!({"ip_cidr": [format!("{h}/32")], "action": "reject"})
+    } else if h.parse::<std::net::Ipv6Addr>().is_ok() {
+        json!({"ip_cidr": [format!("{h}/128")], "action": "reject"})
+    } else {
+        json!({"domain": [h], "action": "reject"})
+    };
+    if let Some(p) = process_path.filter(|s| !s.is_empty()) {
+        if let Some(obj) = rule.as_object_mut() {
+            obj.insert("process_path".into(), json!([p]));
+        }
+    }
+    Some(rule)
 }
 
 /// Decision table: unspecified outbound + mux_default_on → enable only if capability == "yes".
@@ -275,16 +322,11 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         json!({"action": "sniff"}),
         json!({"protocol": "dns", "action": "hijack-dns"}),
     ];
-    for host in input.blocklist {
-        let Ok(h) = normalize_block_host(host) else {
-            continue;
-        };
-        if h.parse::<std::net::Ipv4Addr>().is_ok() {
-            route_rules.push(json!({"ip_cidr": [format!("{h}/32")], "action": "reject"}));
-        } else if h.parse::<std::net::Ipv6Addr>().is_ok() {
-            route_rules.push(json!({"ip_cidr": [format!("{h}/128")], "action": "reject"}));
-        } else {
-            route_rules.push(json!({"domain": [h], "action": "reject"}));
+    for ent in input.blocklist {
+        if let Some(rule) =
+            reject_rule_for_host(&ent.host, ent.process_path.as_deref())
+        {
+            route_rules.push(rule);
         }
     }
     route_rules.push(json!({"ip_is_private": true, "outbound": "direct"}));
@@ -436,7 +478,7 @@ pub fn generate_with_outbound(
     outbound: Value,
     port: u16,
     tun: bool,
-    blocklist: &[String],
+    blocklist: &[BlockEntry],
 ) -> Value {
     // ensure tag
     let mut outbound = outbound;
@@ -685,13 +727,62 @@ mod tests {
     #[test]
     fn normalize_blocklist_dedupes_case_insensitive_domain() {
         let out = normalize_blocklist(&[
-            "A.com".into(),
-            "a.com".into(),
-            "1.2.3.4".into(),
-            "1.2.3.4:443".into(),
+            BlockEntry {
+                host: "A.com".into(),
+                process_path: None,
+            },
+            BlockEntry {
+                host: "a.com".into(),
+                process_path: None,
+            },
+            BlockEntry {
+                host: "1.2.3.4".into(),
+                process_path: None,
+            },
+            BlockEntry {
+                host: "1.2.3.4:443".into(),
+                process_path: None,
+            },
         ])
         .unwrap();
-        assert_eq!(out, vec!["a.com".to_string(), "1.2.3.4".to_string()]);
+        assert_eq!(
+            out,
+            vec![
+                BlockEntry {
+                    host: "a.com".into(),
+                    process_path: None
+                },
+                BlockEntry {
+                    host: "1.2.3.4".into(),
+                    process_path: None
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn normalize_blocklist_keeps_host_with_and_without_process() {
+        let out = normalize_blocklist(&[
+            BlockEntry {
+                host: "ads.x".into(),
+                process_path: None,
+            },
+            BlockEntry {
+                host: "ads.x".into(),
+                process_path: Some("/Apps/Chrome.app/Contents/MacOS/Chrome".into()),
+            },
+            BlockEntry {
+                host: "ads.x".into(),
+                process_path: Some("/Apps/Chrome.app/Contents/MacOS/Chrome".into()),
+            },
+        ])
+        .unwrap();
+        assert_eq!(out.len(), 2);
+        assert!(out[0].process_path.is_none());
+        assert_eq!(
+            out[1].process_path.as_deref(),
+            Some("/Apps/Chrome.app/Contents/MacOS/Chrome")
+        );
     }
 
     #[test]
@@ -702,7 +793,20 @@ mod tests {
             "server": "127.0.0.1",
             "server_port": 1080
         }));
-        let blocks = vec!["telemetry.evil".to_string(), "9.9.9.9".to_string()];
+        let blocks = vec![
+            BlockEntry {
+                host: "telemetry.evil".into(),
+                process_path: None,
+            },
+            BlockEntry {
+                host: "9.9.9.9".into(),
+                process_path: None,
+            },
+            BlockEntry {
+                host: "scoped.evil".into(),
+                process_path: Some("/usr/bin/curl".into()),
+            },
+        ];
         let v = generate_config(&GenerateInput {
             node: &n,
             system_proxy_port: 2080,
@@ -721,12 +825,24 @@ mod tests {
                     .and_then(|d| d.as_array())
                     .map(|a| a.iter().any(|x| x == "telemetry.evil"))
                     .unwrap_or(false)
+                && r.get("process_path").is_none()
         }));
         assert!(rules.iter().any(|r| {
             r.get("action") == Some(&json!("reject"))
                 && r.get("ip_cidr")
                     .and_then(|d| d.as_array())
                     .map(|a| a.iter().any(|x| x == "9.9.9.9/32"))
+                    .unwrap_or(false)
+        }));
+        assert!(rules.iter().any(|r| {
+            r.get("action") == Some(&json!("reject"))
+                && r.get("domain")
+                    .and_then(|d| d.as_array())
+                    .map(|a| a.iter().any(|x| x == "scoped.evil"))
+                    .unwrap_or(false)
+                && r.get("process_path")
+                    .and_then(|d| d.as_array())
+                    .map(|a| a.iter().any(|x| x == "/usr/bin/curl"))
                     .unwrap_or(false)
         }));
         let priv_idx = rules

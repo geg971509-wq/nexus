@@ -250,8 +250,9 @@ async fn blocklist_get() -> Result<serde_json::Value, String> {
     .map_err(|e| format!("blocklist_get join: {e}"))?
 }
 
+/// Full-replace blocklist. Items: `{host, process_path?}` (legacy bare host string still deserializes).
 #[tauri::command]
-async fn blocklist_put(items: Vec<String>) -> Result<serde_json::Value, String> {
+async fn blocklist_put(items: Vec<data::store::BlockEntry>) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         use data::generate::normalize_blocklist;
         use data::store::Store;
@@ -543,6 +544,7 @@ async fn query_connections() -> Result<serde_json::Value, String> {
                     "id": r.id,
                     "created_at": r.created_at,
                     "process": r.process,
+                    "process_path": r.process_path,
                     "dest": r.dest,
                     "domain": r.domain,
                     "network": r.network,
