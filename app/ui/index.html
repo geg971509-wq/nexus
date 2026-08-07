@@ -5153,8 +5153,8 @@
 
   // ——— group management ———
   let GROUPS = [
-    { id: 'default', name: 'Default', count: 0, url: '', autoUpdate: true },
-    // empty URL skips update (upstream should_skip); nodes only from real import/sub
+    // empty URL skips update; paste subscription in 设置 → 订阅
+    { id: 'default', name: 'Default', count: 0, url: '', autoUpdate: false },
     { id: 'backup', name: '备用', count: 0, url: '', autoUpdate: false },
   ];
   let groupEditId = null;
@@ -8395,7 +8395,7 @@
   let SUB_PROFILES = {
     default: {
       label: 'Default',
-      foot: '',
+      foot: '未配置订阅源',
       nodes: []
     },
     backup: {

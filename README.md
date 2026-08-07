@@ -41,14 +41,11 @@ Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box 
 - `app/src-tauri/windows/app.manifest` — Windows elevation + DPI
 - `core/server/` — Go core (`module NexusCore`)
 - `bin/` — build outputs (gitignored)
-- `docs/core-dependencies.md` — Core dependency pins (external fork module paths are not product branding)
-
 ## Build
 
 ### Full dual rebuild (macOS host)
 
 ```bash
-cd .
 ./build.sh   # no flags — always full rebuild
 ```
 

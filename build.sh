@@ -251,12 +251,14 @@ html_count="$(find "$DEST_APP" -name '*.html' 2>/dev/null | wc -l | tr -d ' ')"
 ok "bundle UI clean · html_count=$html_count"
 
 # --- 5) Windows shell via remote host (Tauri GUI needs native Windows toolchain) ---
+# Remote Windows build is opt-in: set NEXUS_WIN_HOST / NEXUS_WIN_USER + pass file.
+# Do not bake LAN hosts or usernames into the tree.
 WIN_HOST="${NEXUS_WIN_HOST:-}"
 WIN_USER="${NEXUS_WIN_USER:-}"
 WIN_PASS_FILE="${NEXUS_WIN_PASS_FILE:-/tmp/nexus-win-ssh.pass}"
 SSH_BASE=(sshpass -f "$WIN_PASS_FILE" ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no)
 SCP_BASE=(sshpass -f "$WIN_PASS_FILE" scp -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no)
-if [[ -f "$WIN_PASS_FILE" ]] && command -v sshpass >/dev/null 2>&1; then
+if [[ -n "$WIN_HOST" && -n "$WIN_USER" && -f "$WIN_PASS_FILE" ]] && command -v sshpass >/dev/null 2>&1; then
   log "Windows host $WIN_USER@$WIN_HOST — sync + remote tauri build…"
   REMOTE_DIR="C:/Users/${WIN_USER}/NexusBuild"
   # Pack only product sources (avoid exclude bin eating app/src-tauri/src/bin).
@@ -287,7 +289,7 @@ if [[ -f "$WIN_PASS_FILE" ]] && command -v sshpass >/dev/null 2>&1; then
       "$WIN_DIST/nexus.exe" && ok "pulled nexus.exe"
   fi
 else
-  log "skip remote Windows shell (need sshpass + $WIN_PASS_FILE); Core-only package at $WIN_DIST"
+  log "skip remote Windows shell (need NEXUS_WIN_HOST/USER + sshpass + $WIN_PASS_FILE); Core-only package at $WIN_DIST"
 fi
 
 echo

@@ -778,13 +778,13 @@ mod tests {
     fn vmess_uri_security_tls() {
         // standard VMess URL (not v2rayN b64)
         let o = parse_to_outbound(
-            "vmess://11111111-1111-1111-1111-111111111111@node.example.com:49362?security=tls#US",
+            "vmess://11111111-1111-1111-1111-111111111111@node.example.com:443?security=tls#US",
         )
         .unwrap();
         assert_eq!(o["type"], "vmess");
         assert_eq!(o["uuid"], "11111111-1111-1111-1111-111111111111");
         assert_eq!(o["server"], "node.example.com");
-        assert_eq!(o["server_port"], 49362);
+        assert_eq!(o["server_port"], 443);
         assert_eq!(o["tls"]["enabled"], true);
     }
 
@@ -792,7 +792,7 @@ mod tests {
     fn vmess_fake_name_user_rejected() {
         // Old Nexus QR/clipboard fabricated: btoa(name)@host — not a UUID
         let e = parse_to_outbound(
-            "vmess://VVMgLSDnvo7lm73psqjpsbwy@node.example.com:49362?security=tls#US",
+            "vmess://VVMgLSDnvo7lm73psqjpsbwy@node.example.com:443?security=tls#US",
         )
         .unwrap_err();
         assert!(
