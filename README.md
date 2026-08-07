@@ -2,6 +2,8 @@
 
 Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box + xray) + framed IPC. Shell: **Tauri 2 + Rust**.
 
+![Nexus UI](assets/screenshot.png)
+
 | Item | Value |
 |------|--------|
 | Product | Nexus |
