@@ -43,6 +43,7 @@ Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box 
 - `app/src-tauri/windows/app.manifest` — Windows elevation + DPI
 - `core/server/` — Go core (`module NexusCore`)
 - `bin/` — build outputs (gitignored)
+
 ## Build
 
 ### Full dual rebuild (macOS host)
@@ -83,9 +84,9 @@ cd app && npm run tauri dev
 - Connect: selected node → generate → Core `Start` (share link or outbound JSON)
 - Tun chip + system proxy; exit clears OS proxy on `:2080` and stops Core
 - Catalog (groups/nodes) in store via `catalog_get` / `catalog_put`
-- Node **流量** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only 重置流量 zeros)
-- Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled 连通 (not proxy path test)
-- **拦截:** sidebar list + connection right-click three scopes (目标·全部进程 / 目标·仅此应用 / 应用·全部连接 by full executable path); multi-select bulk block (one put / one reconnect); store → `domain_suffix` / IP / process-only reject on generate; apply reconnects when connected
+- Node **Traffic** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only Reset traffic zeros)
+- Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled Connectivity (not a proxy-path test)
+- **Blocklist:** sidebar list + connection right-click three scopes (target · all processes / target · this app only / app · all connections by full executable path); multi-select bulk block (one put / one reconnect); store → `domain_suffix` / IP / process-only reject on generate; apply reconnects when connected
 - Connection table: merge by Core id, multi-select like nodes (bulk block / copy), process + PID columns
 - **i18n:** UI chrome + runtime log panel in `zh-CN` / `en` / `ru` / `zh-TW` (live language switch)
 - Advanced routing/DNS settings hidden until generate is wired to them
