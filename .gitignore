@@ -4,6 +4,7 @@
 .cache/
 .omc/
 .claude/
+.venv/
 **/target/
 app/node_modules/
 app/src-tauri/target/

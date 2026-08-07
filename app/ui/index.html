@@ -48,8 +48,8 @@
     --r: 10px;
     --r-lg: 14px;
     --r-xl: 18px;
-    --sidebar: 216px;
-    --sidebar-collapsed: 56px;
+    --sidebar: 252px;
+    --sidebar-collapsed: 72px;
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
       "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     --mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
@@ -270,28 +270,31 @@
     box-shadow: var(--shadow-window);
     overflow: hidden;
     display: grid;
-    grid-template-rows: 52px 1fr 28px;
+    /* auto: two-row titlebar (chrome + tools) must not clip into traffic lights */
+    grid-template-rows: auto 1fr 28px;
   }
 
-  /* Unified titlebar + toolbar (macOS style) */
+  /* Titlebar: traffic-lights row, then full tools row (Nexus / seg / actions) */
   .titlebar {
-    display: grid;
-    grid-template-columns: var(--sidebar) 1fr;
+    display: flex;
+    flex-direction: column;
     background: var(--chrome);
     backdrop-filter: saturate(180%) blur(24px);
     -webkit-backdrop-filter: saturate(180%) blur(24px);
     border-bottom: 0.5px solid var(--separator);
     user-select: none;
-    transition: grid-template-columns .2s var(--ease);
     position: relative;
     z-index: 40; /* menus must paint above sidebar/main */
+    min-height: 0;
+    overflow: visible;
   }
-  .titlebar-left {
+  /* row 1: only window chrome (real macOS lights overlay this spacer) */
+  .titlebar-chrome {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 0 12px;
-    min-width: 0;
+    height: 36px;
+    padding: 0 16px;
+    flex: 0 0 36px;
   }
   .traffic-lights {
     display: flex;
@@ -307,34 +310,28 @@
   .t-r { background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.08); }
   .t-y { background: #febc2e; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.08); }
   .t-g { background: #28c840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.08); }
+  /* row 2: brand + groups + actions — one height, 大气简约; below lights, never under them */
+  .titlebar-tools {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 52px;
+    padding: 6px 22px 12px 16px;
+    min-width: 0;
+    flex: 0 0 auto;
+  }
   .app-name {
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 600;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
     color: var(--label);
     white-space: nowrap;
     overflow: hidden;
+    line-height: 1;
+    padding: 0 4px 0 2px;
   }
   .window.sidebar-collapsed {
     --sidebar: var(--sidebar-collapsed);
-  }
-  .window.sidebar-collapsed .app-name {
-    opacity: 0;
-    width: 0;
-    pointer-events: none;
-  }
-  .window.sidebar-collapsed .titlebar-left {
-    justify-content: center;
-    padding: 0 8px;
-  }
-  .window.sidebar-collapsed .traffic-lights { padding-right: 0; }
-  .titlebar-right {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 12px;
-    padding: 0 16px 0 8px;
-    min-width: 0;
   }
   .titlebar-drag {
     flex: 1 1 auto;
@@ -344,20 +341,27 @@
   .toolbar-group {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .titlebar-tools .toolbar-group.titlebar-brand {
+    gap: 14px;
+  }
+  .titlebar-tools .toolbar-group.titlebar-actions {
+    gap: 12px;
   }
   .seg {
     display: inline-flex;
     background: var(--fill);
-    border-radius: 8px;
-    padding: 2px;
-    gap: 1px;
+    border-radius: 11px;
+    padding: 3px;
+    gap: 2px;
   }
   .seg button {
-    height: 26px;
-    padding: 0 12px;
-    border-radius: 6px;
-    font-size: 12px;
+    height: 34px;
+    padding: 0 16px;
+    border-radius: 9px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--secondary);
     transition: background .15s var(--ease), color .15s var(--ease), box-shadow .15s var(--ease);
@@ -369,28 +373,36 @@
     box-shadow: 0 0.5px 1px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
   }
   .tb-btn {
-    height: 28px;
-    min-width: 28px;
-    padding: 0 11px;
-    border-radius: 7px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0 16px;
+    border-radius: 10px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    font-size: 12px;
+    gap: 7px;
+    font-size: 14px;
     font-weight: 500;
-    color: var(--blue);
-    transition: background .15s var(--ease), box-shadow .15s var(--ease);
+    color: var(--secondary);
+    transition: background .15s var(--ease), color .15s var(--ease), box-shadow .15s var(--ease);
   }
-  .tb-btn:hover { background: var(--fill); }
+  .tb-btn:hover { background: var(--fill); color: var(--label); }
   .tb-btn.solid {
     background: linear-gradient(180deg, #3d8fff 0%, #007aff 100%);
     color: #fff;
     font-weight: 600;
+    padding: 0 18px;
     box-shadow: 0 1px 0 rgba(255,255,255,.2) inset, 0 1px 2px rgba(0, 90, 200, .18);
   }
-  .tb-btn.solid:hover { background: linear-gradient(180deg, #2f86ff 0%, #0071eb 100%); }
-  .tb-btn svg { width: 14px; height: 14px; }
+  .tb-btn.solid:hover { background: linear-gradient(180deg, #2f86ff 0%, #0071eb 100%); color: #fff; }
+  .tb-btn svg { width: 16px; height: 16px; }
+  .titlebar .menu-btn {
+    height: 36px;
+    min-width: 36px;
+    padding: 0 10px;
+    border-radius: 10px;
+  }
+  .titlebar .menu-btn svg { width: 18px; height: 18px; }
 
   /* ── Body ── */
   .body {
@@ -400,14 +412,14 @@
     transition: grid-template-columns .2s var(--ease);
   }
 
-  /* Sidebar */
+  /* Sidebar — large-icon 大气简约; width/row scale with titlebar */
   .sidebar {
     background: var(--sidebar-bg);
     border-right: 0.5px solid var(--separator);
-    padding: 8px 10px 12px;
+    padding: 14px 14px 16px;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 6px;
     min-height: 0;
     min-width: 0;
     position: relative;
@@ -451,16 +463,17 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 10px;
-    height: 34px;
-    padding: 0 10px;
-    border-radius: 8px;
-    font-size: 13px;
+    gap: 14px;
+    height: 52px;
+    padding: 0 14px;
+    border-radius: 12px;
+    font-size: 15px;
     font-weight: 500;
+    letter-spacing: 0.01em;
     color: var(--label);
     white-space: nowrap;
     overflow: hidden;
-    transition: background .12s var(--ease), color .12s var(--ease), padding .2s var(--ease);
+    transition: background .15s var(--ease), color .15s var(--ease), padding .2s var(--ease);
   }
   .side-item:hover { background: var(--side-hover); }
   .side-item.active {
@@ -472,8 +485,8 @@
     content: '';
     position: absolute;
     left: 0;
-    top: 8px;
-    bottom: 8px;
+    top: 14px;
+    bottom: 14px;
     width: 3px;
     border-radius: 0 2px 2px 0;
     background: var(--blue);
@@ -484,15 +497,15 @@
     text-overflow: ellipsis;
   }
   .side-ico {
-    width: 18px;
-    height: 18px;
+    width: 28px;
+    height: 28px;
     display: grid;
     place-items: center;
-    opacity: 0.72;
+    opacity: 0.8;
     color: var(--secondary);
     flex-shrink: 0;
   }
-  .side-ico svg { width: 16px; height: 16px; stroke-width: 1.75; }
+  .side-ico svg { width: 26px; height: 26px; stroke-width: 1.5; }
   /* Icon style: Monochrome | Colorful | Auto */
   html[data-icons="colorful"] .side-item:nth-child(1) .side-ico { color: #007aff; opacity: 1; }
   html[data-icons="colorful"] .side-item:nth-child(2) .side-ico { color: #af52de; opacity: 1; }
@@ -532,26 +545,26 @@
   .side-collapse {
     display: flex;
     align-items: center;
-    gap: 8px;
-    height: 32px;
-    padding: 0 10px;
-    border-radius: 8px;
+    gap: 12px;
+    height: 48px;
+    padding: 0 14px;
+    border-radius: 12px;
     color: var(--secondary);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
     white-space: nowrap;
     transition: background .15s var(--ease), color .15s var(--ease);
   }
   .side-collapse:hover { background: var(--fill); color: var(--label); }
   .side-collapse svg {
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
     flex-shrink: 0;
     transition: transform .2s var(--ease);
   }
   .window.sidebar-collapsed .side-collapse {
-    width: 36px;
-    height: 36px;
+    width: 52px;
+    height: 52px;
     padding: 0;
     justify-content: center;
   }
@@ -559,8 +572,9 @@
   .window.sidebar-collapsed .side-collapse .side-label { display: none; }
   /* Collapsed: icon rail */
   .window.sidebar-collapsed .sidebar {
-    padding: 10px 8px 12px;
+    padding: 14px 10px 16px;
     align-items: center;
+    gap: 8px;
   }
   .window.sidebar-collapsed .side-section {
     height: 1px;
@@ -571,16 +585,16 @@
     border-top: 0.5px solid var(--separator);
   }
   .window.sidebar-collapsed .side-item {
-    width: 36px;
-    height: 36px;
+    width: 52px;
+    height: 52px;
     padding: 0;
     justify-content: center;
     gap: 0;
   }
   .window.sidebar-collapsed .side-label { display: none; }
   .window.sidebar-collapsed .side-item.active::before {
-    top: 9px;
-    bottom: 9px;
+    top: 14px;
+    bottom: 14px;
   }
 
   /* Main — views fill the pane */
@@ -724,21 +738,22 @@
   .toggle.on .switch { background: var(--blue); }
   .toggle.on .switch::after { transform: translateX(12px); }
 
-  /* List area — primary focus */
+  /* List area — primary focus (no list-head: title/count/search removed) */
   .list-wrap {
     min-height: 0;
-    padding: 4px 20px 10px;
+    padding: 10px 22px 12px;
     display: grid;
-    grid-template-rows: auto 1fr;
-    gap: 8px;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
   }
   .list-head {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    min-height: 32px;
   }
   .list-title {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--secondary);
     letter-spacing: -0.01em;
@@ -748,15 +763,15 @@
     font-weight: 600;
     color: var(--tertiary);
     background: var(--fill);
-    padding: 1px 7px;
+    padding: 2px 8px;
     border-radius: 999px;
     font-variant-numeric: tabular-nums;
   }
   .list-head .grow {
     flex: 1 1 auto;
     align-self: stretch;
-    min-width: 32px;
-    min-height: 28px;
+    min-width: 48px;
+    min-height: 30px;
   }
   html.desktop .list-head .grow {
     app-region: drag;
@@ -790,27 +805,31 @@
   .search {
     display: flex;
     align-items: center;
-    gap: 6px;
-    height: 28px;
-    min-width: 196px;
-    padding: 0 10px;
-    border-radius: 8px;
-    background: var(--search-bg);
-    border: 0.5px solid var(--search-border);
+    gap: 8px;
+    height: 32px;
+    min-width: 220px;
+    max-width: 280px;
+    padding: 0 12px;
+    border-radius: 9px;
+    background: var(--fill);
+    border: 0.5px solid transparent;
     color: var(--tertiary);
-    box-shadow: var(--search-inset);
+    box-shadow: none;
+    transition: background .15s var(--ease), border-color .15s var(--ease), box-shadow .15s var(--ease);
   }
+  .search:hover { background: var(--search-bg); }
   .search:focus-within {
-    border-color: rgba(0, 122, 255, 0.5);
-    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.14);
+    background: var(--search-bg);
+    border-color: rgba(0, 122, 255, 0.45);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
   }
-  .search svg { width: 13px; height: 13px; flex-shrink: 0; }
+  .search svg { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.72; }
   .search input {
     border: 0;
     outline: none;
     background: transparent;
     width: 100%;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--label);
   }
   .search input::placeholder { color: var(--quaternary); }
@@ -1047,6 +1066,7 @@
     color: var(--tertiary);
     padding: 4px 8px 6px;
     border-bottom: 0.5px solid var(--separator);
+    white-space: nowrap;
   }
   .conn-table td {
     padding: 5px 8px;
@@ -1074,6 +1094,16 @@
     text-align: right;
   }
   .conn-table td.rule { color: var(--blue); font-family: var(--font); font-size: 11px; }
+  /* last col: keep 流量 + "0 B↑ 0 B↓" one line (never stack glyphs) */
+  .conn-table th.flow,
+  .conn-table td.flow {
+    width: 7.5em;
+    min-width: 7.5em;
+    max-width: 9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .conn-table tbody tr { cursor: default; }
   .conn-table tbody tr:hover td { background: var(--fill); }
   .conn-table tbody tr.selected td { background: var(--row-selected); }
@@ -1103,7 +1133,7 @@
     grid-template-rows: minmax(0, 1fr);
   }
 
-  /* Blocklist — same chrome as settings + list-head search like 节点 */
+  /* Blocklist — same chrome as settings + list-head; one type scale (11/12/13/15) */
   .block-toolbar {
     display: flex;
     align-items: center;
@@ -1124,17 +1154,58 @@
     flex: 1 1 auto;
     width: auto; /* override .field width:100% so 添加 is not crushed */
     min-width: 0;
-    height: 28px;
-    padding: 0 10px;
-    font-size: 12.5px;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 400;
   }
   .block-toolbar .tb-btn {
     flex: 0 0 auto;
     white-space: nowrap;
-    min-width: 52px;
+    min-width: 56px;
+    height: 32px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 0 14px;
   }
   .block-list-head {
     padding: 10px 16px 8px;
+  }
+  .view-block .list-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--secondary);
+  }
+  .view-block .list-count {
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .view-block .search {
+    height: 32px;
+  }
+  .view-block .search input {
+    font-size: 13px;
+    font-weight: 400;
+  }
+  /* shared grid: 目标 | 进程 | 删除 — process narrow; delete col fits 删除 not stacked */
+  .block-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(56px, 100px) 56px;
+    align-items: center;
+    column-gap: 10px;
+  }
+  .block-colhead {
+    padding: 0 10px 6px;
+    margin: 0 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--tertiary);
+    letter-spacing: 0.02em;
+    user-select: none;
+  }
+  .block-colhead span:nth-child(2),
+  .block-colhead span:last-child {
+    text-align: end;
   }
   .block-list {
     list-style: none;
@@ -1145,50 +1216,65 @@
   }
   .block-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(88px, 0.55fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(56px, 100px) 56px;
     align-items: center;
-    column-gap: 12px;
+    column-gap: 10px;
     min-height: 36px;
     padding: 6px 10px;
     border-radius: 10px;
     transition: background .12s var(--ease);
   }
   .block-row:hover { background: var(--row-hover); }
-  .block-row .block-host {
+  /* primary data: host + process basename — same mono body */
+  .block-row .block-host,
+  .block-row .block-scope.proc {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 13px;
+    font-weight: 400;
     color: var(--label);
     letter-spacing: -0.01em;
+    line-height: 1.3;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
   }
   .block-row .block-scope {
-    font-size: 11.5px;
-    color: var(--tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
-    text-align: left;
+    text-align: end;
   }
-  .block-row .block-scope.proc {
+  /* * wildcard both columns: identical mono tertiary (not bigger/smaller than data) */
+  .block-row .block-host.is-any,
+  .block-row .block-scope.is-any {
     font-family: var(--mono);
-    font-size: 11px;
-    color: var(--secondary);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--tertiary);
+    letter-spacing: 0.02em;
   }
   .block-row .tb-btn {
     justify-self: end;
+    min-width: 0;
+    width: 100%;
+    max-width: 56px;
+    height: 28px;
+    padding: 0 6px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
     color: var(--secondary);
   }
   .block-row .tb-btn:hover { color: var(--red, #ff3b30); }
   .block-empty {
     padding: 28px 20px 32px;
     text-align: center;
-    font-size: 12.5px;
-    line-height: 1.5;
-    color: var(--tertiary);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.55;
+    color: var(--secondary);
   }
   .block-empty[hidden] { display: none !important; }
 
@@ -2047,14 +2133,16 @@
   <div class="window" role="application" aria-label="Nexus">
     <!-- deep: empty chrome + brand drag; buttons/tabs auto no-drag via Tauri drag.js -->
     <header class="titlebar" data-tauri-drag-region="deep">
-      <div class="titlebar-left">
-        <div class="traffic-lights" aria-hidden="true">
+      <!-- row 1: traffic lights only (macOS draws real ones over this spacer) -->
+      <div class="titlebar-chrome" aria-hidden="true">
+        <div class="traffic-lights">
           <i class="t-r"></i><i class="t-y"></i><i class="t-g"></i>
         </div>
-        <div class="app-name">Nexus</div>
       </div>
-      <div class="titlebar-right">
-        <div class="toolbar-group">
+      <!-- row 2: one height — Nexus · 菜单 · Default/备用 · … · 连通 · 分组 · 更新 -->
+      <div class="titlebar-tools">
+        <div class="toolbar-group titlebar-brand">
+          <div class="app-name">Nexus</div>
           <div class="menu-wrap">
             <button class="menu-btn" id="appMenuBtn" title="导入配置、启动项与退出" aria-haspopup="menu" aria-expanded="false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
@@ -2089,9 +2177,8 @@
             <button role="tab" aria-selected="false" data-sub="backup" title="切换到备用订阅"><span data-i18n="tb.backup">备用</span></button>
           </div>
         </div>
-        <!-- empty middle: hold & drag window (deep titlebar covers this; keep fill for hit area) -->
         <div class="titlebar-drag" aria-hidden="true"></div>
-        <div class="toolbar-group">
+        <div class="toolbar-group titlebar-actions">
           <div class="menu-wrap test-menu-wrap">
             <button class="tb-btn" id="testBtn" title="测试菜单" aria-haspopup="menu" aria-expanded="false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>
@@ -2186,16 +2273,6 @@
         </section>
 
         <section class="list-wrap">
-          <div class="list-head" data-tauri-drag-region="deep">
-            <div class="list-title">节点</div>
-            <span class="list-count" id="nodeCount">11</span>
-            <div class="grow" data-tauri-drag-region aria-hidden="true"></div>
-            <div class="search" data-tauri-drag-region="false">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-              <input type="search" id="searchInput" placeholder="搜索节点" title="按名称或地址筛选" />
-            </div>
-          </div>
-
           <div class="table-card">
             <table>
               <thead>
@@ -2204,7 +2281,7 @@
                   <th class="type sortable" data-sort="type" title="点击排序">类型</th>
                   <th class="addr sortable" data-sort="addr" title="点击排序">地址</th>
                   <th class="sortable" data-sort="name" title="点击排序">名称</th>
-                  <th class="lat sortable" data-sort="lat" title="点击排序">延迟</th>
+                  <th class="lat sortable" data-sort="lat" aria-sort="ascending" title="点击排序">延迟</th>
                   <th class="flow sortable" data-sort="flow" title="点击排序">流量</th>
                 </tr>
               </thead>
@@ -2252,7 +2329,7 @@
                   <th class="sortable" data-csort="dest" role="columnheader" tabindex="0">目标</th>
                   <th class="sortable" data-csort="proto" role="columnheader" tabindex="0">协议</th>
                   <th class="sortable" data-csort="out" role="columnheader" tabindex="0">出站</th>
-                  <th class="sortable" data-csort="flow" role="columnheader" tabindex="0">流量</th>
+                  <th class="sortable flow" data-csort="flow" role="columnheader" tabindex="0">流量</th>
                 </tr>
               </thead>
               <tbody id="connTable">
@@ -2283,6 +2360,11 @@
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                       <input type="search" id="blockFilterInput" placeholder="过滤域名 / IP / 应用" title="按域名、IP 或应用筛选" autocomplete="off" />
                     </div>
+                  </div>
+                  <div class="block-cols block-colhead" id="blockColHead" aria-hidden="true" hidden>
+                    <span title="* = 任意目标">目标</span>
+                    <span title="* = 任意进程">进程</span>
+                    <span></span>
                   </div>
                   <div id="blockEmpty" class="block-empty" hidden>暂无拦截项。<br/>在底部「连接」表右键：拦截目标 / 拦截应用（可多选后批量拦截），或在上方手动添加域名。</div>
                   <div id="blockFilterEmpty" class="block-empty" hidden>无匹配项</div>
@@ -3026,8 +3108,6 @@
   const sbProxy = document.getElementById('sbProxy');
   const logPanel = document.getElementById('logPanel');
   const nodeTable = document.getElementById('nodeTable');
-  const searchInput = document.getElementById('searchInput');
-  const nodeCount = document.getElementById('nodeCount');
   const tableCard = document.querySelector('.table-card');
   let nodeListPointerInside = false;
   let nodeListFocus = false;
@@ -3042,7 +3122,8 @@
   // Hero "经 xxx" follows the tunnel actually started — not the list selection.
   let connectedName = '';
   let connectedLat = '—';
-  let sortKey = null;
+  // default first open: 延迟升序（快→慢；未知/超时仍沉底）
+  let sortKey = 'lat';
   let sortDir = 1; // 1 asc, -1 desc
 
   // AutoSelector: missing/timeout latency always parks at the end in BOTH directions.
@@ -3497,8 +3578,6 @@
   function nodeListHotkeyActive() {
     const ae = document.activeElement;
     if (isEditableTarget(ae) && !ae?.closest?.('.table-card')) return false;
-    // search box is in list-head: allow normal text select-all there
-    if (ae && ae.closest && ae.closest('.search')) return false;
     if (ae && (ae === tableCard || ae.closest?.('.table-card') || ae.closest?.('#nodeTable'))) return true;
     if (nodeListPointerInside || nodeListFocus) return true;
     return false;
@@ -3559,7 +3638,6 @@
             if (g) g.count = prof.nodes.length;
           }
           rows.forEach(r => r.remove());
-          nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
           renumberRows();
           if (typeof saveCatalog === 'function') saveCatalog(true);
           log('SYS', 'warn', `已删除 ${rows.length} 个节点`);
@@ -3635,7 +3713,6 @@
           const nameEl = clone.querySelector('.name');
           if (nameEl) nameEl.textContent = name;
           row.after(clone);
-          nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
           renumberRows();
           if (typeof saveCatalog === 'function') saveCatalog(true);
           log('SYS', 'ok', '已克隆：' + name);
@@ -3672,7 +3749,6 @@
             if (g) g.count = next.length;
           }
           drop.forEach(r => r.remove());
-          nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
           renumberRows();
           if (typeof saveCatalog === 'function') saveCatalog(true);
           log('SYS', 'ok', '已去除重复节点 · ' + drop.length + ' 个');
@@ -3754,7 +3830,6 @@
       if (g) g.count = prof.nodes.length;
     }
     rows.forEach(r => r.remove());
-    nodeCount.textContent = String(nodeTable.querySelectorAll('tr').length);
     renumberRows();
     if (typeof saveCatalog === 'function') saveCatalog(true);
     log('SYS', 'warn', (logLabel || '已移除') + ' · ' + rows.length + ' 个');
@@ -5410,6 +5485,7 @@
     const empty = document.getElementById('blockEmpty');
     const filterEmpty = document.getElementById('blockFilterEmpty');
     const countEl = document.getElementById('blockCount');
+    const colHead = document.getElementById('blockColHead');
     if (!ul) return;
     const q = blockFilterQuery();
     const rows = ul.querySelectorAll('.block-row');
@@ -5425,6 +5501,7 @@
     if (empty) empty.hidden = total > 0;
     if (filterEmpty) filterEmpty.hidden = !(total > 0 && shown === 0);
     ul.hidden = total === 0;
+    if (colHead) colHead.hidden = total === 0;
   }
 
   function renderBlocklist(items) {
@@ -5438,26 +5515,27 @@
       const hostOnly = !!e.host && !e.process_path;
       const hostProc = !!e.host && !!e.process_path;
       const procOnly = !e.host && !!e.process_path;
-      // left = subject (domain/IP or process basename); right = scope modifier
-      const hostLabel = procOnly ? base : e.host;
-      const scopeLabel = hostOnly ? '全部进程' : (hostProc ? base : (procOnly ? '全部目标' : '—'));
-      const scopeTitle = e.process_path
+      // fixed columns: 目标 | 进程 — never put process basename in the host column
+      // * = wildcard: host-only → any process; process-only → any destination
+      const destLabel = procOnly ? '*' : e.host;
+      const destTitle = procOnly
+        ? '此应用访问任意目标均拒绝'
+        : (e.host || '');
+      const destCls = procOnly ? 'block-host is-any' : 'block-host';
+      const procLabel = hostOnly ? '*' : (base || '—');
+      const procTitle = e.process_path
         ? e.process_path
         : (hostOnly ? '任意进程访问该目标' : '');
-      const hostTitle = procOnly
-        ? (e.process_path || base)
-        : (e.host || '');
-      const scopeCls = hostProc ? ' block-scope proc' : ' block-scope';
-      const scope = `<span class="${scopeCls.trim()}" title="${escHtml(scopeTitle)}">${escHtml(scopeLabel)}</span>`;
+      const procCls = hostOnly ? 'block-scope is-any' : 'block-scope proc';
       const filter = [
-        e.host, e.process_path || '', base, hostLabel, scopeLabel,
-        procOnly ? '应用 全部目标' : '',
-        hostOnly ? '全部进程' : '',
+        e.host, e.process_path || '', base, destLabel, procLabel,
+        procOnly ? '应用 全部目标 *' : '',
+        hostOnly ? '全部进程 *' : '',
         hostProc ? '仅此应用' : '',
       ].join(' ');
       return `<li class="block-row" data-host="${escHtml(e.host)}" data-proc="${escHtml(e.process_path || '')}" data-filter="${escHtml(filter)}">
-        <span class="block-host" title="${escHtml(hostTitle)}">${escHtml(hostLabel)}</span>
-        ${scope}
+        <span class="${destCls}" title="${escHtml(destTitle)}">${escHtml(destLabel)}</span>
+        <span class="${procCls}" title="${escHtml(procTitle)}">${escHtml(procLabel)}</span>
         <button type="button" class="tb-btn" data-block-del title="从拦截列表移除">删除</button>
       </li>`;
     }).join('');
@@ -6185,7 +6263,7 @@
         `<td>${escHtml(dest)}</td>` +
         `<td>${escHtml(proto)}</td>` +
         `<td class="rule">${escHtml(out)}</td>` +
-        `<td>${escHtml(flow)}</td>`;
+        `<td class="flow">${escHtml(flow)}</td>`;
       return;
     }
     const put = (i, text) => {
@@ -6872,9 +6950,9 @@
   })();
 
   const SIDE_W_KEY = 'nexus.sidebarW';
-  const SIDE_W_MIN = 140;
-  const SIDE_W_DEFAULT = 216;
-  const SIDE_W_COLLAPSED = 56;
+  const SIDE_W_MIN = 176;
+  const SIDE_W_DEFAULT = 252;
+  const SIDE_W_COLLAPSED = 72;
   function sideMaxW() {
     const w = win.clientWidth || 720;
     // leave main usable (~320px min)
@@ -6938,24 +7016,12 @@
       : (typeof t === 'function' ? t('nav.collapseTitle') : '收窄侧栏');
     sideCollapse.setAttribute('aria-label', sideCollapse.title);
     // Inline --sidebar (from drag/load) beats .sidebar-collapsed CSS.
-    // Collapse: drop inline so --sidebar-collapsed (56px) wins; expand: restore remembered width.
+    // Collapse: drop inline so --sidebar-collapsed wins; expand: restore remembered width.
     if (collapsed) win.style.removeProperty('--sidebar');
     else loadSidebarWidth();
   }
   sideCollapse.addEventListener('click', () => {
     setSidebarCollapsed(!win.classList.contains('sidebar-collapsed'));
-  });
-
-  searchInput.addEventListener('input', () => {
-    const q = searchInput.value.trim().toLowerCase();
-    let n = 0;
-    nodeTable.querySelectorAll('tr').forEach(row => {
-      const show = !q || row.textContent.toLowerCase().includes(q);
-      row.style.display = show ? '' : 'none';
-      if (show) n++;
-    });
-    nodeCount.textContent = String(n);
-    renumberRows();
   });
 
   document.querySelectorAll('.dock-tab').forEach(tab => {
@@ -8372,7 +8438,6 @@
                 </tr>`;
     }).join('');
     nodeTable.innerHTML = rows;
-    nodeCount.textContent = String(prof.nodes.length);
     selectedName = prof.nodes[0]?.name || '—';
     {
       const L = prof.nodes[0]?.lat;
@@ -8385,7 +8450,6 @@
     } else {
       document.querySelectorAll('thead th.sortable').forEach(th => th.removeAttribute('aria-sort'));
     }
-    if (searchInput) searchInput.value = '';
     // rebind selection anchor to live row (Shift-range after re-render)
     selectAnchorRow = nodeTable.querySelector('tr.selected')
       || [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === selectedName)
