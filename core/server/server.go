@@ -44,14 +44,38 @@ var (
 	instanceCancel  context.CancelFunc
 	debug           bool
 	activeProfileID atomic.Int32
-	// lifeMu serializes Start/Stop and snapshots for Query*/TestCurrent.
+	// lifeMu serializes Start/Stop and short Query* bodies.
+	// boxPins tracks long TestCurrent/SpeedTest users of the live box after RLock drop.
 	// ponytail: global lock; finer per-subsystem locks if Start latency matters.
-	lifeMu sync.RWMutex
+	lifeMu  sync.RWMutex
+	boxPins atomic.Int32
 )
 
+// pinBox snapshots the live box under RLock and pins it so Stop waits before Close.
+// Caller must invoke the release func (idempotent not required — call once).
+func pinBox() (*boxbox.Box, func()) {
+	lifeMu.RLock()
+	b := boxInstance
+	if b == nil {
+		lifeMu.RUnlock()
+		return nil, func() {}
+	}
+	boxPins.Add(1)
+	lifeMu.RUnlock()
+	var once sync.Once
+	return b, func() {
+		once.Do(func() { boxPins.Add(-1) })
+	}
+}
+
 // cleanupAll tears down box + extra + xray + DNS. Idempotent; call only while
-// holding lifeMu (or from a path that already owns exclusive lifecycle).
+// holding lifeMu write lock (or from a path that already owns exclusive lifecycle).
 func cleanupAll() {
+	// Wait for TestCurrent/SpeedTest pins so Close does not race traffic/test paths.
+	deadline := time.Now().Add(2 * time.Second)
+	for boxPins.Load() > 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
 	if needUnsetDNS {
 		needUnsetDNS = false
 		if boxInstance != nil {
@@ -387,9 +411,8 @@ func (s *server) Test(ctx context.Context, in *gen.TestReq) (*gen.TestResp, erro
 	var err error
 	twice := true
 	if *in.TestCurrent {
-		lifeMu.RLock()
-		testInstance = boxInstance
-		lifeMu.RUnlock()
+		var release func()
+		testInstance, release = pinBox()
 		if testInstance == nil {
 			return &gen.TestResp{Results: []*gen.URLTestResp{{
 				OutboundTag: To("proxy"),
@@ -397,6 +420,7 @@ func (s *server) Test(ctx context.Context, in *gen.TestReq) (*gen.TestResp, erro
 				Error:       To("Instance is not running"),
 			}}}, nil
 		}
+		defer release()
 		twice = false
 	} else {
 		if *in.NeedXray {
@@ -572,9 +596,10 @@ func (s *server) QueryStats(ctx context.Context, in *gen.EmptyReq) (out *gen.Que
 	out = &gen.QueryStatsResp{}
 	out.Ups = make(map[string]int64)
 	out.Downs = make(map[string]int64)
+	// Hold RLock for the whole short body so Stop cannot Close under our feet.
 	lifeMu.RLock()
+	defer lifeMu.RUnlock()
 	box := boxInstance
-	lifeMu.RUnlock()
 	if box == nil {
 		return
 	}
@@ -654,9 +679,10 @@ func connMetaToProto(c *trafficontrol.TrackerMetadata) *gen.ConnectionMetaData {
 // connection that closed between polls). Process ownership is resolved at route
 // time (processOwnerEnricher); this RPC only reports stored fields.
 func (s *server) QueryConnections(ctx context.Context, in *gen.EmptyReq) (*gen.QueryConnectionsResp, error) {
+	// Hold RLock for the whole short body so Stop cannot Close under our feet.
 	lifeMu.RLock()
+	defer lifeMu.RUnlock()
 	box := boxInstance
-	lifeMu.RUnlock()
 	if box == nil {
 		return &gen.QueryConnectionsResp{}, nil
 	}
@@ -701,15 +727,15 @@ func (s *server) SpeedTest(ctx context.Context, in *gen.SpeedTestRequest) (*gen.
 	outboundTags := in.OutboundTags
 	var err error
 	if *in.TestCurrent {
-		lifeMu.RLock()
-		testInstance = boxInstance
-		lifeMu.RUnlock()
+		var release func()
+		testInstance, release = pinBox()
 		if testInstance == nil {
 			return &gen.SpeedTestResponse{Results: []*gen.SpeedTestResult{{
 				OutboundTag: To("proxy"),
 				Error:       To("Instance is not running"),
 			}}}, nil
 		}
+		defer release()
 	} else {
 		if *in.NeedXray {
 			xrayTestIntance, err = xray.CreateXrayInstance(*in.XrayConfig)

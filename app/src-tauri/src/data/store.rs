@@ -88,35 +88,57 @@ impl Store {
     pub fn load() -> Self {
         let p = Self::path();
         let _guard = lock_store_file(&p);
-        if let Ok(mut f) = fs::File::open(&p) {
-            let mut s = String::new();
-            if f.read_to_string(&mut s).is_ok() {
-                if let Ok(st) = serde_json::from_str(&s) {
-                    return st;
-                }
-            }
-        }
-        Self::default()
+        load_unlocked(&p)
     }
 
+    #[allow(dead_code)] // kept for callers that already hold a Store value
     pub fn save(&self) -> Result<(), String> {
         let p = Self::path();
         let _guard = lock_store_file(&p).map_err(|e| e.to_string())?;
-        let s = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
-        let tmp = p.with_extension("json.tmp");
-        {
-            let mut f = fs::File::create(&tmp).map_err(|e| e.to_string())?;
-            f.write_all(s.as_bytes()).map_err(|e| e.to_string())?;
-            f.sync_all().map_err(|e| e.to_string())?;
-        }
-        fs::rename(&tmp, &p).map_err(|e| e.to_string())?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&p, fs::Permissions::from_mode(0o600));
-        }
-        Ok(())
+        save_unlocked(&p, self)
     }
+
+    /// 3A: one exclusive lock for load → mutate → save (no lost field updates).
+    pub fn update<F, T>(f: F) -> Result<T, String>
+    where
+        F: FnOnce(&mut Store) -> Result<T, String>,
+    {
+        let p = Self::path();
+        let _guard = lock_store_file(&p).map_err(|e| e.to_string())?;
+        let mut st = load_unlocked(&p);
+        let out = f(&mut st)?;
+        save_unlocked(&p, &st)?;
+        Ok(out)
+    }
+}
+
+fn load_unlocked(p: &std::path::Path) -> Store {
+    if let Ok(mut f) = fs::File::open(p) {
+        let mut s = String::new();
+        if f.read_to_string(&mut s).is_ok() {
+            if let Ok(st) = serde_json::from_str(&s) {
+                return st;
+            }
+        }
+    }
+    Store::default()
+}
+
+fn save_unlocked(p: &std::path::Path, st: &Store) -> Result<(), String> {
+    let s = serde_json::to_string_pretty(st).map_err(|e| e.to_string())?;
+    let tmp = p.with_extension("json.tmp");
+    {
+        let mut f = fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        f.write_all(s.as_bytes()).map_err(|e| e.to_string())?;
+        f.sync_all().map_err(|e| e.to_string())?;
+    }
+    fs::rename(&tmp, p).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(p, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }
 
 fn dirs_next_path() -> PathBuf {

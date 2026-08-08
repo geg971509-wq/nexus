@@ -10,6 +10,18 @@ mod winhide;
 
 use core::session::{CoreSession, SESSION};
 use defaults::{APP_IDENTIFIER, APP_NAME, APP_VERSION, MIXED_PORT};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Connect generation: disconnect/teardown bumps this so in-flight Start cannot reinstall.
+static CONNECT_GEN: AtomicU64 = AtomicU64::new(1);
+
+fn bump_connect_gen() -> u64 {
+    CONNECT_GEN.fetch_add(1, Ordering::SeqCst).wrapping_add(1)
+}
+
+fn current_connect_gen() -> u64 {
+    CONNECT_GEN.load(Ordering::SeqCst)
+}
 
 #[tauri::command]
 fn app_identity() -> serde_json::Value {
@@ -22,23 +34,85 @@ fn app_identity() -> serde_json::Value {
 }
 
 /// Put a session back after long RPC outside the lock.
-/// If disconnect already installed/cleared, drop our handle (kill if still ours alone).
-fn put_session_back(mut session: CoreSession) {
+/// Only reinstalls when `gen` is still current and the slot is empty.
+/// Returns true when the session was reinstalled under this gen.
+fn put_session_back(mut session: CoreSession, gen: u64) -> bool {
     if session.child_exited() {
         let _ = session.stop_core_process();
-        return;
+        return false;
+    }
+    if gen == 0 || gen != current_connect_gen() {
+        let _ = session.stop_core_process();
+        return false;
     }
     match SESSION.lock() {
         Ok(mut g) if g.is_none() => {
-            *g = Some(session);
+            if gen == current_connect_gen() {
+                *g = Some(session);
+                true
+            } else {
+                let _ = session.stop_core_process();
+                false
+            }
         }
         Ok(_) => {
             let _ = session.stop_core_process();
+            false
         }
         Err(_) => {
             let _ = session.stop_core_process();
+            false
         }
     }
+}
+
+/// 2A: apply proxy/spin only if this connect gen still owns the live session.
+/// After OS proxy write, re-check gen — disconnect can win during the call; undo enable.
+fn apply_post_start_side_effects(gen: u64, use_sys_proxy: bool, port: u16) -> Option<String> {
+    if gen == 0 || gen != current_connect_gen() {
+        return Some("skipped proxy: connect superseded".into());
+    }
+    let still_ours = SESSION
+        .lock()
+        .ok()
+        .map(|g| g.is_some())
+        .unwrap_or(false);
+    if !still_ours || gen != current_connect_gen() {
+        return Some("skipped proxy: session gone".into());
+    }
+    let proxy_note = if use_sys_proxy {
+        match sys::set_system_proxy(true, port) {
+            Ok(m) => Some(m),
+            Err(e) => Some(format!("system proxy failed: {e}")),
+        }
+    } else {
+        match sys::set_system_proxy(false, port) {
+            Ok(m) => Some(m),
+            Err(e) => Some(format!("clear system proxy: {e}")),
+        }
+    };
+    // TOCTOU close: if disconnect bumped gen during set_system_proxy, undo enable.
+    if gen != current_connect_gen() {
+        if use_sys_proxy {
+            let _ = sys::set_system_proxy(false, port);
+        }
+        tray_spin::set_spinning(false);
+        return Some("rolled back proxy: connect superseded".into());
+    }
+    let still_ours = SESSION
+        .lock()
+        .ok()
+        .map(|g| g.is_some())
+        .unwrap_or(false);
+    if !still_ours {
+        if use_sys_proxy {
+            let _ = sys::set_system_proxy(false, port);
+        }
+        tray_spin::set_spinning(false);
+        return Some("rolled back proxy: session gone".into());
+    }
+    tray_spin::set_spinning(true);
+    proxy_note
 }
 
 /// Share-link → SVG QR (offline; for 显示二维码 dialog).
@@ -75,44 +149,40 @@ mod qr_tests {
     }
 }
 
-/// Off async runtime: spawn + socket accept can take seconds and freezes UI if sync.
+/// Reinstall a short-poll session only if gen still current and slot empty.
+fn reinstall_poll_session(mut session: CoreSession, gen: u64) {
+    if gen == 0 || gen != current_connect_gen() {
+        let _ = session.stop_core_process();
+        return;
+    }
+    match SESSION.lock() {
+        Ok(mut g) if g.is_none() && gen == current_connect_gen() => {
+            *g = Some(session);
+        }
+        Ok(_) => {
+            let _ = session.stop_core_process();
+        }
+        Err(_) => {
+            let _ = session.stop_core_process();
+        }
+    }
+}
+
+/// Kept for debug/tools only — product UI must use connect_selected / session_status.
+/// Spawns Core process without profile Start (tunnel not loaded).
 #[tauri::command]
 async fn core_start() -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let mut g = SESSION.lock().map_err(|e| e.to_string())?;
-        if let Some(s) = g.as_mut() {
-            if !s.child_exited() {
-                return Ok("already running".into());
-            }
-            let _ = s.stop_core_process();
-            *g = None;
-        }
-        let bin = CoreSession::resolve_core_binary();
-        if !bin.is_file() {
-            return Err(format!("NexusCore not found at {}", bin.display()));
-        }
-        let session = CoreSession::start(&bin).map_err(|e| e.to_string())?;
-        *g = Some(session);
-        Ok(format!("started {}", bin.display()))
-    })
-    .await
-    .map_err(|e| format!("core_start join: {e}"))?
+    Err("core_start is disabled; use connect_selected".into())
 }
 
+/// Alias of session_status for older UI callers (single status truth after 4A/8A).
 #[tauri::command]
 async fn core_query_state() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let mut g = SESSION.lock().map_err(|e| e.to_string())?;
-        let s = g.as_mut().ok_or("core not started")?;
-        let (running, profile_id) = s.query_state()?;
-        Ok(serde_json::json!({ "running": running, "profile_id": profile_id }))
-    })
-    .await
-    .map_err(|e| format!("core_query_state join: {e}"))?
+    session_status().await
 }
 
-/// Boot / power sync: store chips + live Core (SESSION QueryState, or orphan process/port).
-/// GUI quit without Stop leaves NexusCore + utun/mixed; power must show 已连接.
+/// Boot / power sync: store chips + live Core (SESSION QueryState, or orphan process).
+/// 4A: never treat mixed-port alone as live (unrelated listener on 2080).
 #[tauri::command]
 async fn session_status() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(|| {
@@ -121,21 +191,26 @@ async fn session_status() -> Result<serde_json::Value, String> {
         let mut rpc_running = false;
         let mut profile_id = -1i32;
         let mut has_session = false;
-        if let Ok(mut g) = SESSION.lock() {
-            if let Some(s) = g.as_mut() {
-                has_session = true;
-                if let Ok((r, pid)) = s.query_state() {
-                    rpc_running = r;
-                    profile_id = pid;
-                }
+        // 6A: take session for short QueryState so poll/disconnect is not blocked.
+        let (taken, gen) = match SESSION.lock() {
+            Ok(mut g) => {
+                let gen = current_connect_gen();
+                (g.take(), gen)
             }
+            Err(_) => (None, 0),
+        };
+        if let Some(mut s) = taken {
+            has_session = true;
+            if let Ok((r, pid)) = s.query_state() {
+                rpc_running = r;
+                profile_id = pid;
+            }
+            reinstall_poll_session(s, gen);
         }
         let process_alive = CoreSession::core_process_alive();
         let mixed_open = CoreSession::mixed_port_open(MIXED_PORT);
-        // Live if RPC Start still loaded, OR Core/mixed residual (GUI relaunch / SESSION lag).
-        // Do not require !has_session — dead SESSION + live process was painting 未连接.
-        let live = rpc_running || process_alive || mixed_open;
-        // Keep menu-bar Earth spin in sync (boot / orphan Core / reconnect).
+        // Prefer RPC truth; else owned/orphan process + mixed; never mixed alone.
+        let live = rpc_running || (process_alive && mixed_open);
         tray_spin::set_spinning(live);
         Ok(serde_json::json!({
             "running": live,
@@ -164,14 +239,11 @@ async fn core_check_config(json: String) -> Result<serde_json::Value, String> {
     .map_err(|e| format!("core_check_config join: {e}"))?
 }
 
+/// Full disconnect (same body as disconnect_selected). Kept for UI fallback callers.
 #[tauri::command]
 async fn core_stop() -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(|| {
-        let mut g = SESSION.lock().map_err(|e| e.to_string())?;
-        if let Some(mut s) = g.take() {
-            let _ = s.stop_rpc();
-            s.stop_core_process().map_err(|e| e.to_string())?;
-        }
+        let _ = disconnect_selected_sync()?;
         Ok("stopped".into())
     })
     .await
@@ -257,10 +329,10 @@ async fn catalog_put(blob: serde_json::Value) -> Result<String, String> {
         if !blob.is_object() {
             return Err("catalog blob must be object".into());
         }
-        let mut st = Store::load();
-        st.catalog = Some(blob);
-        st.save()?;
-        Ok("ok".into())
+        Store::update(|st| {
+            st.catalog = Some(blob);
+            Ok("ok".into())
+        })
     })
     .await
     .map_err(|e| format!("catalog_put join: {e}"))?
@@ -284,10 +356,10 @@ async fn blocklist_put(items: Vec<data::store::BlockEntry>) -> Result<serde_json
         use data::generate::normalize_blocklist;
         use data::store::Store;
         let normalized = normalize_blocklist(&items)?;
-        let mut st = Store::load();
-        st.blocklist = normalized.clone();
-        st.save()?;
-        Ok(serde_json::json!({ "items": normalized }))
+        Store::update(|st| {
+            st.blocklist = normalized.clone();
+            Ok(serde_json::json!({ "items": normalized }))
+        })
     })
     .await
     .map_err(|e| format!("blocklist_put join: {e}"))?
@@ -301,9 +373,10 @@ async fn set_system_proxy_cmd(enabled: bool) -> Result<String, String> {
         use core::session::SESSION;
         use data::store::Store;
         // set_spmode_system_proxy: always persist intent; OS write only if profile running.
-        let mut st = Store::load();
-        st.system_proxy = enabled;
-        st.save()?;
+        Store::update(|st| {
+            st.system_proxy = enabled;
+            Ok(())
+        })?;
         let port = MIXED_PORT;
         // Short lock: query only — never hold across networksetup.
         let core_running = {
@@ -331,10 +404,11 @@ async fn set_system_proxy_cmd(enabled: bool) -> Result<String, String> {
 async fn set_tun_cmd(enabled: bool) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         use data::store::Store;
-        let mut st = Store::load();
-        let prev = st.tun;
-        st.tun = enabled;
-        st.save()?;
+        let prev = Store::update(|st| {
+            let prev = st.tun;
+            st.tun = enabled;
+            Ok(prev)
+        })?;
         if !enabled {
             return Ok(serde_json::json!({
                 "tun": false,
@@ -354,8 +428,10 @@ async fn set_tun_cmd(enabled: bool) -> Result<serde_json::Value, String> {
                             match s.recycle_privileged() {
                                 Ok(()) => recycled = true,
                                 Err(e) => {
-                                    st.tun = prev;
-                                    let _ = st.save();
+                                    let _ = Store::update(|st| {
+                                        st.tun = prev;
+                                        Ok(())
+                                    });
                                     return Err(format!("Tun elevate recycle failed: {e}"));
                                 }
                             }
@@ -375,8 +451,10 @@ async fn set_tun_cmd(enabled: bool) -> Result<serde_json::Value, String> {
                 }))
             }
             Err(e) => {
-                st.tun = prev;
-                let _ = st.save();
+                let _ = Store::update(|st| {
+                    st.tun = prev;
+                    Ok(())
+                });
                 Err(format!("Tun needs admin: {e}"))
             }
         }
@@ -416,27 +494,17 @@ fn connect_selected_sync(
     use data::share_link::parse_to_outbound;
     use data::store::Store;
 
-    let mut st = Store::load();
     // Start uses current checkbox state, not a stale disk flag.
     // Prefer explicit UI args; persist so next cold Start matches chips.
-    let mut dirty = false;
-    if let Some(v) = tun {
-        if st.tun != v {
+    let (use_tun, use_sys_proxy, blocklist) = Store::update(|st| {
+        if let Some(v) = tun {
             st.tun = v;
-            dirty = true;
         }
-    }
-    if let Some(v) = system_proxy {
-        if st.system_proxy != v {
+        if let Some(v) = system_proxy {
             st.system_proxy = v;
-            dirty = true;
         }
-    }
-    if dirty {
-        let _ = st.save();
-    }
-    let use_tun = st.tun;
-    let use_sys_proxy = st.system_proxy;
+        Ok((st.tun, st.system_proxy, st.blocklist.clone()))
+    })?;
     let port = MIXED_PORT;
     let pid = profile_id.unwrap_or(1);
 
@@ -455,7 +523,7 @@ fn connect_selected_sync(
     };
 
     // generate.cpp: tun inbound only if spmode_vpn
-    let cfg = generate_with_outbound(ob, port, use_tun, &st.blocklist);
+    let cfg = generate_with_outbound(ob, port, use_tun, &blocklist);
     let json = serde_json::to_string(&cfg).map_err(|e| e.to_string())?;
 
     // Tun: setuid Core before LoadConfig (upstream profile_start elevation).
@@ -465,8 +533,8 @@ fn connect_selected_sync(
     }
 
     // 1A: take session out of SESSION so Start (≤60s) does not block poll/disconnect.
-    // Setup (spawn / privilege recycle / soft Stop) stays under the lock; long Start runs free.
-    let mut session = {
+    // Setup under lock; mint connect gen so mid-Start disconnect invalidates put_session_back.
+    let (mut session, connect_gen) = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         if let Some(s) = g.as_mut() {
             if s.child_exited() {
@@ -493,13 +561,15 @@ fn connect_selected_sync(
                 let _ = s.stop_rpc();
             }
         }
-        g.take().ok_or_else(|| "session vanished before start".to_string())?
+        let gen = bump_connect_gen();
+        let session = g.take().ok_or_else(|| "session vanished before start".to_string())?;
+        (session, gen)
     };
 
     let mut start_err = match session.start_rpc(&json, pid) {
         Ok(e) => e,
         Err(e) => {
-            put_session_back(session);
+            let _ = put_session_back(session, connect_gen);
             return Err(e);
         }
     };
@@ -515,14 +585,14 @@ fn connect_selected_sync(
             start_err = match session.start_rpc(&json, pid) {
                 Ok(e) => e,
                 Err(e) => {
-                    put_session_back(session);
+                    let _ = put_session_back(session, connect_gen);
                     return Err(e);
                 }
             };
         }
     }
     if start_err.is_some() {
-        put_session_back(session);
+        let _ = put_session_back(session, connect_gen);
         return Ok(serde_json::json!({
             "started": false,
             "start_error": start_err,
@@ -533,25 +603,40 @@ fn connect_selected_sync(
         }));
     }
     let (running, qpid) = session.query_state().unwrap_or((false, -1));
-    put_session_back(session);
+    // 2A arch: started only if this gen still owns a reinstalled session.
+    let owned = put_session_back(session, connect_gen);
+    if !owned {
+        return Ok(serde_json::json!({
+            "started": false,
+            "start_error": "connect superseded",
+            "running": false,
+            "profile_id": qpid,
+            "listen_port": port,
+            "proxy_note": "session discarded: connect superseded",
+            "tun": use_tun,
+            "system_proxy": use_sys_proxy,
+            "config": cfg,
+        }));
+    }
 
-    // system proxy applied when spmode_system_proxy (not when Tun-only).
-    // Only after Start success — OS must point at a live mixed port.
-    let proxy_note = if use_sys_proxy {
-        match sys::set_system_proxy(true, port) {
-            Ok(m) => Some(m),
-            Err(e) => Some(format!("system proxy failed: {e}")),
-        }
-    } else {
-        // Chip off: clear any leftover OS proxy from a previous session
-        match sys::set_system_proxy(false, port) {
-            Ok(m) => Some(m),
-            Err(e) => Some(format!("clear system proxy: {e}")),
-        }
-    };
-
-    // Menu-bar Earth spins while tunnel is up (proxy and/or Tun).
-    tray_spin::set_spinning(true);
+    // cycle2 2A: proxy/spin only if this connect gen still owns the live session.
+    let proxy_note = apply_post_start_side_effects(connect_gen, use_sys_proxy, port);
+    // If proxy path rolled back because gen died mid-call, still report not started.
+    let still = current_connect_gen() == connect_gen
+        && SESSION.lock().ok().map(|g| g.is_some()).unwrap_or(false);
+    if !still {
+        return Ok(serde_json::json!({
+            "started": false,
+            "start_error": "connect superseded",
+            "running": false,
+            "profile_id": qpid,
+            "listen_port": port,
+            "proxy_note": proxy_note,
+            "tun": use_tun,
+            "system_proxy": use_sys_proxy,
+            "config": cfg,
+        }));
+    }
 
     Ok(serde_json::json!({
         "started": true,
@@ -567,14 +652,25 @@ fn connect_selected_sync(
 }
 
 /// Live connections from Core TrafficManager (needs experimental.clash_api).
-/// Includes recently closed rows (short HTTP often leaves active empty).
+/// 6A: take/put + gen so poll does not hold SESSION across Core RPC.
 #[tauri::command]
 async fn query_connections() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(|| {
         use core::session::SESSION;
-        let mut g = SESSION.lock().map_err(|e| e.to_string())?;
-        let s = g.as_mut().ok_or("core not started")?;
-        let rows = s.query_connections()?;
+        let (mut session, gen) = {
+            let mut g = SESSION.lock().map_err(|e| e.to_string())?;
+            let gen = current_connect_gen();
+            let s = g.take().ok_or_else(|| "core not started".to_string())?;
+            (s, gen)
+        };
+        let rows = match session.query_connections() {
+            Ok(r) => r,
+            Err(e) => {
+                reinstall_poll_session(session, gen);
+                return Err(e);
+            }
+        };
+        reinstall_poll_session(session, gen);
         let list: Vec<serde_json::Value> = rows
             .into_iter()
             .map(|r| {
@@ -601,14 +697,26 @@ async fn query_connections() -> Result<serde_json::Value, String> {
 }
 
 /// Cumulative proxy outbound traffic (Core QueryStats / TrafficManager).
-/// Use this for the node 流量 column — connection-window sums freeze when conns close.
+/// 6A: take/put + gen so poll does not hold SESSION across Core RPC.
 #[tauri::command]
 async fn query_stats() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(|| {
         use core::session::SESSION;
-        let mut g = SESSION.lock().map_err(|e| e.to_string())?;
-        let s = g.as_mut().ok_or("core not started")?;
-        let (upload, download) = s.query_stats_proxy()?;
+        let (mut session, gen) = {
+            let mut g = SESSION.lock().map_err(|e| e.to_string())?;
+            let gen = current_connect_gen();
+            let s = g.take().ok_or_else(|| "core not started".to_string())?;
+            (s, gen)
+        };
+        let stats = match session.query_stats_proxy() {
+            Ok(r) => r,
+            Err(e) => {
+                reinstall_poll_session(session, gen);
+                return Err(e);
+            }
+        };
+        reinstall_poll_session(session, gen);
+        let (upload, download) = stats;
         Ok(serde_json::json!({
             "upload": upload,
             "download": download,
@@ -618,7 +726,8 @@ async fn query_stats() -> Result<serde_json::Value, String> {
     .map_err(|e| format!("query_stats join: {e}"))?
 }
 
-/// Stop RPC only — keep Core process for next Start.
+/// Full disconnect: stop RPC + kill Core + clear OS proxy + stop tray spin.
+/// Invalidates in-flight connect gen so put_session_back will not reinstall.
 #[tauri::command]
 async fn disconnect_selected() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(disconnect_selected_sync)
@@ -627,7 +736,8 @@ async fn disconnect_selected() -> Result<serde_json::Value, String> {
 }
 
 fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
-    // Align with teardown_session: soft Stop, always kill process + clear proxy.
+    // Invalidate any in-flight Start before killing (1A residual).
+    let _ = bump_connect_gen();
     let (stop_err, running, pid) = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         if g.is_none() {
@@ -744,10 +854,8 @@ async fn net_tcp_probe(
                 let _ = app.emit("net-probe-result", r);
             },
         );
-        // aborted if stop was called for this batch, or a newer batch replaced it mid-flight
-        let aborted = results.iter().any(|r| {
-            r.error.as_deref() == Some("aborted")
-        }) || net::is_aborted();
+        // aborted if stop was called for this batch (canonical error "aborted")
+        let aborted = results.iter().any(|r| r.error.as_deref() == Some("aborted"));
         serde_json::json!({
             "results": results,
             "aborted": aborted,
@@ -795,9 +903,11 @@ async fn net_resolve_hosts(
         let results = net::resolve_batch_progressive(&targets, concurrency, |r| {
             let _ = app.emit("net-resolve-result", r);
         });
+        let aborted = results.iter().any(|r| r.error.as_deref() == Some("aborted"));
         serde_json::json!({
             "results": results,
             "count": results.len(),
+            "aborted": aborted,
         })
     })
     .await
@@ -811,6 +921,7 @@ static ALLOW_EXIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool
 /// Single quit/teardown path: stop Core + always best-effort clear OS proxy at MIXED_PORT.
 /// Used by app_quit, tray quit, and Exit (after confirm). Idempotent.
 fn teardown_session() {
+    let _ = bump_connect_gen();
     tray_spin::set_spinning(false);
     // Always clear — store flag can lag OS; exit must not leave browsers on dead mixed port.
     let _ = sys::set_system_proxy(false, MIXED_PORT);

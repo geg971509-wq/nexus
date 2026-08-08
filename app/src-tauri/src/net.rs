@@ -40,6 +40,7 @@ pub fn is_batch_live(batch_id: u64) -> bool {
 }
 
 /// True when the most recently issued batch id is already aborted.
+#[allow(dead_code)] // retained for ad-hoc diagnostics; production uses is_batch_live
 pub fn is_aborted() -> bool {
     let next = NEXT_BATCH.load(Ordering::SeqCst);
     let through = ABORTED_THROUGH.load(Ordering::SeqCst);
@@ -241,11 +242,12 @@ fn tcp_connect_ms(
     addrs: &[SocketAddr],
     timeout: Duration,
     ifindex: Option<u32>,
+    batch_id: u64,
 ) -> Result<(i64, String), String> {
     let mut last_err = String::from("connect failed");
     for addr in addrs {
-        if is_aborted() {
-            return Err("test aborted".into());
+        if !is_batch_live(batch_id) {
+            return Err("aborted".into());
         }
         let domain = if addr.is_ipv4() {
             Domain::IPV4
@@ -282,8 +284,9 @@ fn one_probe(
     port: u16,
     timeout: Duration,
     ifindex: Option<u32>,
+    batch_id: u64,
 ) -> ProbeResult {
-    if is_aborted() {
+    if !is_batch_live(batch_id) {
         return ProbeResult {
             id,
             host,
@@ -291,11 +294,11 @@ fn one_probe(
             ok: false,
             ms: Some(-1),
             ip: None,
-            error: Some("test aborted".into()),
+            error: Some("aborted".into()),
         };
     }
     match parse_target(&host, port) {
-        Ok(addrs) => match tcp_connect_ms(&addrs, timeout, ifindex) {
+        Ok(addrs) => match tcp_connect_ms(&addrs, timeout, ifindex, batch_id) {
             Ok((ms, ip)) => ProbeResult {
                 id,
                 host,
@@ -392,7 +395,7 @@ where
         let bid = batch_id;
         handles.push(thread::spawn(move || {
             let res = if is_batch_live(bid) {
-                one_probe(id, host, port, timeout, ifindex)
+                one_probe(id, host, port, timeout, ifindex, bid)
             } else {
                 ProbeResult {
                     id,
@@ -443,6 +446,7 @@ pub struct ResolveResult {
 }
 
 /// Concurrent DNS. `on_each` fires as soon as each host finishes (same progressive model as TCP probe).
+/// Shares probe batch-id abort so stop cancels resolve-all too.
 pub fn resolve_batch_progressive<F>(
     targets: &[serde_json::Value],
     concurrency: usize,
@@ -451,6 +455,7 @@ pub fn resolve_batch_progressive<F>(
 where
     F: FnMut(&ResolveResult),
 {
+    let batch_id = begin_probe_batch();
     let conc = concurrency.clamp(1, 32);
     if targets.is_empty() {
         return Vec::new();
@@ -460,6 +465,9 @@ where
     let mut handles = Vec::with_capacity(targets.len());
 
     for t in targets {
+        if !is_batch_live(batch_id) {
+            break;
+        }
         let id = t
             .get("id")
             .and_then(|v| v.as_str())
@@ -473,6 +481,9 @@ where
         let tx_c = tx.clone();
         let sem_c = Arc::clone(&sem);
         loop {
+            if !is_batch_live(batch_id) {
+                break;
+            }
             let mut g = sem_c.lock().unwrap();
             if *g < conc {
                 *g += 1;
@@ -481,22 +492,36 @@ where
             drop(g);
             thread::sleep(Duration::from_millis(2));
         }
+        if !is_batch_live(batch_id) {
+            break;
+        }
+        let bid = batch_id;
         handles.push(thread::spawn(move || {
-            let res = match resolve_host(&host) {
-                Ok(ips) => ResolveResult {
-                    id,
-                    host,
-                    ok: true,
-                    ips,
-                    error: None,
-                },
-                Err(e) => ResolveResult {
+            let res = if !is_batch_live(bid) {
+                ResolveResult {
                     id,
                     host,
                     ok: false,
                     ips: Vec::new(),
-                    error: Some(e),
-                },
+                    error: Some("aborted".into()),
+                }
+            } else {
+                match resolve_host(&host) {
+                    Ok(ips) => ResolveResult {
+                        id,
+                        host,
+                        ok: true,
+                        ips,
+                        error: None,
+                    },
+                    Err(e) => ResolveResult {
+                        id,
+                        host,
+                        ok: false,
+                        ips: Vec::new(),
+                        error: Some(e),
+                    },
+                }
             };
             let _ = tx_c.send(res);
             if let Ok(mut g) = sem_c.lock() {
@@ -544,17 +569,27 @@ pub fn probe_json(
     concurrency: usize,
 ) -> serde_json::Value {
     let results = probe_batch(&targets, timeout_ms, concurrency);
-    json!({ "results": results, "aborted": is_aborted() })
+    let aborted = results.iter().any(|r| r.error.as_deref() == Some("aborted"));
+    json!({ "results": results, "aborted": aborted })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::sync::Mutex;
+    use std::sync::{Mutex, OnceLock};
+
+    /// Global batch atomics are process-wide; serialize tests that touch them.
+    fn probe_test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+    }
 
     #[test]
     fn probe_localhost_or_fail_honest() {
+        let _g = probe_test_lock();
         let res = probe_batch(&[json!({"id":"a","host":"127.0.0.1","port":1})], 500, 2);
         assert_eq!(res.len(), 1);
         assert!(!res[0].ok);
@@ -563,6 +598,7 @@ mod tests {
 
     #[test]
     fn resolve_batch_fires() {
+        let _g = probe_test_lock();
         let hits = Arc::new(Mutex::new(0usize));
         let hits_c = Arc::clone(&hits);
         let res = resolve_batch_progressive(
@@ -588,6 +624,7 @@ mod tests {
 
     #[test]
     fn progressive_callback_fires_per_result() {
+        let _g = probe_test_lock();
         let hits = Arc::new(Mutex::new(0usize));
         let hits_c = Arc::clone(&hits);
         let res = probe_batch_progressive(
@@ -607,6 +644,7 @@ mod tests {
 
     #[test]
     fn abort_kills_issued_batch_not_next() {
+        let _g = probe_test_lock();
         let id = begin_probe_batch();
         assert!(is_batch_live(id));
         abort_probes();
@@ -614,6 +652,40 @@ mod tests {
         let id2 = begin_probe_batch();
         assert!(is_batch_live(id2));
         assert!(!is_batch_live(id));
+    }
+
+    #[test]
+    fn one_probe_abort_uses_canonical_string() {
+        let _g = probe_test_lock();
+        let id = begin_probe_batch();
+        abort_probes();
+        let r = one_probe("x".into(), "127.0.0.1".into(), 1, Duration::from_millis(100), None, id);
+        assert!(!r.ok);
+        assert_eq!(r.error.as_deref(), Some("aborted"));
+    }
+
+    #[test]
+    fn resolve_batch_respects_abort() {
+        let _g = probe_test_lock();
+        // resolve_batch_progressive mints its own batch; abort while it runs.
+        let handle = thread::spawn(|| {
+            // Many targets + conc=1 stretches the spawn loop so abort can win.
+            let mut targets = Vec::new();
+            for i in 0..40 {
+                targets.push(json!({"id": format!("n{i}"), "host": "127.0.0.1"}));
+            }
+            resolve_batch_progressive(&targets, 1, |_| {})
+        });
+        thread::sleep(Duration::from_millis(5));
+        abort_probes();
+        let res = handle.join().expect("resolve thread");
+        assert!(
+            res.is_empty()
+                || res.iter().any(|r| r.error.as_deref() == Some("aborted"))
+                || res.len() < 40,
+            "expected abort to cut short, got {} rows",
+            res.len()
+        );
     }
 
     #[test]

@@ -3421,14 +3421,24 @@
   let catalogPutChain = Promise.resolve();
   let _catalogUnloadBound = false;
   function flushCatalogPut() {
+    // 3A: store.json is sole truth. LS only as offline/bridge-down cache.
     const blob = serializeCatalog();
-    try { localStorage.setItem(CATALOG_KEY, JSON.stringify(blob)); } catch (_) {}
-    if (typeof nexusInvoke !== 'function') return Promise.resolve();
+    if (typeof nexusInvoke !== 'function') {
+      try { localStorage.setItem(CATALOG_KEY, JSON.stringify(blob)); } catch (_) {}
+      return Promise.resolve();
+    }
     return nexusInvoke('catalog_put', { blob }).then(r => {
+      if (r && r.ok) {
+        try { localStorage.removeItem(CATALOG_KEY); } catch (_) {}
+        return;
+      }
+      // Put failed / offline — keep LS so next boot can migrate.
+      try { localStorage.setItem(CATALOG_KEY, JSON.stringify(blob)); } catch (_) {}
       if (r && !r.ok && !r.offline) {
         try { log('SYS', 'warn', t('log.subStoreFail', { error: r.error || '' })); } catch (_) {}
       }
     }).catch(e => {
+      try { localStorage.setItem(CATALOG_KEY, JSON.stringify(blob)); } catch (_) {}
       try { log('SYS', 'warn', t('log.subStoreFail', { error: e && e.message || e })); } catch (_) {}
     });
   }
@@ -4088,7 +4098,7 @@
       if (!r.ok || r.ms == null || r.ms < 0) {
         applyLatencyToRow(t.row, -1, true);
         fail++;
-        if (r.error && r.error !== 'test aborted' && fail <= 5) {
+        if (r.error && r.error !== 'aborted' && r.error !== 'test aborted' && fail <= 5) {
           log('TEST', 'warn', `[${t.id}] ${r.error}`);
         }
       } else {
@@ -6685,15 +6695,21 @@
     }
     refreshSbProxyFromNodes();
   }
+  // 1A: consecutive poll/RPC failures while UI thinks connected → auto disconnect.
+  let connPollFailStreak = 0;
+  const CONN_POLL_FAIL_LIMIT = 3;
   async function refreshConnections() {
     if (!connected) {
       connEmptyStreak = 0;
+      connPollFailStreak = 0;
       renderConnections([]);
       return;
     }
+    let pollOk = false;
     try {
       const r = await nexusInvoke('query_connections');
       if (r && r.ok && r.data) {
+        pollOk = true;
         const list = r.data.active || [];
         // table body only when conn dock visible
         const open = dock?.classList.contains('open');
@@ -6720,16 +6736,46 @@
           n = 0;
         }
         if (st) st.textContent = String(n);
+      } else if (r && !r.ok && !r.offline) {
+        // explicit RPC failure (core dead / not started)
+        pollOk = false;
+      } else if (r && r.offline) {
+        pollOk = false;
       }
-      // mid-restart / core down: keep previous rows (do not wipe on throw or !ok)
       // Node 流量: Core QueryStats deltas → per-node cumulative (survives switch).
       try {
         const st = await nexusInvoke('query_stats');
         if (st && st.ok && st.data) {
           applyNodeFlow(st.data.upload, st.data.download);
+          pollOk = true;
         }
       } catch (_) { /* QueryStats optional if core mid-stop */ }
-    } catch (_) { /* offline / core down — keep last table */ }
+    } catch (_) { /* offline / core down */ }
+
+    if (pollOk) {
+      connPollFailStreak = 0;
+      return;
+    }
+    connPollFailStreak += 1;
+    if (connPollFailStreak < CONN_POLL_FAIL_LIMIT || !connected) return;
+    // Core gone while UI still ON — full disconnect cleanup (sticky proxy risk).
+    connPollFailStreak = 0;
+    try { log('SYS', 'warn', t('log.coreLost') || 'Core lost — disconnecting'); } catch (_) {}
+    try {
+      if (typeof runSessionOp === 'function') {
+        await runSessionOp('disconnect', async () => {
+          try { await nexusInvoke('disconnect_selected'); } catch (_) {
+            try { await nexusInvoke('core_stop'); } catch (_) {}
+          }
+          if (typeof setConnected === 'function') setConnected(false);
+        });
+      } else {
+        try { await nexusInvoke('disconnect_selected'); } catch (_) {}
+        if (typeof setConnected === 'function') setConnected(false);
+      }
+    } catch (_) {
+      if (typeof setConnected === 'function') setConnected(false);
+    }
   }
   function startConnPoll() {
     // restart timer only — do not wipe table (reconnect / setConnected re-entry)
@@ -6817,29 +6863,29 @@
   let lastExitIp = null;
   let lastCountry = null;
   async function fillRuntimeStats() {
-    // Core Start()/traffic/IPTest not fully ported — query real process if up, never invent metrics.
+    // 8A: single status consumer — session_status (tightened live).
     let coreLabel = '已停止';
     let coreRunning = false;
     try {
-      const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
-      if (typeof inv === 'function') {
-        // process may exist even when UI "connected" is CheckConfig-only
-        const st = await inv('core_query_state');
+      if (typeof nexusInvoke === 'function') {
+        const r = await nexusInvoke('session_status');
+        const st = r && r.ok ? r.data : r;
         if (st && st.running) {
           coreRunning = true;
           coreLabel = (st.profile_id != null && st.profile_id >= 0)
             ? `运行中 · profile ${st.profile_id}`
             : '运行中';
         } else if (connected) {
-          coreLabel = '进程在线 · 隧道未跑';
-        } else {
+          coreLabel = '核心未响应';
+        } else if (st && st.process_alive) {
           coreLabel = '进程在线 · 空闲';
+        } else {
+          coreLabel = '已停止';
         }
       } else if (connected) {
         coreLabel = '已连接（状态未知）';
       }
     } catch (e) {
-      // core process not up
       if (connected) coreLabel = '核心未响应';
       else coreLabel = '已停止';
     }
@@ -10523,7 +10569,8 @@
     try {
       const ss = await nexusInvoke('session_status');
       const d = ss && ss.ok ? ss.data : null;
-      const live = !!(d && (d.running || d.process_alive || d.mixed_open || d.rpc_running));
+      // 4A: trust server-side running (already tightened); do not OR mixed alone.
+      const live = !!(d && d.running);
       if (live) {
         if (typeof setChipOn === 'function') {
           if (d.tun != null) setChipOn('tunToggle', 'tunChip', !!d.tun);
@@ -10560,7 +10607,7 @@
       try {
         const ss = await nexusInvoke('session_status');
         const d = ss && ss.ok ? ss.data : null;
-        live = !!(d && (d.running || d.process_alive || d.mixed_open || d.rpc_running));
+        live = !!(d && d.running);
       } catch (_) {}
     }
     if (live) {
