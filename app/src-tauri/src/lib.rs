@@ -664,6 +664,31 @@ async fn sub_parse_clash(body: String) -> Result<serde_json::Value, String> {
     .map_err(|e| format!("sub_parse_clash join: {e}"))?
 }
 
+/// Free-list / share URI body → catalog nodes with full outbound (vless/vmess/trojan/ss/…).
+#[tauri::command]
+async fn sub_parse_share(body: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let nodes = data::share_link::parse_share_body(&body);
+        let arr: Vec<serde_json::Value> = nodes
+            .into_iter()
+            .map(|n| {
+                serde_json::json!({
+                    "name": n.name,
+                    "type": n.type_label,
+                    "addr": n.addr,
+                    "lat": null,
+                    "flow": null,
+                    "link": n.link,
+                    "outbound": n.outbound,
+                })
+            })
+            .collect();
+        Ok(serde_json::json!({ "ok": true, "nodes": arr, "count": arr.len() }))
+    })
+    .await
+    .map_err(|e| format!("sub_parse_share join: {e}"))?
+}
+
 /// TCP connect RTT probe. Emits `net-probe-result` per finished target (upstream progressive).
 /// Runs off the async runtime so the webview keeps painting while probes are in flight.
 #[tauri::command]
@@ -680,7 +705,8 @@ async fn net_tcp_probe(
         return Err("too many targets".into());
     }
     let timeout_ms = timeout_ms.unwrap_or(3000);
-    let concurrency = concurrency.unwrap_or(8);
+    // Default closer to Throne test_concurrent (was 8 → free-list ~300 feels frozen)
+    let concurrency = concurrency.unwrap_or(32);
     tauri::async_runtime::spawn_blocking(move || {
         use tauri::Emitter;
         let results = net::probe_batch_progressive(
@@ -871,6 +897,7 @@ pub fn run() {
             query_stats,
             sub_fetch,
             sub_parse_clash,
+            sub_parse_share,
             net_tcp_probe,
             net_tcp_probe_stop,
             net_resolve_host,

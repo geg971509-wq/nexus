@@ -5,6 +5,137 @@
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
+/// One catalog node from a share-line body (vless/vmess/trojan/ss/…).
+#[derive(Debug, Clone)]
+pub struct ShareNode {
+    pub name: String,
+    pub type_label: String,
+    pub addr: String,
+    pub link: String,
+    pub outbound: Value,
+}
+
+/// Parse a free-list / share-URI body into catalog nodes with full outbound JSON.
+/// Per-line isolation: bad lines are skipped. Cap 5000 like Clash path.
+pub fn parse_share_body(body: &str) -> Vec<ShareNode> {
+    let mut out = Vec::new();
+    for line in body.lines() {
+        if out.len() >= 5000 {
+            break;
+        }
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        // subscription URL, not a proxy share
+        if (line.starts_with("http://") || line.starts_with("https://")) && !line.contains('@') {
+            continue;
+        }
+        match parse_to_outbound(line) {
+            Ok(outbound) => {
+                if let Some(n) = share_node_from_outbound(line, &outbound, out.len()) {
+                    out.push(n);
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+    out
+}
+
+fn share_node_from_outbound(link: &str, outbound: &Value, idx: usize) -> Option<ShareNode> {
+    let server = outbound
+        .get("server")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let port = outbound
+        .get("server_port")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    if server.is_empty() || port == 0 {
+        return None;
+    }
+    let ty = outbound
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("vless");
+    let type_label = match ty {
+        "vless" => "VLESS",
+        "vmess" => "VMess",
+        "trojan" => "Trojan",
+        "shadowsocks" => "SS",
+        "socks" => "SOCKS",
+        "http" => {
+            if outbound
+                .get("tls")
+                .and_then(|t| t.get("enabled"))
+                .and_then(|e| e.as_bool())
+                .unwrap_or(false)
+            {
+                "HTTPS"
+            } else {
+                "HTTP"
+            }
+        }
+        "anytls" => "AnyTLS",
+        "tuic" => "TUIC",
+        "hysteria2" | "hysteria" => "Hysteria2",
+        other => other,
+    }
+    .to_string();
+    let name = fragment_name(link).unwrap_or_else(|| {
+        // vmess v2rayN: ps/name inside JSON
+        if ty == "vmess" {
+            if let Some(ps) = vmess_remark_from_link(link) {
+                return ps;
+            }
+        }
+        format!("{type_label}-{}", idx + 1)
+    });
+    let addr = format!("{server}:{port}");
+    Some(ShareNode {
+        name,
+        type_label,
+        addr,
+        link: link.to_string(),
+        outbound: outbound.clone(),
+    })
+}
+
+fn fragment_name(link: &str) -> Option<String> {
+    let hash = link.find('#')?;
+    let frag = &link[hash + 1..];
+    if frag.is_empty() {
+        return None;
+    }
+    let name = pct_decode(frag).trim().to_string();
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
+}
+
+fn vmess_remark_from_link(link: &str) -> Option<String> {
+    let rest = link.split_once("://").map(|(_, r)| r.trim())?;
+    let b64 = rest.split('#').next().unwrap_or(rest).trim();
+    if b64.contains('@') {
+        return None;
+    }
+    let raw = b64_decode_std(b64).ok()?;
+    let txt = String::from_utf8_lossy(&raw);
+    let j: Value = serde_json::from_str(txt.trim()).ok()?;
+    let ps = j
+        .get("ps")
+        .or_else(|| j.get("name"))
+        .or_else(|| j.get("remark"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?;
+    Some(ps.to_string())
+}
+
 /// Parse one share URL or a JSON outbound object string into a sing-box outbound.
 pub fn parse_to_outbound(input: &str) -> Result<Value, String> {
     let s = input.trim();
@@ -150,18 +281,37 @@ fn vmess_from_v2rayn_json(j: &Value) -> Result<Value, String> {
     if alter_id > 0 {
         o.insert("alter_id".into(), json!(alter_id));
     }
-    let tls_on = j
+    let tls_raw = j
         .get("tls")
         .and_then(|v| v.as_str())
-        .map(|s| s.eq_ignore_ascii_case("tls"))
-        .unwrap_or(false);
+        .unwrap_or("")
+        .to_ascii_lowercase();
     // SNI only from sni field (host is often WS Host header, not SNI)
     let sni = j.get("sni").and_then(|v| v.as_str()).unwrap_or("");
-    if tls_on || !sni.is_empty() {
+    // "tls"/"reality" enable; bare sni also enables (common free-list style)
+    let tls_on = tls_raw == "tls" || tls_raw == "reality" || !sni.is_empty();
+    if tls_on {
         let mut tls = Map::new();
         tls.insert("enabled".into(), json!(true));
         if !sni.is_empty() {
             tls.insert("server_name".into(), json!(sni));
+        }
+        if let Some(fp) = j.get("fp").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            tls.insert(
+                "utls".into(),
+                json!({"enabled": true, "fingerprint": fp}),
+            );
+        }
+        if tls_raw == "reality" {
+            let mut reality = Map::new();
+            reality.insert("enabled".into(), json!(true));
+            if let Some(pbk) = j.get("pbk").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+                reality.insert("public_key".into(), json!(pbk));
+            }
+            if let Some(sid) = j.get("sid").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+                reality.insert("short_id".into(), json!(sid));
+            }
+            tls.insert("reality".into(), Value::Object(reality));
         }
         o.insert("tls".into(), Value::Object(tls));
     }
@@ -171,20 +321,36 @@ fn vmess_from_v2rayn_json(j: &Value) -> Result<Value, String> {
         .and_then(|v| v.as_str())
         .unwrap_or("tcp");
     let net = if net == "h2" { "http" } else { net };
-    if net != "tcp" && net != "raw" {
+    let path = j
+        .get("path")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("");
+    let host_hdr = j
+        .get("host")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("");
+    // Non-tcp nets always get transport; tcp/raw with host/path → http camouflage (v2rayN style)
+    if (net != "tcp" && net != "raw") || !path.is_empty() || !host_hdr.is_empty() {
         let mut t = Map::new();
         let ty = match net {
             "ws" | "websocket" => "ws",
             "grpc" => "grpc",
             "h2" | "http" => "http",
+            "tcp" | "raw" if !path.is_empty() || !host_hdr.is_empty() => "http",
             other => other,
         };
         t.insert("type".into(), json!(ty));
-        if let Some(path) = j.get("path").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+        if !path.is_empty() {
             t.insert("path".into(), json!(path));
         }
-        if let Some(h) = j.get("host").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
-            t.insert("headers".into(), json!({"Host": h}));
+        if !host_hdr.is_empty() {
+            if ty == "ws" || ty == "http" {
+                t.insert("headers".into(), json!({"Host": host_hdr}));
+            } else {
+                t.insert("host".into(), json!(host_hdr));
+            }
         }
         o.insert("transport".into(), Value::Object(t));
     }
@@ -585,14 +751,29 @@ fn transport_from_query(q: &HashMap<String, String>) -> Option<Value> {
     }
     let mut t = Map::new();
     t.insert("type".into(), json!(ty));
+    // WS/HTTP Host belongs in headers (sing-box + UI fieldsFromOutbound); grpc uses service_name / host
     if let Some(host) = q.get("host").filter(|s| !s.is_empty()) {
-        t.insert("host".into(), json!(host));
+        if ty == "ws" || ty == "http" {
+            t.insert("headers".into(), json!({"Host": host}));
+        } else {
+            t.insert("host".into(), json!(host));
+        }
     }
     if let Some(path) = q.get("path").filter(|s| !s.is_empty()) {
         t.insert("path".into(), json!(path));
     }
-    if let Some(sn) = q.get("serviceName").filter(|s| !s.is_empty()) {
+    if let Some(sn) = q
+        .get("serviceName")
+        .or_else(|| q.get("service_name"))
+        .filter(|s| !s.is_empty())
+    {
         t.insert("service_name".into(), json!(sn));
+    }
+    if let Some(mode) = q.get("mode").filter(|s| !s.is_empty()) {
+        // grpc mode (gun/multi) — pass through when present
+        if ty == "grpc" {
+            t.insert("mode".into(), json!(mode));
+        }
     }
     Some(Value::Object(t))
 }
@@ -775,6 +956,38 @@ mod tests {
     }
 
     #[test]
+    fn parse_share_body_smoke() {
+        let body = concat!(
+            "vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443",
+            "?encryption=none&security=reality&sni=www.example.com&fp=chrome",
+            "&pbk=PUBLICKEY&sid=abcd&type=tcp&flow=xtls-rprx-vision#RealityNode\n",
+            "vless://22222222-2222-2222-2222-222222222222@5.6.7.8:80",
+            "?encryption=none&security=none&type=ws&host=cdn.example.com&path=%2Fws#WsNode\n",
+            "trojan://secretpass@9.9.9.9:443",
+            "?security=tls&sni=trojan.example.com&type=ws&host=trojan.example.com&path=%2Ftrojan#TrojanWs\n",
+        );
+        let nodes = parse_share_body(body);
+        assert_eq!(nodes.len(), 3);
+        let r = &nodes[0];
+        assert_eq!(r.name, "RealityNode");
+        assert_eq!(r.outbound["uuid"], "11111111-1111-1111-1111-111111111111");
+        assert_eq!(r.outbound["flow"], "xtls-rprx-vision");
+        assert_eq!(r.outbound["tls"]["enabled"], true);
+        assert_eq!(r.outbound["tls"]["server_name"], "www.example.com");
+        assert_eq!(r.outbound["tls"]["reality"]["public_key"], "PUBLICKEY");
+        let w = &nodes[1];
+        assert_eq!(w.name, "WsNode");
+        assert_eq!(w.outbound["transport"]["type"], "ws");
+        assert_eq!(w.outbound["transport"]["headers"]["Host"], "cdn.example.com");
+        assert_eq!(w.outbound["transport"]["path"], "/ws");
+        let t = &nodes[2];
+        assert_eq!(t.name, "TrojanWs");
+        assert_eq!(t.outbound["password"], "secretpass");
+        assert_eq!(t.outbound["tls"]["server_name"], "trojan.example.com");
+        assert_eq!(t.outbound["transport"]["headers"]["Host"], "trojan.example.com");
+    }
+
+    #[test]
     fn vmess_uri_security_tls() {
         // standard VMess URL (not v2rayN b64)
         let o = parse_to_outbound(
@@ -906,3 +1119,4 @@ mod tests {
         assert_eq!(o["tls"]["alpn"][0], "h3");
     }
 }
+

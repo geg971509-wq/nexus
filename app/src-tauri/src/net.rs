@@ -330,7 +330,8 @@ where
     // Once per batch: under Tun, default route is often utun — bind en0/… instead.
     let ifindex = physical_ifindex();
     let timeout = Duration::from_millis(timeout_ms.clamp(200, 30_000));
-    let conc = concurrency.clamp(1, 32);
+    // Throne MaxConcurrentTests=100; keep headroom for free-list ~300 nodes
+    let conc = concurrency.clamp(1, 100);
     if targets.is_empty() {
         return Vec::new();
     }

@@ -24,6 +24,7 @@ commands.allow = [
   "query_stats",
   "sub_fetch",
   "sub_parse_clash",
+  "sub_parse_share",
   "net_tcp_probe",
   "net_tcp_probe_stop",
   "net_resolve_host",

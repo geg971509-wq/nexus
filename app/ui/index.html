@@ -4001,6 +4001,30 @@
     if (!host) return null;
     return { id: row.dataset.name || addr, host, port, row };
   }
+  // Throne-style: paint latency immediately; re-sort at most ~5×/s (not every probe).
+  let latencyResortTimer = 0;
+  let latencyResortRaf = 0;
+  function scheduleLatencyResort() {
+    if (sortKey !== 'lat') return;
+    if (latencyResortTimer) return;
+    latencyResortTimer = setTimeout(() => {
+      latencyResortTimer = 0;
+      if (latencyResortRaf) cancelAnimationFrame(latencyResortRaf);
+      latencyResortRaf = requestAnimationFrame(() => {
+        latencyResortRaf = 0;
+        if (typeof sortNodeTable === 'function' && sortKey === 'lat') {
+          sortNodeTable('lat', sortDir);
+        }
+      });
+    }, 200);
+  }
+  function flushLatencyResort() {
+    if (latencyResortTimer) { clearTimeout(latencyResortTimer); latencyResortTimer = 0; }
+    if (latencyResortRaf) { cancelAnimationFrame(latencyResortRaf); latencyResortRaf = 0; }
+    if (typeof sortNodeTable === 'function' && sortKey === 'lat') {
+      sortNodeTable('lat', sortDir);
+    }
+  }
   function applyLatencyToRow(row, ms, err) {
     const lat = row.querySelector('.lat');
     const name = row.dataset.name;
@@ -4019,8 +4043,7 @@
       row.dataset.lat = ms + ' ms';
       if (node) node.lat = ms;
     }
-    // keep latency order live while progressive probes finish
-    if (typeof resortIfLatencyActive === 'function') resortIfLatencyActive();
+    scheduleLatencyResort();
   }
   async function runUrlTest(scope) {
     if (urlTesting) {
@@ -4039,6 +4062,8 @@
     urlTesting = true;
     urlTestAbort = false;
     const label = scope === 'group' ? 'URL 测试当前组' : 'URL 测试选定项';
+    // concurrency scales with batch size (Throne-like); cap 64 for free-list comfort
+    const conc = Math.min(64, Math.max(16, Math.ceil(targets.length / 6)));
     log('TEST', 'info', t('log.testStart', { label, n: targets.length }));
     // mark pending + index by id for progressive paint
     const byId = new Map();
@@ -4048,9 +4073,13 @@
       if (lat) { lat.textContent = '…'; lat.className = 'lat muted'; }
       t.row.dataset.lat = '…';
     }
-    let ok = 0, fail = 0;
+    let ok = 0, fail = 0, done = 0;
+    const total = targets.length;
     const seen = new Set();
-    const onResult = (r) => {
+    let lastProgressLog = 0;
+    const onResult = (payload) => {
+      // harden unwrap (same as resolve path) — progressive must not depend on final batch
+      const r = (payload && payload.payload !== undefined) ? payload.payload : payload;
       if (!r || r.id == null) return;
       if (seen.has(r.id)) return;
       seen.add(r.id);
@@ -4059,24 +4088,36 @@
       if (!r.ok || r.ms == null || r.ms < 0) {
         applyLatencyToRow(t.row, -1, true);
         fail++;
-        if (r.error && r.error !== 'test aborted') log('TEST', 'warn', `[${t.id}] ${r.error}`);
+        if (r.error && r.error !== 'test aborted' && fail <= 5) {
+          log('TEST', 'warn', `[${t.id}] ${r.error}`);
+        }
       } else {
         applyLatencyToRow(t.row, r.ms, false);
         ok++;
       }
+      done++;
+      // Throne polls ~200ms and refreshes list; we log progress every ~25 finishes
+      if (done - lastProgressLog >= 25 || done === total) {
+        lastProgressLog = done;
+        log('TEST', 'info', `${label} ${done}/${total} · ok ${ok} · fail ${fail}`);
+      }
     };
     try {
-      // progressive progressive: listen before invoke so early results paint immediately
+      // listen before invoke so early results paint immediately (Throne QueryURLTest poller)
       if (urlTestUnlisten) { try { urlTestUnlisten(); } catch (_) {} urlTestUnlisten = null; }
       const un = await tauriListen('net-probe-result', onResult);
-      if (typeof un === 'function') urlTestUnlisten = un;
+      if (typeof un === 'function') {
+        urlTestUnlisten = un;
+      } else {
+        log('TEST', 'warn', 'progressive listen unavailable — will paint when batch ends');
+      }
       const payload = targets.map(t => ({ id: t.id, host: t.host, port: t.port }));
       let res;
       try {
         res = await tauriInvoke('net_tcp_probe', {
           targets: payload,
           timeoutMs: 3000,
-          concurrency: 8,
+          concurrency: conc,
         });
       } catch (e) {
         log('TEST', 'warn', t('log.probeUnavailable', { error: e && e.message || e }));
@@ -4089,11 +4130,13 @@
       const results = res?.results || [];
       for (const r of results) onResult(r);
       for (const t of targets) {
-        if (!seen.has(t.id)) { applyLatencyToRow(t.row, -1, true); fail++; }
+        if (!seen.has(t.id)) { applyLatencyToRow(t.row, -1, true); fail++; done++; }
       }
+      flushLatencyResort();
       const aborted = !!(res?.aborted || urlTestAbort);
       log('OK', 'ok', t('log.testDone', { label, ok, fail, extra: aborted ? t('log.testStopped') : '' }));
       log('SYS', 'info', t('log.testNote'));
+      if (typeof saveCatalog === 'function') saveCatalog(true);
     } finally {
       if (urlTestUnlisten) { try { urlTestUnlisten(); } catch (_) {} urlTestUnlisten = null; }
       urlTesting = false;
@@ -4722,16 +4765,57 @@
     // Clash YAML handled in parseSubscriptionBodyAsync (Throne updateClash port)
     return parseShareLines(text);
   }
-  /** Throne-style body parse: share/JSON sync, Clash YAML via Rust sub_parse_clash. */
+  /** Map Rust share/clash node bag → catalog node (keeps outbound + link). */
+  function nodeFromRustSub(n) {
+    if (!n || typeof n !== 'object') return null;
+    const node = {
+      name: n.name || 'node',
+      type: normalizeNodeType(n.type || 'VLESS'),
+      addr: n.addr || '—',
+      lat: null,
+      flow: null,
+    };
+    if (typeof n.link === 'string' && n.link) node.link = n.link;
+    if (n.outbound && typeof n.outbound === 'object') node.outbound = n.outbound;
+    if (node.outbound && node.outbound.type === 'http' && node.outbound.tls && node.outbound.tls.enabled) {
+      node.type = 'HTTPS';
+    }
+    return node;
+  }
+  /** Throne-style body parse: share via Rust sub_parse_share (full outbound), Clash via sub_parse_clash. */
   async function parseSubscriptionBodyAsync(raw) {
     let text = String(raw || '').trim();
     if (!text) return [];
     if (/^<!DOCTYPE\s+html/i.test(text) || /^<html[\s>]/i.test(text)) return [];
-    // share lines first (free-list plaintext)
+    const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
+    // share lines first (free-list plaintext) — Rust attaches full outbound
+    const looksShare = /^(vless|trojan|ss|vmess|hysteria2?|hy2|socks5?|tuic|anytls):\/\//im.test(text)
+      || (/(vless|trojan|ss|vmess):\/\//i.test(text) && text.includes('\n'));
+    if (looksShare && typeof inv === 'function') {
+      try {
+        const res = await inv('sub_parse_share', { body: text });
+        if (res && res.ok && Array.isArray(res.nodes) && res.nodes.length) {
+          return res.nodes.map(nodeFromRustSub).filter(Boolean);
+        }
+      } catch (e) {
+        console.warn('sub_parse_share', e);
+      }
+    }
+    // JS display-only fallback (no outbound) when Rust unavailable
     let nodes = parseShareLines(text);
     if (nodes.length) return nodes;
     const decoded = tryB64Decode(text);
     if (decoded) {
+      if (typeof inv === 'function') {
+        try {
+          const res = await inv('sub_parse_share', { body: decoded });
+          if (res && res.ok && Array.isArray(res.nodes) && res.nodes.length) {
+            return res.nodes.map(nodeFromRustSub).filter(Boolean);
+          }
+        } catch (e) {
+          console.warn('sub_parse_share b64', e);
+        }
+      }
       nodes = parseShareLines(decoded);
       if (nodes.length) return nodes;
       text = decoded.trim();
@@ -4746,25 +4830,11 @@
     } catch (_) {}
     // Clash: real YAML in Rust (Throne fkYAML path) — nested ws-opts/reality-opts/…
     if (/\bproxies\s*:/i.test(text)) {
-      const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
       if (typeof inv === 'function') {
         try {
           const res = await inv('sub_parse_clash', { body: text });
           if (res && res.ok && Array.isArray(res.nodes) && res.nodes.length) {
-            return res.nodes.map((n) => {
-              const node = {
-                name: n.name || 'node',
-                type: normalizeNodeType(n.type || 'VLESS'),
-                addr: n.addr || '—',
-                lat: null,
-                flow: null,
-              };
-              if (n.outbound && typeof n.outbound === 'object') node.outbound = n.outbound;
-              if (node.outbound && node.outbound.type === 'http' && node.outbound.tls && node.outbound.tls.enabled) {
-                node.type = 'HTTPS';
-              }
-              return node;
-            });
+            return res.nodes.map(nodeFromRustSub).filter(Boolean);
           }
         } catch (e) {
           console.warn('sub_parse_clash', e);
@@ -5127,16 +5197,33 @@
     if (el.type === 'checkbox') return !!el.checked;
     return (el.value || '').trim();
   }
-  function openEditDialog(name) {
+  async function openEditDialog(name) {
     const row = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === name) || selectedRows()[0];
     const n = name || row?.dataset.name || '';
     const node = (typeof findNodeByName === 'function' ? findNodeByName(n) : null) || null;
     const type = node?.type || row?.querySelector('.pill')?.textContent || 'VLESS';
     const addr = node?.addr || row?.querySelector('.addr')?.textContent || '';
-    const f = fieldsFromOutbound(node?.outbound, { name: n, type, addr, note: node?.note || '' });
+    // share-line nodes may only have link — hydrate outbound once via Rust parse_to_outbound
+    if (node && !node.outbound && typeof node.link === 'string' && node.link) {
+      const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
+      if (typeof inv === 'function') {
+        try {
+          const res = await inv('sub_parse_share', { body: node.link });
+          const one = res && res.ok && Array.isArray(res.nodes) ? res.nodes[0] : null;
+          if (one && one.outbound && typeof one.outbound === 'object') {
+            node.outbound = one.outbound;
+            if (one.addr) node.addr = one.addr;
+            if (typeof saveCatalog === 'function') saveCatalog(true);
+          }
+        } catch (e) {
+          console.warn('openEditDialog hydrate', e);
+        }
+      }
+    }
+    const f = fieldsFromOutbound(node?.outbound, { name: n, type, addr: node?.addr || addr, note: node?.note || '' });
     // share-link only: still show host/port from addr
-    if (!node?.outbound && addr) {
-      const [h, p] = addr.split(':');
+    if (!node?.outbound && (node?.addr || addr)) {
+      const [h, p] = String(node?.addr || addr).split(':');
       if (h) f.server = h;
       if (p) f.port = p;
     }
@@ -10239,7 +10326,7 @@
           return;
         }
       }
-      const nodes = parseShareLines(text);
+      const nodes = await parseSubscriptionBodyAsync(text);
       addNodesToCurrent(nodes, '剪贴板');
     } catch (_) {
       log('SYS', 'warn', t('log.clipFail'));
