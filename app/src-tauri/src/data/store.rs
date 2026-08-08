@@ -1,6 +1,8 @@
 //! Minimal app store (JSON file). Catalog blob is the node source of truth.
+//! Save uses exclusive advisory lock + atomic replace so concurrent writers cannot interleave.
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fs;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 /// One reject entry:
@@ -85,10 +87,13 @@ impl Store {
 
     pub fn load() -> Self {
         let p = Self::path();
-        if let Ok(s) = fs::read_to_string(&p) {
-            // Unknown legacy fields (profiles/groups/…) are ignored by serde.
-            if let Ok(st) = serde_json::from_str(&s) {
-                return st;
+        let _guard = lock_store_file(&p);
+        if let Ok(mut f) = fs::File::open(&p) {
+            let mut s = String::new();
+            if f.read_to_string(&mut s).is_ok() {
+                if let Ok(st) = serde_json::from_str(&s) {
+                    return st;
+                }
             }
         }
         Self::default()
@@ -96,8 +101,15 @@ impl Store {
 
     pub fn save(&self) -> Result<(), String> {
         let p = Self::path();
+        let _guard = lock_store_file(&p).map_err(|e| e.to_string())?;
         let s = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
-        fs::write(&p, s).map_err(|e| e.to_string())?;
+        let tmp = p.with_extension("json.tmp");
+        {
+            let mut f = fs::File::create(&tmp).map_err(|e| e.to_string())?;
+            f.write_all(s.as_bytes()).map_err(|e| e.to_string())?;
+            f.sync_all().map_err(|e| e.to_string())?;
+        }
+        fs::rename(&tmp, &p).map_err(|e| e.to_string())?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -109,4 +121,74 @@ impl Store {
 
 fn dirs_next_path() -> PathBuf {
     crate::paths::ensure_data_dir()
+}
+
+/// Holds exclusive advisory lock for the duration of load/save.
+struct StoreLock {
+    _file: fs::File,
+}
+
+fn lock_store_file(store_path: &std::path::Path) -> Result<StoreLock, std::io::Error> {
+    let lock_path = store_path.with_extension("json.lock");
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&lock_path)?;
+    apply_exclusive_lock(&file)?;
+    Ok(StoreLock { _file: file })
+}
+
+#[cfg(unix)]
+fn apply_exclusive_lock(file: &fs::File) -> Result<(), std::io::Error> {
+    use std::os::unix::io::AsRawFd;
+    let fd = file.as_raw_fd();
+    let rc = unsafe { libc::flock(fd, libc::LOCK_EX) };
+    if rc != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn apply_exclusive_lock(file: &fs::File) -> Result<(), std::io::Error> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::Storage::FileSystem::{LockFileEx, LOCKFILE_EXCLUSIVE_LOCK};
+    use windows_sys::Win32::System::IO::OVERLAPPED;
+
+    let handle = file.as_raw_handle() as HANDLE;
+    let mut ov: OVERLAPPED = unsafe { std::mem::zeroed() };
+    // Lock one byte of the lock file (whole-file exclusive via exclusive flag).
+    let ok = unsafe {
+        LockFileEx(
+            handle,
+            LOCKFILE_EXCLUSIVE_LOCK,
+            0,
+            1,
+            0,
+            &mut ov,
+        )
+    };
+    if ok == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn apply_exclusive_lock(_file: &fs::File) -> Result<(), std::io::Error> {
+    Ok(())
+}
+
+// Unlock on drop: flock unlock / handle close releases LockFileEx.
+#[cfg(unix)]
+impl Drop for StoreLock {
+    fn drop(&mut self) {
+        use std::os::unix::io::AsRawFd;
+        let fd = self._file.as_raw_fd();
+        unsafe {
+            let _ = libc::flock(fd, libc::LOCK_UN);
+        }
+    }
 }

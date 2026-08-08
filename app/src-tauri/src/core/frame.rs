@@ -40,12 +40,17 @@ impl From<std::io::Error> for IpcError {
 
 impl LibcoreClient {
     pub fn from_stream(stream: IpcStream) -> std::io::Result<Self> {
+        let default = Duration::from_secs(15);
         #[cfg(unix)]
         {
-            stream.set_read_timeout(Some(Duration::from_secs(15)))?;
-            stream.set_write_timeout(Some(Duration::from_secs(15)))?;
+            stream.set_read_timeout(Some(default))?;
+            stream.set_write_timeout(Some(default))?;
         }
-        let _ = Duration::from_secs(15);
+        #[cfg(windows)]
+        {
+            stream.set_read_timeout(Some(default))?;
+            stream.set_write_timeout(Some(default))?;
+        }
         Ok(Self { stream })
     }
 
@@ -59,16 +64,11 @@ impl LibcoreClient {
         payload: &[u8],
         timeout: Duration,
     ) -> Result<Vec<u8>, IpcError> {
-        #[cfg(unix)]
-        let (prev_r, prev_w) = {
-            let prev_r = self.stream.read_timeout().ok().flatten();
-            let prev_w = self.stream.write_timeout().ok().flatten();
-            let _ = self.stream.set_read_timeout(Some(timeout));
-            let _ = self.stream.set_write_timeout(Some(timeout));
-            (prev_r, prev_w)
-        };
-        #[cfg(windows)]
-        let _ = timeout;
+        // Unix + Windows: apply deadline for this call, restore after.
+        let prev_r = self.stream.read_timeout().ok().flatten();
+        let prev_w = self.stream.write_timeout().ok().flatten();
+        let _ = self.stream.set_read_timeout(Some(timeout));
+        let _ = self.stream.set_write_timeout(Some(timeout));
 
         let result = (|| {
             let req_id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
@@ -111,11 +111,8 @@ impl LibcoreClient {
             Ok(data)
         })();
 
-        #[cfg(unix)]
-        {
-            let _ = self.stream.set_read_timeout(prev_r);
-            let _ = self.stream.set_write_timeout(prev_w);
-        }
+        let _ = self.stream.set_read_timeout(prev_r);
+        let _ = self.stream.set_write_timeout(prev_w);
         result
     }
 

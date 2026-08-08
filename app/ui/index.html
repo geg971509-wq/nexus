@@ -3478,7 +3478,7 @@
           }
           setConnected(true);
           try { localStorage.setItem('nexus.lastConnected', connectedName || selectedName || ''); } catch (_) {}
-          const port = r.data?.listen_port || 2080;
+          const port = r.data?.listen_port || mixedPort();
           log('OK', 'ok', t('log.tunnelOn', { port, name: connectedName || selectedName }));
           if (r.data?.proxy_note) log('SYS', 'info', r.data.proxy_note);
           if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
@@ -3737,7 +3737,7 @@
               if (!r.data?.started) { log('CORE', 'warn', t('log.startNoOk')); return; }
               setConnected(true);
               try { localStorage.setItem('nexus.lastConnected', connectedName || selectedName || ''); } catch (_) {}
-              log('OK', 'ok', t('log.tunnelOn', { port: r.data?.listen_port || 2080, name: connectedName || selectedName }));
+              log('OK', 'ok', t('log.tunnelOn', { port: r.data?.listen_port || mixedPort(), name: connectedName || selectedName }));
             } finally {
               powerBusy = false;
               powerBtn.disabled = false;
@@ -4666,7 +4666,11 @@
     if (!name) name = type + '-' + ((idx || 0) + 1);
     return { name, type: normalizeNodeType(type), addr };
   }
-  function parseShareLines(text) {
+  /** Display-only share lines (no outbound). Desktop import uses Rust sub_parse_share. */
+  function mixedPort() {
+    return Number(window.__NEXUS_MIXED_PORT__) || 2080;
+  }
+  function parseShareLinesDisplay(text) {
     const out = [];
     const lines = String(text || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
     for (const line of lines) {
@@ -4738,33 +4742,7 @@
     if (u === 'HTTP') return 'HTTP';
     return t || 'VLESS';
   }
-  function parseSubscriptionBody(raw) {
-    // Sync path: share-lines / base64 / JSON. Clash YAML → parseSubscriptionBodyAsync (Rust).
-    let text = String(raw || '').trim();
-    if (!text) return [];
-    // strip HTML error pages early
-    if (/^<!DOCTYPE\s+html/i.test(text) || /^<html[\s>]/i.test(text)) return [];
-    let nodes = parseShareLines(text);
-    if (nodes.length) return nodes;
-    const decoded = tryB64Decode(text);
-    if (decoded) {
-      nodes = parseShareLines(decoded);
-      if (nodes.length) return nodes;
-      text = decoded.trim();
-    }
-    // JSON: array / {proxies|outbounds|nodes} / full sing-box config
-    try {
-      const j = JSON.parse(text);
-      const arr = Array.isArray(j) ? j : (j.proxies || j.outbounds || j.nodes || []);
-      if (Array.isArray(arr) && arr.length) {
-        // full sing-box: outbounds include selector/urltest/direct — keep dial proxies only
-        const nodes = arr.map((o, i) => nodeFromProxyObject(o, i)).filter(Boolean);
-        if (nodes.length) return nodes;
-      }
-    } catch (_) {}
-    // Clash YAML handled in parseSubscriptionBodyAsync (Throne updateClash port)
-    return parseShareLines(text);
-  }
+  // Sync incomplete share parse removed (4A): all import paths use parseSubscriptionBodyAsync.
   /** Map Rust share/clash node bag → catalog node (keeps outbound + link). */
   function nodeFromRustSub(n) {
     if (!n || typeof n !== 'object') return null;
@@ -4782,16 +4760,15 @@
     }
     return node;
   }
-  /** Throne-style body parse: share via Rust sub_parse_share (full outbound), Clash via sub_parse_clash. */
+  /** Throne-style body parse: share/clash always via Rust when desktop; JSON stays JS. */
   async function parseSubscriptionBodyAsync(raw) {
     let text = String(raw || '').trim();
     if (!text) return [];
     if (/^<!DOCTYPE\s+html/i.test(text) || /^<html[\s>]/i.test(text)) return [];
     const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
-    // share lines first (free-list plaintext) — Rust attaches full outbound
-    const looksShare = /^(vless|trojan|ss|vmess|hysteria2?|hy2|socks5?|tuic|anytls):\/\//im.test(text)
-      || (/(vless|trojan|ss|vmess):\/\//i.test(text) && text.includes('\n'));
-    if (looksShare && typeof inv === 'function') {
+    const hasRust = typeof inv === 'function';
+    // Prefer Rust share parse whenever invoke exists (not only when line looks like URI).
+    if (hasRust) {
       try {
         const res = await inv('sub_parse_share', { body: text });
         if (res && res.ok && Array.isArray(res.nodes) && res.nodes.length) {
@@ -4801,12 +4778,11 @@
         console.warn('sub_parse_share', e);
       }
     }
-    // JS display-only fallback (no outbound) when Rust unavailable
-    let nodes = parseShareLines(text);
+    let nodes = hasRust ? [] : parseShareLinesDisplay(text);
     if (nodes.length) return nodes;
     const decoded = tryB64Decode(text);
     if (decoded) {
-      if (typeof inv === 'function') {
+      if (hasRust) {
         try {
           const res = await inv('sub_parse_share', { body: decoded });
           if (res && res.ok && Array.isArray(res.nodes) && res.nodes.length) {
@@ -4815,9 +4791,10 @@
         } catch (e) {
           console.warn('sub_parse_share b64', e);
         }
+      } else {
+        nodes = parseShareLinesDisplay(decoded);
+        if (nodes.length) return nodes;
       }
-      nodes = parseShareLines(decoded);
-      if (nodes.length) return nodes;
       text = decoded.trim();
     }
     try {
@@ -5563,7 +5540,7 @@
         }
         if (n.link) o.link = n.link;
         if (n.outbound) o.outbound = repairStoredOutbound(n.outbound);
-        // old parseShareLines used lastIndexOf('@') → query tail as addr (broke table cols)
+        // old share display used lastIndexOf('@') → query tail as addr (broke table cols)
         if (typeof healNodeDisplay === 'function') healNodeDisplay(o);
         return o;
       }) : [];
@@ -6909,7 +6886,7 @@
     }));
     const obj = {
       log: { level: 'info' },
-      inbounds: [{ type: 'mixed', listen: '127.0.0.1', listen_port: 2080 }],
+      inbounds: [{ type: 'mixed', listen: '127.0.0.1', listen_port: mixedPort() }],
       outbounds: nodes.length
         ? nodes.concat([{ type: 'direct', tag: 'direct' }])
         : [{ type: 'direct', tag: 'direct' }],
@@ -10515,7 +10492,15 @@
       }
     } catch (_) {}
     const id = await nexusInvoke('app_identity');
-    if (id.ok) log('SYS', 'info', t('log.backendId', { id: id.data?.identifier || 'Nexus', phase: id.data?.phase || '' }));
+    if (id.ok) {
+      log('SYS', 'info', t('log.backendId', { id: id.data?.identifier || 'Nexus', phase: id.data?.phase || '' }));
+      if (id.data?.mixed_port) {
+        window.__NEXUS_MIXED_PORT__ = id.data.mixed_port;
+        document.querySelectorAll('.sb-c strong').forEach(el => {
+          if (/:\d+$/.test(el.textContent) || el.textContent.includes('2080')) el.textContent = `[::]:${id.data.mixed_port}`;
+        });
+      }
+    }
     else log('SYS', 'warn', t('log.backendOffline'));
     const st = await nexusInvoke('store_snapshot');
     if (st.ok) {
@@ -10558,7 +10543,7 @@
         if (typeof setConnected === 'function') setConnected(true, { pin: !!pinName });
         const bits = [];
         if (d.process_alive) bits.push('Core 进程');
-        if (d.mixed_open) bits.push('mixed:2080');
+        if (d.mixed_open) bits.push('mixed:' + mixedPort());
         if (d.rpc_running) bits.push('RPC');
         log('OK', 'ok', t('log.syncState', { bits: bits.join(' · ') || t('log.tunnelStill') }));
       }

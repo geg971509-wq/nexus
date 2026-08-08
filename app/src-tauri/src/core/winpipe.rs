@@ -1,4 +1,5 @@
 //! Windows named-pipe server (GUI side) for Core go-winio DialPipe clients.
+//! Overlapped Read/Write so call_timeout can actually expire (PIPE_WAIT alone blocks forever).
 #![cfg(windows)]
 
 use std::ffi::OsStr;
@@ -6,72 +7,175 @@ use std::io::{self, Read, Write};
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
 use std::ptr;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_PIPE_CONNECTED, HANDLE, INVALID_HANDLE_VALUE,
+    CloseHandle, GetLastError, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, HANDLE,
+    INVALID_HANDLE_VALUE, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
-use windows_sys::Win32::Storage::FileSystem::{ReadFile, WriteFile};
+use windows_sys::Win32::Storage::FileSystem::{ReadFile, WriteFile, FILE_FLAG_OVERLAPPED};
 use windows_sys::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
     PIPE_WAIT,
 };
+use windows_sys::Win32::System::Threading::{CreateEventW, WaitForSingleObject, INFINITE};
+use windows_sys::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
 
 // PIPE_ACCESS_DUPLEX not exported on all windows-sys versions; duplex = 3.
 const PIPE_ACCESS_DUPLEX: u32 = 0x0000_0003;
 
-/// Connected duplex byte pipe, Read/Write via ReadFile/WriteFile.
+/// Connected duplex byte pipe with optional R/W deadlines (mirrors UnixStream timeouts).
 pub struct PipeStream {
     handle: OwnedHandle,
+    /// Interior-mutable timeouts so API matches UnixStream (&self setters).
+    timeouts: Mutex<(Option<Duration>, Option<Duration>)>,
 }
 
 impl PipeStream {
     unsafe fn from_raw(h: HANDLE) -> Self {
         Self {
             handle: OwnedHandle::from_raw_handle(h as RawHandle),
+            timeouts: Mutex::new((
+                Some(Duration::from_secs(15)),
+                Some(Duration::from_secs(15)),
+            )),
         }
     }
 
     fn as_raw(&self) -> HANDLE {
         self.handle.as_raw_handle() as HANDLE
     }
+
+    pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        if let Ok(mut g) = self.timeouts.lock() {
+            g.0 = timeout;
+        }
+        Ok(())
+    }
+
+    pub fn set_write_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        if let Ok(mut g) = self.timeouts.lock() {
+            g.1 = timeout;
+        }
+        Ok(())
+    }
+
+    pub fn read_timeout(&self) -> io::Result<Option<Duration>> {
+        Ok(self.timeouts.lock().map(|g| g.0).unwrap_or(None))
+    }
+
+    pub fn write_timeout(&self) -> io::Result<Option<Duration>> {
+        Ok(self.timeouts.lock().map(|g| g.1).unwrap_or(None))
+    }
+
+    fn io_timeout_ms(&self, write: bool) -> u32 {
+        let d = self
+            .timeouts
+            .lock()
+            .ok()
+            .and_then(|g| if write { g.1 } else { g.0 });
+        match d {
+            None => INFINITE,
+            Some(t) if t.is_zero() => 0,
+            Some(t) => t.as_millis().min(u32::MAX as u128) as u32,
+        }
+    }
+
+    fn read_xfer(&self, buf: &mut [u8]) -> io::Result<usize> {
+        self.xfer(buf.as_mut_ptr(), buf.len(), false)
+    }
+
+    fn write_xfer(&self, buf: &[u8]) -> io::Result<usize> {
+        self.xfer(buf.as_ptr() as *mut u8, buf.len(), true)
+    }
+
+    /// Overlapped ReadFile/WriteFile + WaitForSingleObject(deadline).
+    fn xfer(&self, ptr: *mut u8, len: usize, write: bool) -> io::Result<usize> {
+        if len == 0 {
+            return Ok(0);
+        }
+        unsafe {
+            let event = CreateEventW(ptr::null_mut(), 1, 0, ptr::null());
+            if event.is_null() {
+                return Err(io::Error::last_os_error());
+            }
+            let mut ov: OVERLAPPED = std::mem::zeroed();
+            ov.hEvent = event;
+
+            let mut done: u32 = 0;
+            let ok = if write {
+                WriteFile(
+                    self.as_raw(),
+                    ptr as *const _,
+                    len as u32,
+                    &mut done,
+                    &mut ov,
+                )
+            } else {
+                ReadFile(
+                    self.as_raw(),
+                    ptr as *mut _,
+                    len as u32,
+                    &mut done,
+                    &mut ov,
+                )
+            };
+
+            if ok != 0 {
+                let _ = CloseHandle(event);
+                return Ok(done as usize);
+            }
+            let err = GetLastError();
+            if err != ERROR_IO_PENDING {
+                let _ = CloseHandle(event);
+                return Err(io::Error::from_raw_os_error(err as i32));
+            }
+
+            let wait = WaitForSingleObject(event, self.io_timeout_ms(write));
+            if wait == WAIT_TIMEOUT {
+                let _ = CancelIoEx(self.as_raw(), &mut ov);
+                let mut ignored: u32 = 0;
+                let _ = GetOverlappedResult(self.as_raw(), &mut ov, &mut ignored, 1);
+                let _ = CloseHandle(event);
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    if write {
+                        "named pipe write timed out"
+                    } else {
+                        "named pipe read timed out"
+                    },
+                ));
+            }
+            if wait != WAIT_OBJECT_0 {
+                let _ = CloseHandle(event);
+                return Err(io::Error::last_os_error());
+            }
+
+            let mut transferred: u32 = 0;
+            let got = GetOverlappedResult(self.as_raw(), &mut ov, &mut transferred, 0);
+            let _ = CloseHandle(event);
+            if got == 0 {
+                let e = GetLastError();
+                if e == ERROR_IO_INCOMPLETE {
+                    return Err(io::Error::new(io::ErrorKind::TimedOut, "pipe io incomplete"));
+                }
+                return Err(io::Error::from_raw_os_error(e as i32));
+            }
+            Ok(transferred as usize)
+        }
+    }
 }
 
 impl Read for PipeStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut done: u32 = 0;
-        let ok = unsafe {
-            ReadFile(
-                self.as_raw(),
-                buf.as_mut_ptr() as *mut _,
-                buf.len() as u32,
-                &mut done,
-                ptr::null_mut(),
-            )
-        };
-        if ok == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(done as usize)
+        self.read_xfer(buf)
     }
 }
 
 impl Write for PipeStream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut done: u32 = 0;
-        let ok = unsafe {
-            WriteFile(
-                self.as_raw(),
-                buf.as_ptr() as *const _,
-                buf.len() as u32,
-                &mut done,
-                ptr::null_mut(),
-            )
-        };
-        if ok == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(done as usize)
+        self.write_xfer(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -93,12 +197,10 @@ pub fn accept_one(pipe_name: &str, timeout: Duration) -> io::Result<PipeStream> 
     let wide = to_wide(&full);
     let deadline = Instant::now() + timeout;
 
-    // One CreateNamedPipe + ConnectNamedPipe (blocks until client or we abort via timeout thread).
-    // For timeout: create pipe, ConnectNamedPipe on worker, wait with deadline.
     let h: HANDLE = unsafe {
         CreateNamedPipeW(
             wide.as_ptr(),
-            PIPE_ACCESS_DUPLEX,
+            PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
             PIPE_UNLIMITED_INSTANCES,
             64 * 1024,
@@ -111,48 +213,64 @@ pub fn accept_one(pipe_name: &str, timeout: Duration) -> io::Result<PipeStream> 
         return Err(io::Error::last_os_error());
     }
 
-    // ConnectNamedPipe blocks; run with deadline via channel.
-    // HANDLE is a pointer — move as isize so the worker is Send.
-    let h_bits = h as isize;
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let handle = h_bits as HANDLE;
-        let connected = unsafe { ConnectNamedPipe(handle, ptr::null_mut()) };
-        let err = unsafe { GetLastError() };
-        let ok = connected != 0 || err == ERROR_PIPE_CONNECTED;
-        let _ = tx.send((ok, err, h_bits));
-    });
+    // Overlapped ConnectNamedPipe with deadline (no worker thread).
+    unsafe {
+        let event = CreateEventW(ptr::null_mut(), 1, 0, ptr::null());
+        if event.is_null() {
+            let _ = CloseHandle(h);
+            return Err(io::Error::last_os_error());
+        }
+        let mut ov: OVERLAPPED = std::mem::zeroed();
+        ov.hEvent = event;
 
-    loop {
-        match rx.try_recv() {
-            Ok((true, _, handle_bits)) => {
-                return Ok(unsafe { PipeStream::from_raw(handle_bits as HANDLE) });
-            }
-            Ok((false, err, handle_bits)) => {
-                unsafe {
-                    let _ = CloseHandle(handle_bits as HANDLE);
-                }
-                return Err(io::Error::from_raw_os_error(err as i32));
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {
-                if Instant::now() > deadline {
-                    // Closing handle unblocks ConnectNamedPipe
-                    unsafe {
-                        let _ = CloseHandle(h);
-                    }
-                    return Err(io::Error::new(
-                        io::ErrorKind::TimedOut,
-                        "named pipe accept timed out",
-                    ));
-                }
-                std::thread::sleep(Duration::from_millis(20));
-            }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+        let connected = ConnectNamedPipe(h, &mut ov);
+        if connected != 0 {
+            let _ = CloseHandle(event);
+            return Ok(PipeStream::from_raw(h));
+        }
+        let err = GetLastError();
+        if err == ERROR_PIPE_CONNECTED {
+            let _ = CloseHandle(event);
+            return Ok(PipeStream::from_raw(h));
+        }
+        if err != ERROR_IO_PENDING {
+            let _ = CloseHandle(event);
+            let _ = CloseHandle(h);
+            return Err(io::Error::from_raw_os_error(err as i32));
+        }
+
+        loop {
+            let remain = deadline.saturating_duration_since(Instant::now());
+            if remain.is_zero() {
+                let _ = CancelIoEx(h, &mut ov);
+                let mut ignored: u32 = 0;
+                let _ = GetOverlappedResult(h, &mut ov, &mut ignored, 1);
+                let _ = CloseHandle(event);
+                let _ = CloseHandle(h);
                 return Err(io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    "pipe accept thread died",
+                    io::ErrorKind::TimedOut,
+                    "named pipe accept timed out",
                 ));
             }
+            let ms = remain.as_millis().min(u32::MAX as u128) as u32;
+            let wait = WaitForSingleObject(event, ms.min(50).max(1));
+            if wait == WAIT_OBJECT_0 {
+                let mut transferred: u32 = 0;
+                let got = GetOverlappedResult(h, &mut ov, &mut transferred, 0);
+                let _ = CloseHandle(event);
+                if got == 0 {
+                    let e = GetLastError();
+                    let _ = CloseHandle(h);
+                    return Err(io::Error::from_raw_os_error(e as i32));
+                }
+                return Ok(PipeStream::from_raw(h));
+            }
+            if wait == WAIT_TIMEOUT {
+                continue;
+            }
+            let _ = CloseHandle(event);
+            let _ = CloseHandle(h);
+            return Err(io::Error::last_os_error());
         }
     }
 }

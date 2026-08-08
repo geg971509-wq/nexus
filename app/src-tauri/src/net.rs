@@ -13,25 +13,37 @@ use serde::Serialize;
 use serde_json::json;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::net::{SocketAddr, ToSocketAddrs};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// Shared abort for in-flight URL tests (upstream stopSpeedtest).
-static PROBE_ABORT: AtomicBool = AtomicBool::new(false);
+/// Probe batch ids. Abort marks all issued ids ≤ ABORTED_THROUGH dead;
+/// a later begin_probe_batch() issues a higher id and is live again (no global sticky flag).
+static NEXT_BATCH: AtomicU64 = AtomicU64::new(1);
+static ABORTED_THROUGH: AtomicU64 = AtomicU64::new(0);
 
+/// Start a new probe batch; returns id. Concurrent batches stay live until abort.
+pub fn begin_probe_batch() -> u64 {
+    NEXT_BATCH.fetch_add(1, Ordering::SeqCst)
+}
+
+/// Abort every batch that has already been issued (UI stopSpeedtest).
 pub fn abort_probes() {
-    PROBE_ABORT.store(true, Ordering::SeqCst);
+    let next = NEXT_BATCH.load(Ordering::SeqCst);
+    ABORTED_THROUGH.store(next.saturating_sub(1), Ordering::SeqCst);
 }
 
-pub fn clear_abort() {
-    PROBE_ABORT.store(false, Ordering::SeqCst);
+pub fn is_batch_live(batch_id: u64) -> bool {
+    batch_id != 0 && batch_id > ABORTED_THROUGH.load(Ordering::SeqCst)
 }
 
+/// True when the most recently issued batch id is already aborted.
 pub fn is_aborted() -> bool {
-    PROBE_ABORT.load(Ordering::SeqCst)
+    let next = NEXT_BATCH.load(Ordering::SeqCst);
+    let through = ABORTED_THROUGH.load(Ordering::SeqCst);
+    next > 1 && through >= next.saturating_sub(1)
 }
 
 #[derive(Clone, Serialize)]
@@ -326,7 +338,7 @@ pub fn probe_batch_progressive<F>(
 where
     F: FnMut(&ProbeResult),
 {
-    clear_abort();
+    let batch_id = begin_probe_batch();
     // Once per batch: under Tun, default route is often utun — bind en0/… instead.
     let ifindex = physical_ifindex();
     let timeout = Duration::from_millis(timeout_ms.clamp(200, 30_000));
@@ -341,7 +353,7 @@ where
     let mut handles = Vec::with_capacity(targets.len());
 
     for t in targets {
-        if is_aborted() {
+        if !is_batch_live(batch_id) {
             break;
         }
         let id = t
@@ -362,7 +374,7 @@ where
         let tx_c = tx.clone();
         let sem_c = Arc::clone(&sem);
         loop {
-            if is_aborted() {
+            if !is_batch_live(batch_id) {
                 break;
             }
             let mut g = sem_c.lock().unwrap();
@@ -373,11 +385,25 @@ where
             drop(g);
             thread::sleep(Duration::from_millis(2));
         }
-        if is_aborted() {
+        if !is_batch_live(batch_id) {
             break;
         }
+        // Capture batch_id so late workers can skip work after abort/new batch.
+        let bid = batch_id;
         handles.push(thread::spawn(move || {
-            let res = one_probe(id, host, port, timeout, ifindex);
+            let res = if is_batch_live(bid) {
+                one_probe(id, host, port, timeout, ifindex)
+            } else {
+                ProbeResult {
+                    id,
+                    host,
+                    port,
+                    ok: false,
+                    ms: Some(-1),
+                    ip: None,
+                    error: Some("aborted".into()),
+                }
+            };
             let _ = tx_c.send(res);
             if let Ok(mut g) = sem_c.lock() {
                 *g = g.saturating_sub(1);
@@ -577,6 +603,17 @@ mod tests {
         );
         assert_eq!(res.len(), 2);
         assert_eq!(*hits.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn abort_kills_issued_batch_not_next() {
+        let id = begin_probe_batch();
+        assert!(is_batch_live(id));
+        abort_probes();
+        assert!(!is_batch_live(id));
+        let id2 = begin_probe_batch();
+        assert!(is_batch_live(id2));
+        assert!(!is_batch_live(id));
     }
 
     #[test]

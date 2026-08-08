@@ -1,5 +1,6 @@
 pub mod core;
 mod data;
+mod defaults;
 mod paths;
 mod sys;
 mod sub;
@@ -8,14 +9,36 @@ mod tray_spin;
 mod winhide;
 
 use core::session::{CoreSession, SESSION};
+use defaults::{APP_IDENTIFIER, APP_NAME, APP_VERSION, MIXED_PORT};
 
 #[tauri::command]
 fn app_identity() -> serde_json::Value {
     serde_json::json!({
-        "name": "Nexus",
-        "identifier": "app.nexus.desktop",
-        "version": "0.2.0",
+        "name": APP_NAME,
+        "identifier": APP_IDENTIFIER,
+        "version": APP_VERSION,
+        "mixed_port": MIXED_PORT,
     })
+}
+
+/// Put a session back after long RPC outside the lock.
+/// If disconnect already installed/cleared, drop our handle (kill if still ours alone).
+fn put_session_back(mut session: CoreSession) {
+    if session.child_exited() {
+        let _ = session.stop_core_process();
+        return;
+    }
+    match SESSION.lock() {
+        Ok(mut g) if g.is_none() => {
+            *g = Some(session);
+        }
+        Ok(_) => {
+            let _ = session.stop_core_process();
+        }
+        Err(_) => {
+            let _ = session.stop_core_process();
+        }
+    }
 }
 
 /// Share-link → SVG QR (offline; for 显示二维码 dialog).
@@ -108,7 +131,7 @@ async fn session_status() -> Result<serde_json::Value, String> {
             }
         }
         let process_alive = CoreSession::core_process_alive();
-        let mixed_open = CoreSession::mixed_port_open(2080);
+        let mixed_open = CoreSession::mixed_port_open(MIXED_PORT);
         // Live if RPC Start still loaded, OR Core/mixed residual (GUI relaunch / SESSION lag).
         // Do not require !has_session — dead SESSION + live process was painting 未连接.
         let live = rpc_running || process_alive || mixed_open;
@@ -209,7 +232,7 @@ async fn generate_preview(
         } else {
             return Err("no selected node link/outbound for preview".into());
         };
-        Ok(generate_with_outbound(ob, 2080, st.tun, &st.blocklist))
+        Ok(generate_with_outbound(ob, MIXED_PORT, st.tun, &st.blocklist))
     })
     .await
     .map_err(|e| format!("generate_preview join: {e}"))?
@@ -281,7 +304,7 @@ async fn set_system_proxy_cmd(enabled: bool) -> Result<String, String> {
         let mut st = Store::load();
         st.system_proxy = enabled;
         st.save()?;
-        let port = 2080u16;
+        let port = MIXED_PORT;
         // Short lock: query only — never hold across networksetup.
         let core_running = {
             let mut g = SESSION.lock().map_err(|e| e.to_string())?;
@@ -414,7 +437,7 @@ fn connect_selected_sync(
     }
     let use_tun = st.tun;
     let use_sys_proxy = st.system_proxy;
-    let port = 2080u16;
+    let port = MIXED_PORT;
     let pid = profile_id.unwrap_or(1);
 
     let ob = if let Some(v) = outbound {
@@ -441,11 +464,10 @@ fn connect_selected_sync(
         CoreSession::ensure_privileged_core()?;
     }
 
-    // Hold SESSION only for Core IPC. networksetup must not sit under the lock
-    // (blocks query_connections poll + other commands for ~0.2–1s+).
-    let (start_err, running, qpid) = {
+    // 1A: take session out of SESSION so Start (≤60s) does not block poll/disconnect.
+    // Setup (spawn / privilege recycle / soft Stop) stays under the lock; long Start runs free.
+    let mut session = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
-        // Dead child still in SESSION → drop and respawn.
         if let Some(s) = g.as_mut() {
             if s.child_exited() {
                 let _ = s.stop_core_process();
@@ -460,71 +482,76 @@ fn connect_selected_sync(
             *g = Some(CoreSession::start(&bin).map_err(|e| e.to_string())?);
         }
         let s = g.as_mut().unwrap();
-
-        // Tun requires euid=0. Recycle unprivileged live Core onto setuid copy.
         if use_tun {
             let priv_now = s.is_privileged().unwrap_or(false);
             if !priv_now {
                 s.recycle_privileged()?;
             }
         }
-
-        // Start may replace running instance; Stop first if already running
         if let Ok((running, _)) = s.query_state() {
             if running {
                 let _ = s.stop_rpc();
             }
         }
-
-        let mut start_err = s.start_rpc(&json, pid)?;
-        // Orphan Core / stale bbolt → initialize cache-file: timeout. One recovery:
-        // kill strays, drop cache.db, Stop, Start again.
-        if let Some(ref e) = start_err {
-            let el = e.to_ascii_lowercase();
-            if el.contains("cache-file") || el.contains("cache.db") || el.contains("timeout") {
-                let keep = s.child_pid();
-                CoreSession::kill_stray_cores(keep);
-                let _ = s.stop_rpc();
-                let _ = std::fs::remove_file(CoreSession::cache_db_path());
-                start_err = s.start_rpc(&json, pid)?;
-            }
-        }
-        if start_err.is_some() {
-            return Ok(serde_json::json!({
-                "started": false,
-                "start_error": start_err,
-                "config": cfg,
-                "profile_id": pid,
-                "tun": use_tun,
-                "system_proxy": use_sys_proxy,
-            }));
-        }
-        let (running, qpid) = s.query_state().unwrap_or((false, -1));
-        (start_err, running, qpid)
+        g.take().ok_or_else(|| "session vanished before start".to_string())?
     };
+
+    let mut start_err = match session.start_rpc(&json, pid) {
+        Ok(e) => e,
+        Err(e) => {
+            put_session_back(session);
+            return Err(e);
+        }
+    };
+    // Orphan Core / stale bbolt → initialize cache-file: timeout. One recovery:
+    // kill strays, drop cache.db, Stop, Start again.
+    if let Some(ref e) = start_err {
+        let el = e.to_ascii_lowercase();
+        if el.contains("cache-file") || el.contains("cache.db") || el.contains("timeout") {
+            let keep = session.child_pid();
+            CoreSession::kill_stray_cores(keep);
+            let _ = session.stop_rpc();
+            let _ = std::fs::remove_file(CoreSession::cache_db_path());
+            start_err = match session.start_rpc(&json, pid) {
+                Ok(e) => e,
+                Err(e) => {
+                    put_session_back(session);
+                    return Err(e);
+                }
+            };
+        }
+    }
+    if start_err.is_some() {
+        put_session_back(session);
+        return Ok(serde_json::json!({
+            "started": false,
+            "start_error": start_err,
+            "config": cfg,
+            "profile_id": pid,
+            "tun": use_tun,
+            "system_proxy": use_sys_proxy,
+        }));
+    }
+    let (running, qpid) = session.query_state().unwrap_or((false, -1));
+    put_session_back(session);
 
     // system proxy applied when spmode_system_proxy (not when Tun-only).
     // Only after Start success — OS must point at a live mixed port.
-    let mut proxy_note = None;
-    if start_err.is_none() {
-        if use_sys_proxy {
-            match sys::set_system_proxy(true, port) {
-                Ok(m) => proxy_note = Some(m),
-                Err(e) => proxy_note = Some(format!("system proxy failed: {e}")),
-            }
-        } else {
-            // Chip off: clear any leftover OS proxy from a previous session
-            match sys::set_system_proxy(false, port) {
-                Ok(m) => proxy_note = Some(m),
-                Err(e) => proxy_note = Some(format!("clear system proxy: {e}")),
-            }
+    let proxy_note = if use_sys_proxy {
+        match sys::set_system_proxy(true, port) {
+            Ok(m) => Some(m),
+            Err(e) => Some(format!("system proxy failed: {e}")),
         }
-    }
+    } else {
+        // Chip off: clear any leftover OS proxy from a previous session
+        match sys::set_system_proxy(false, port) {
+            Ok(m) => Some(m),
+            Err(e) => Some(format!("clear system proxy: {e}")),
+        }
+    };
 
     // Menu-bar Earth spins while tunnel is up (proxy and/or Tun).
-    if start_err.is_none() {
-        tray_spin::set_spinning(true);
-    }
+    tray_spin::set_spinning(true);
 
     Ok(serde_json::json!({
         "started": true,
@@ -618,7 +645,7 @@ fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
     };
 
     // Always best-effort clear OS proxy (store flag can lag).
-    let proxy_note = match sys::set_system_proxy(false, 2080) {
+    let proxy_note = match sys::set_system_proxy(false, MIXED_PORT) {
         Ok(m) => Some(m),
         Err(e) => Some(format!("clear system proxy: {e}")),
     };
@@ -717,9 +744,13 @@ async fn net_tcp_probe(
                 let _ = app.emit("net-probe-result", r);
             },
         );
+        // aborted if stop was called for this batch, or a newer batch replaced it mid-flight
+        let aborted = results.iter().any(|r| {
+            r.error.as_deref() == Some("aborted")
+        }) || net::is_aborted();
         serde_json::json!({
             "results": results,
-            "aborted": net::is_aborted(),
+            "aborted": aborted,
         })
     })
     .await
@@ -777,12 +808,12 @@ async fn net_resolve_hosts(
 /// Set only after user confirms (or tunnel already dead). ExitRequested honors this.
 static ALLOW_EXIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Single quit/teardown path: stop Core + always best-effort clear OS proxy at :2080.
+/// Single quit/teardown path: stop Core + always best-effort clear OS proxy at MIXED_PORT.
 /// Used by app_quit, tray quit, and Exit (after confirm). Idempotent.
 fn teardown_session() {
     tray_spin::set_spinning(false);
-    // Always clear — store flag can lag OS; exit must not leave browsers on dead :2080.
-    let _ = sys::set_system_proxy(false, 2080);
+    // Always clear — store flag can lag OS; exit must not leave browsers on dead mixed port.
+    let _ = sys::set_system_proxy(false, MIXED_PORT);
     let _ = (|| -> Result<(), String> {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         if let Some(mut s) = g.take() {
@@ -794,7 +825,7 @@ fn teardown_session() {
     })();
 }
 
-/// Best-effort: RPC running, NexusCore process, or mixed :2080 still accepting.
+/// Best-effort: RPC running, NexusCore process, or mixed port still accepting.
 fn tunnel_is_live() -> bool {
     if let Ok(mut g) = SESSION.lock() {
         if let Some(s) = g.as_mut() {
@@ -805,7 +836,7 @@ fn tunnel_is_live() -> bool {
             }
         }
     }
-    CoreSession::core_process_alive() || CoreSession::mixed_port_open(2080)
+    CoreSession::core_process_alive() || CoreSession::mixed_port_open(MIXED_PORT)
 }
 
 /// Native warning before full teardown (tray / Cmd+Q when webview dialog unavailable).
