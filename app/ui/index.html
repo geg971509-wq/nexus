@@ -333,6 +333,16 @@
   .window.sidebar-collapsed {
     --sidebar: var(--sidebar-collapsed);
   }
+  /* Force track + rail width: inline --sidebar from drag must not leave a fat empty rail. */
+  .window.sidebar-collapsed .body {
+    grid-template-columns: var(--sidebar-collapsed) minmax(0, 1fr);
+  }
+  .window.sidebar-collapsed .sidebar {
+    width: var(--sidebar-collapsed);
+    max-width: var(--sidebar-collapsed);
+    min-width: 0;
+    box-sizing: border-box;
+  }
   .titlebar-drag {
     flex: 1 1 auto;
     align-self: stretch;
@@ -407,8 +417,9 @@
   /* ── Body ── */
   .body {
     display: grid;
-    grid-template-columns: var(--sidebar) 1fr;
+    grid-template-columns: var(--sidebar) minmax(0, 1fr);
     min-height: 0;
+    height: 100%;
     transition: grid-template-columns .2s var(--ease);
   }
 
@@ -467,6 +478,8 @@
     height: 52px;
     padding: 0 14px;
     border-radius: 12px;
+    app-region: no-drag;
+    -webkit-app-region: no-drag;
     font-size: 15px;
     font-weight: 500;
     letter-spacing: 0.01em;
@@ -476,6 +489,11 @@
     transition: background .15s var(--ease), color .15s var(--ease), padding .2s var(--ease);
   }
   .side-item:hover { background: var(--side-hover); }
+  /* author display:flex beats UA [hidden]; product-hide (routing) must actually disappear */
+  .side-item[hidden],
+  .side-item[aria-hidden="true"] {
+    display: none !important;
+  }
   .side-item.active {
     background: var(--blue-soft);
     color: var(--blue);
@@ -597,14 +615,15 @@
     bottom: 14px;
   }
 
-  /* Main — views fill the pane */
+  /* Main — single pane; views stack absolutely so only .active paints */
   .main {
-    display: grid;
-    grid-template-rows: minmax(0, 1fr);
     min-width: 0;
     min-height: 0;
+    height: 100%;
+    align-self: stretch;
     background: var(--bg);
     position: relative;
+    overflow: hidden;
   }
 
   /* Hero connection bar — compact, list is primary */
@@ -741,6 +760,7 @@
   /* List area — primary focus (no list-head: title/count/search removed) */
   .list-wrap {
     min-height: 0;
+    min-width: 0; /* allow table-card to shrink + scroll instead of blowing main */
     padding: 10px 22px 12px;
     display: grid;
     grid-template-rows: minmax(0, 1fr);
@@ -841,6 +861,7 @@
     box-shadow: var(--shadow-sm);
     overflow: auto;
     min-height: 0;
+    min-width: 0;
   }
   .table-card:focus {
     outline: none;
@@ -854,6 +875,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
+    table-layout: fixed; /* long addr must not push 名称/延迟/流量 off-screen */
   }
   thead th {
     position: sticky;
@@ -917,11 +939,26 @@
   #nodeTable tr.connected.selected:hover { background: var(--row-connected-hover); }
   #nodeTable tr.connected td.name { color: var(--green); font-weight: 600; }
 
-  .idx { width: 40px; color: var(--quaternary); font-variant-numeric: tabular-nums; font-size: 12px; }
-  .type { width: 84px; }
-  .addr { width: 170px; font-family: var(--mono); font-size: 12px; color: var(--secondary); font-variant-numeric: tabular-nums; }
-  .name { font-weight: 500; letter-spacing: -0.01em; }
-  .lat { width: 88px; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .idx { width: 40px; color: var(--quaternary); font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+  .type { width: 84px; white-space: nowrap; }
+  .addr {
+    width: 170px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--secondary);
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .name {
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lat { width: 88px; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
   .lat.good { color: var(--lat-good); }
   .lat.mid { color: var(--lat-mid); }
   .lat.bad { color: var(--lat-bad); }
@@ -936,12 +973,13 @@
     /* flow = 流量列 (never reuse .traffic — clashes with traffic-lights) */
   .flow {
     width: 140px;
-    min-width: 140px;
     font-family: var(--mono);
     font-size: 11.5px;
     font-variant-numeric: tabular-nums;
     color: var(--secondary);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .up { color: #0a84ff; }
   .down { color: var(--purple); }
@@ -1118,12 +1156,19 @@
   .log-msg { min-width: 0; word-break: break-all; }
   .log-msg .node { color: var(--label); font-weight: 500; }
 
-  /* Views */
-  .view { min-height: 0; min-width: 0; display: none; height: 100%; }
-  .view.active {
-    display: grid;
+  /* Views — absolute stack; paint only via .active (hidden is a11y only) */
+  .view {
+    position: absolute;
+    inset: 0;
     min-height: 0;
-    height: 100%;
+    min-width: 0;
+    display: none !important;
+    height: auto;
+    overflow: hidden;
+  }
+  .view.active {
+    display: grid !important;
+    z-index: 1;
   }
   .view-home.active {
     grid-template-rows: auto minmax(0, 1fr) auto;
@@ -1647,7 +1692,8 @@
     align-items: center;
     justify-content: center;
   }
-  .confirm-mask.open { display: flex; }
+  /* !important: beat UA [hidden] if attribute clear races class toggle */
+  .confirm-mask.open { display: flex !important; }
   .confirm-card {
     width: min(360px, calc(100vw - 40px));
     padding: 18px 18px 14px;
@@ -2192,35 +2238,35 @@
               <button class="menu-item" data-test="clear" role="menuitem"><span class="grow" data-i18n="test.clear">清理测试结果</span></button>
             </div>
           </div>
-          <button class="tb-btn" id="groupsBtn" title="管理订阅分组" data-i18n="tb.groups" data-i18n-title="title.manageGroups">分组</button>
-          <button class="tb-btn solid" id="refreshBtn" title="立即更新订阅节点列表" data-i18n-title="title.refresh"><span data-i18n="tb.refresh">更新</span></button>
+          <button type="button" class="tb-btn" id="groupsBtn" title="管理订阅分组" data-i18n="tb.groups" data-i18n-title="title.manageGroups" data-tauri-drag-region="false">分组</button>
+          <button type="button" class="tb-btn solid" id="refreshBtn" title="立即更新订阅节点列表" data-i18n-title="title.refresh" data-tauri-drag-region="false"><span data-i18n="tb.refresh">更新</span></button>
         </div>
       </div>
     </header>
 
     <div class="body">
       <nav class="sidebar" id="sidebar" aria-label="主导航">
-        <button class="side-item active" data-view="home" aria-current="page" title="节点列表与连接状态" data-i18n-title="title.navHome">
+        <button type="button" class="side-item active" data-view="home" aria-current="page" title="节点列表与连接状态" data-i18n-title="title.navHome" data-tauri-drag-region="false">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg></span>
           <span class="side-label" data-i18n="nav.home">节点</span>
         </button>
-        <button class="side-item" data-view="settings" data-settings="routing" title="分流、DNS 与规则" data-i18n-title="title.navRouting">
+        <button type="button" class="side-item" data-view="settings" data-settings="routing" title="分流、DNS 与规则" data-i18n-title="title.navRouting" data-tauri-drag-region="false">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 18.5V5.5M4.5 18.5h15"/><path d="m8.2 14.8 3.2-4.3 3.1 2.2 4.3-6.2"/></svg></span>
           <span class="side-label" data-i18n="nav.routing">路由</span>
         </button>
-        <button class="side-item" data-view="settings" data-settings="vpn" title="入站、系统代理与 Tun" data-i18n-title="title.navVpn">
+        <button type="button" class="side-item" data-view="settings" data-settings="vpn" title="入站、系统代理与 Tun" data-i18n-title="title.navVpn" data-tauri-drag-region="false">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 4.5 6.8v4.7c0 4.8 3.2 8.1 7.5 8.8 4.3-.7 7.5-4 7.5-8.8V6.8L12 3.2Z"/><path d="m9.2 12.1 1.9 1.9 3.7-3.8"/></svg></span>
           <span class="side-label" data-i18n="nav.vpn">连接</span>
         </button>
-        <button class="side-item" data-view="settings" data-settings="sub" title="订阅更新与安全" data-i18n-title="title.navSub">
+        <button type="button" class="side-item" data-view="settings" data-settings="sub" title="订阅更新与安全" data-i18n-title="title.navSub" data-tauri-drag-region="false">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5h15M4.5 12h15M4.5 16.5h10"/><path d="m16.5 15 2.5 2.5L22 14"/></svg></span>
           <span class="side-label" data-i18n="nav.sub">订阅</span>
         </button>
-        <button class="side-item" data-view="block" title="拦截域名与 IP" data-i18n-title="title.navBlock">
+        <button type="button" class="side-item" data-view="block" title="拦截域名与 IP" data-i18n-title="title.navBlock" data-tauri-drag-region="false">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.25"/><path d="M6.2 6.2 17.8 17.8"/></svg></span>
           <span class="side-label" data-i18n="nav.block">拦截</span>
         </button>
-        <button class="side-item" data-view="settings" data-settings="basic" title="界面、启动与核心" data-i18n-title="title.navSettings">
+        <button type="button" class="side-item" data-view="settings" data-settings="basic" title="界面、启动与核心" data-i18n-title="title.navSettings" data-tauri-drag-region="false">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.24.3.4.65.5 1.02.1.36.15.74.15 1.13s-.05.77-.15 1.13c-.1.37-.26.72-.5 1.02Z"/></svg></span>
           <span class="side-label" data-i18n="nav.settings">设置</span>
         </button>
@@ -2314,10 +2360,7 @@
             <button type="button" class="lf-chip" data-llvl="warn">WARN</button>
           </div>
           <div class="log" id="logPanel" aria-live="polite" hidden>
-            <div class="log-line" data-lvl="info"><span class="log-time">08:21:44</span><span class="log-tag info">TEST</span><span class="log-msg">URL test for batch done.</span></div>
-            <div class="log-line" data-lvl="ok"><span class="log-time">08:21:44</span><span class="log-tag ok">OK</span><span class="log-msg" data-i18n="demo.urlTestDone">URL 测试完成 · 11 个节点</span></div>
-            <div class="log-line" data-lvl="info"><span class="log-time">08:21:52</span><span class="log-tag info">CORE</span><span class="log-msg">启动配置档 <span class="node" data-i18n="demo.sampleNode">[VLESS] 示例节点</span></span></div>
-            <div class="log-line" data-lvl="warn"><span class="log-time">08:21:53</span><span class="log-tag warn">CORE</span><span class="log-msg">停止配置档 <span class="node" data-i18n="demo.sampleNode">[VLESS] 示例节点</span></span></div>
+            <!-- runtime log lines only — no demo seed -->
           </div>
           <div class="conn-panel" id="connPanel" hidden>
             <table class="conn-table" aria-label="活跃连接">
@@ -3255,13 +3298,15 @@
   }
 
   function setConnected(on, opts) {
-    connected = on;
+    const prev = !!connected;
+    const side = !opts || opts.sideEffects !== false;
+    connected = !!on;
     const pb = document.getElementById('powerBtn') || powerBtn;
-    pb.classList.toggle('on', on);
-    pb.setAttribute('aria-pressed', String(on));
-    statusDot.classList.toggle('on', on);
+    pb.classList.toggle('on', connected);
+    pb.setAttribute('aria-pressed', String(connected));
+    statusDot.classList.toggle('on', connected);
     // traffic: never invent; disconnect keeps per-node totals (only 重置流量 zeros)
-    if (!on) {
+    if (!connected) {
       if (typeof refreshSbProxyFromNodes === 'function') refreshSbProxyFromNodes();
       else if (sbProxy) sbProxy.textContent = '—';
       const sbDirect = document.getElementById('sbDirect');
@@ -3280,10 +3325,13 @@
     }
     refreshHeroStatus();
     refreshConnectedRow();
-    if (on) {
-      if (typeof startConnPoll === 'function') startConnPoll();
-    } else if (typeof stopConnPoll === 'function') {
-      stopConnPoll();
+    // Poll only on false↔true edge (renderNodes must not rebaseline traffic).
+    if (side) {
+      if (!prev && connected) {
+        if (typeof startConnPoll === 'function') startConnPoll();
+      } else if (prev && !connected) {
+        if (typeof stopConnPoll === 'function') stopConnPoll();
+      }
     }
     if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
   }
@@ -3335,75 +3383,123 @@
     }
   }
 
-  let powerBusy = false;
-  powerBtn.addEventListener('click', async () => {
-    if (powerBusy) {
-      log('CORE', 'info', t('log.busy'));
-      return;
-    }
-    powerBusy = true;
-    powerBtn.disabled = true;
-    try {
-      if (!connected) {
-        // real sub nodes: outbound (Clash/JSON) or share URI; demo catalog has neither
-        const payload = (typeof nodeConnectPayload === 'function')
-          ? nodeConnectPayload(selectedName)
-          : null;
-        log('CORE', 'info', t('log.startProfile', { name: selectedName }));
-        if (!payload) {
-          const n = typeof findNodeByName === 'function' ? findNodeByName(selectedName) : null;
-          if (n && n.link && !isShareUri(n.link)) {
-            log('CORE', 'warn', t('log.badShare'));
-          } else if (n && n.addr && n.addr !== '—') {
-            log('CORE', 'warn', t('log.noCreds'));
-          } else {
-            log('CORE', 'warn', t('log.noRealLink'));
-          }
-          return;
-        }
-        // Start uses current spmode_vpn / spmode_system_proxy (chips), not stale disk alone
-        const r = await nexusInvoke('connect_selected', Object.assign({
-          profile_id: 1,
-          tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
-          system_proxy: !!document.getElementById('sysToggle')?.checked,
-        }, payload));
-        if (!r || r.offline) {
-          log('CORE', 'warn', t('log.backendDown'));
-          return;
-        }
-        if (!r.ok) { log('CORE', 'warn', t('log.startFail', { error: r.error })); return; }
-        if (r.data?.start_error) {
-          log('CORE', 'warn', `Start: ${r.data.start_error}`);
-          return;
-        }
-        if (!r.data?.started) {
-          log('CORE', 'warn', t('log.startNoOk'));
-          return;
-        }
-        setConnected(true); // pins connectedName = selectedName at Start success
-        try { localStorage.setItem('nexus.lastConnected', connectedName || selectedName || ''); } catch (_) {}
-        const port = r.data?.listen_port || 2080;
-        log('OK', 'ok', t('log.tunnelOn', { port, name: connectedName || selectedName }));
-        if (r.data?.proxy_note) log('SYS', 'info', r.data.proxy_note);
-        if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
-      } else {
-        log('CORE', 'warn', t('log.stopProfile', { name: connectedName || selectedName }));
-        // Stop RPC; also kill Core process (orphan after quit left power desynced).
-        let r = await nexusInvoke('disconnect_selected');
-        if (r && !r.ok && String(r.error || '').includes('core not started')) {
-          r = await nexusInvoke('core_stop');
-        } else if (r && !r.ok) {
-          await nexusInvoke('core_stop');
-        }
-        setConnected(false);
-        try { localStorage.removeItem('nexus.lastConnected'); } catch (_) {}
-        log('OK', 'ok', t('log.stopped'));
-        if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
+  // Session op queue: one promise chain; coalesce reconnect-class ops to latest.
+  let sessionOpChain = Promise.resolve();
+  let sessionOpPending = null; // {kind, run}
+  let sessionOpRunning = false;
+  function runSessionOp(kind, fn) {
+    // coalesce: only one pending reconnect/disconnect of same class
+    if (kind === 'reconnect' || kind === 'disconnect') {
+      if (sessionOpRunning && sessionOpPending && sessionOpPending.kind === kind) {
+        sessionOpPending = { kind, run: fn };
+        return sessionOpChain;
       }
-    } finally {
-      powerBusy = false;
-      powerBtn.disabled = false;
+      if (!sessionOpRunning && sessionOpPending && sessionOpPending.kind === kind) {
+        sessionOpPending = { kind, run: fn };
+        return sessionOpChain;
+      }
+      sessionOpPending = { kind, run: fn };
+      sessionOpChain = sessionOpChain.then(async () => {
+        while (sessionOpPending) {
+          const job = sessionOpPending;
+          sessionOpPending = null;
+          sessionOpRunning = true;
+          try { await job.run(); } catch (e) {
+            try { log('SYS', 'warn', String(e && e.message || e)); } catch (_) {}
+          } finally { sessionOpRunning = false; }
+        }
+      });
+      return sessionOpChain;
     }
+    // generic serial
+    sessionOpChain = sessionOpChain.then(async () => {
+      sessionOpRunning = true;
+      try { await fn(); } finally { sessionOpRunning = false; }
+    });
+    return sessionOpChain;
+  }
+  let catalogPutChain = Promise.resolve();
+  let _catalogUnloadBound = false;
+  function flushCatalogPut() {
+    const blob = serializeCatalog();
+    try { localStorage.setItem(CATALOG_KEY, JSON.stringify(blob)); } catch (_) {}
+    if (typeof nexusInvoke !== 'function') return Promise.resolve();
+    return nexusInvoke('catalog_put', { blob }).then(r => {
+      if (r && !r.ok && !r.offline) {
+        try { log('SYS', 'warn', t('log.subStoreFail', { error: r.error || '' })); } catch (_) {}
+      }
+    }).catch(e => {
+      try { log('SYS', 'warn', t('log.subStoreFail', { error: e && e.message || e })); } catch (_) {}
+    });
+  }
+
+  let powerBusy = false;
+  powerBtn.addEventListener('click', () => {
+    // Always queue/coalesce — never drop a connect/disconnect intent.
+    const wantConnect = !connected;
+    const kind = wantConnect ? 'reconnect' : 'disconnect';
+    runSessionOp(kind, async () => {
+      powerBusy = true;
+      powerBtn.disabled = true;
+      try {
+        if (wantConnect) {
+          const payload = (typeof nodeConnectPayload === 'function')
+            ? nodeConnectPayload(selectedName)
+            : null;
+          log('CORE', 'info', t('log.startProfile', { name: selectedName }));
+          if (!payload) {
+            const n = typeof findNodeByName === 'function' ? findNodeByName(selectedName) : null;
+            if (n && n.link && !isShareUri(n.link)) {
+              log('CORE', 'warn', t('log.badShare'));
+            } else if (n && n.addr && n.addr !== '—') {
+              log('CORE', 'warn', t('log.noCreds'));
+            } else {
+              log('CORE', 'warn', t('log.noRealLink'));
+            }
+            return;
+          }
+          const r = await nexusInvoke('connect_selected', Object.assign({
+            profile_id: 1,
+            tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
+            system_proxy: !!document.getElementById('sysToggle')?.checked,
+          }, payload));
+          if (!r || r.offline) {
+            log('CORE', 'warn', t('log.backendDown'));
+            return;
+          }
+          if (!r.ok) { log('CORE', 'warn', t('log.startFail', { error: r.error })); return; }
+          if (r.data?.start_error) {
+            log('CORE', 'warn', `Start: ${r.data.start_error}`);
+            return;
+          }
+          if (!r.data?.started) {
+            log('CORE', 'warn', t('log.startNoOk'));
+            return;
+          }
+          setConnected(true);
+          try { localStorage.setItem('nexus.lastConnected', connectedName || selectedName || ''); } catch (_) {}
+          const port = r.data?.listen_port || 2080;
+          log('OK', 'ok', t('log.tunnelOn', { port, name: connectedName || selectedName }));
+          if (r.data?.proxy_note) log('SYS', 'info', r.data.proxy_note);
+          if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
+        } else {
+          log('CORE', 'warn', t('log.stopProfile', { name: connectedName || selectedName }));
+          let r = await nexusInvoke('disconnect_selected');
+          if (r && !r.ok && String(r.error || '').includes('core not started')) {
+            r = await nexusInvoke('core_stop');
+          } else if (r && !r.ok) {
+            await nexusInvoke('core_stop');
+          }
+          setConnected(false);
+          try { localStorage.removeItem('nexus.lastConnected'); } catch (_) {}
+          log('OK', 'ok', t('log.stopped'));
+          if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
+        }
+      } finally {
+        powerBusy = false;
+        powerBtn.disabled = false;
+      }
+    });
   });
   // nexusInvoke defined later; hoist stub
   
@@ -3608,19 +3704,45 @@
         'add-clip': () => { importFromClipboard(); },
         'add-file': () => { importFromFile(); },
         'scan-qr': () => { importScanQr(); },
-        start: async () => {
+        start: () => {
           if (one) {
             selectedName = one;
             const row = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === one);
             if (row) selectedLat = row.dataset.lat || '—';
           }
-          if (connected) {
-            // restart selected — Stop then Start
-            setConnected(false);
-            const dr = await nexusInvoke('disconnect_selected');
-            if (dr && !dr.ok) await nexusInvoke('core_stop');
-          }
-          powerBtn.click();
+          runSessionOp('reconnect', async () => {
+            powerBusy = true;
+            powerBtn.disabled = true;
+            try {
+              if (connected) {
+                const dr = await nexusInvoke('disconnect_selected');
+                if (dr && !dr.ok) await nexusInvoke('core_stop');
+                setConnected(false);
+              }
+              const payload = (typeof nodeConnectPayload === 'function')
+                ? nodeConnectPayload(selectedName) : null;
+              if (!payload) {
+                log('CORE', 'warn', t('log.noRealLink'));
+                return;
+              }
+              log('CORE', 'info', t('log.startProfile', { name: selectedName }));
+              const r = await nexusInvoke('connect_selected', Object.assign({
+                profile_id: 1,
+                tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
+                system_proxy: !!document.getElementById('sysToggle')?.checked,
+              }, payload));
+              if (!r || r.offline) { log('CORE', 'warn', t('log.backendDown')); return; }
+              if (!r.ok) { log('CORE', 'warn', t('log.startFail', { error: r.error })); return; }
+              if (r.data?.start_error) { log('CORE', 'warn', `Start: ${r.data.start_error}`); return; }
+              if (!r.data?.started) { log('CORE', 'warn', t('log.startNoOk')); return; }
+              setConnected(true);
+              try { localStorage.setItem('nexus.lastConnected', connectedName || selectedName || ''); } catch (_) {}
+              log('OK', 'ok', t('log.tunnelOn', { port: r.data?.listen_port || 2080, name: connectedName || selectedName }));
+            } finally {
+              powerBusy = false;
+              powerBtn.disabled = false;
+            }
+          });
         },
         stop: () => {
           if (connected) powerBtn.click();
@@ -4436,46 +4558,113 @@
     return node;
   }
 
+  /** Display meta for one share URI. Authority-only host (query @ must not win). */
+  function shareDisplayMeta(line, idx) {
+    const raw = String(line || '').trim();
+    const m = raw.match(/^(vless|trojan|ss|vmess|hysteria2?|hy2|socks5?|tuic|anytls|https?):\/\//i);
+    if (!m) return null;
+    if (/^https?:\/\//i.test(raw) && !raw.includes('@')) return null; // sub URL, not proxy share
+    let type = m[1].toUpperCase()
+      .replace('HY2', 'Hysteria2').replace('HYSTERIA2', 'Hysteria2')
+      .replace('SOCKS5', 'SOCKS');
+    if (type === 'HTTPS') type = 'HTTPS';
+    else if (type === 'HTTP') type = 'HTTP';
+
+    let name = '';
+    const hash = raw.indexOf('#');
+    if (hash >= 0) {
+      try { name = decodeURIComponent(raw.slice(hash + 1)); } catch (_) { name = raw.slice(hash + 1); }
+    }
+
+    // v2rayN vmess://base64(json) — body has no user@host
+    if (/^vmess:\/\//i.test(raw)) {
+      const rest = raw.replace(/^vmess:\/\//i, '').split('#')[0].trim();
+      if (rest && !rest.includes('@')) {
+        const decoded = tryB64Decode(rest);
+        if (decoded) {
+          try {
+            const j = JSON.parse(String(decoded).trim());
+            if (j && typeof j === 'object') {
+              const host = String(j.add || j.host || j.server || '').trim();
+              const port = j.port != null && String(j.port) !== '' ? String(j.port) : '443';
+              if (host) {
+                if (!name) name = String(j.ps || j.name || j.remark || '').trim();
+                if (!name) name = 'VMess-' + ((idx || 0) + 1);
+                return {
+                  name,
+                  type: normalizeNodeType('vmess'),
+                  addr: host.includes(':') ? host : (host + ':' + port),
+                };
+              }
+            }
+          } catch (_) { /* fall through to URI parse */ }
+        }
+      }
+    }
+
+    // scheme://[userinfo@]host[:port][/path][?query][#frag] — strip query before @ split
+    // (free lists put Telegram=@foo in query; lastIndexOf('@') on full body ate real host)
+    let addr = '—';
+    try {
+      const withoutScheme = raw.replace(/^[a-z0-9+.-]+:\/\//i, '');
+      const withoutFrag = withoutScheme.split('#')[0];
+      const authorityPath = withoutFrag.split('?')[0];
+      const authority = authorityPath.split('/')[0] || '';
+      let hostport = authority;
+      const at = authority.lastIndexOf('@');
+      if (at >= 0) hostport = authority.slice(at + 1);
+      hostport = String(hostport || '').trim();
+      if (hostport) {
+        if (hostport.includes(':')) addr = hostport;
+        else addr = hostport + (type === 'HTTP' ? ':80' : ':443');
+      }
+    } catch (_) {}
+
+    if (!name) name = type + '-' + ((idx || 0) + 1);
+    return { name, type: normalizeNodeType(type), addr };
+  }
   function parseShareLines(text) {
     const out = [];
     const lines = String(text || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
     for (const line of lines) {
-      // upstream: protocol dispatch table — accept common share schemes
-      const m = line.match(/^(vless|trojan|ss|vmess|hysteria2?|hy2|socks5?|tuic|anytls|https?):\/\//i);
-      if (!m) continue;
-      if (/^https?:\/\//i.test(line) && !line.includes('@')) continue; // sub URL, not proxy share
-      let type = (m ? m[1] : 'VLESS').toUpperCase()
-        .replace('HY2', 'Hysteria2').replace('HYSTERIA2', 'Hysteria2')
-        .replace('SOCKS5', 'SOCKS');
-      // keep HTTPS ≠ HTTP (user product; sing-box still type http + tls)
-      if (type === 'HTTPS') type = 'HTTPS';
-      else if (type === 'HTTP') type = 'HTTP';
-      let name = '';
-      const hash = line.indexOf('#');
-      if (hash >= 0) {
-        try { name = decodeURIComponent(line.slice(hash + 1)); } catch (_) { name = line.slice(hash + 1); }
-      }
-      if (!name) name = type + '-' + (out.length + 1);
-      // host:port heuristic
-      let addr = '—';
-      try {
-        const body = line.replace(/^[a-z0-9+.-]+:\/\//i, '').split('#')[0];
-        const at = body.lastIndexOf('@');
-        const hostPart = at >= 0 ? body.slice(at + 1) : body;
-        const hp = hostPart.split(/[/?]/)[0];
-        if (hp && hp.includes(':')) addr = hp;
-        else if (hp) addr = hp + (type === 'HTTP' ? ':80' : ':443');
-      } catch (_) {}
+      const meta = shareDisplayMeta(line, out.length);
+      if (!meta) continue;
       out.push({
-        name,
-        type: normalizeNodeType(type),
-        addr,
+        name: meta.name,
+        type: meta.type,
+        addr: meta.addr,
         lat: null,
         flow: null,
         link: line,
       });
     }
     return out;
+  }
+  /** True when stored display addr is garbage from old lastIndexOf('@') / raw vmess b64. */
+  function addrLooksBroken(addr) {
+    const a = String(addr || '').trim();
+    if (!a || a === '—') return true;
+    if (a.includes('&')) return true; // query tail mistaken for host
+    if (a.length > 80) return true;
+    // bare base64 blob (vmess body used as host)
+    if (/^[A-Za-z0-9+/_=-]{40,}$/.test(a) && !a.includes(':')) return true;
+    if (/^eyJ/i.test(a)) return true;
+    return false;
+  }
+  function healNodeDisplay(n) {
+    if (!n || typeof n !== 'object') return n;
+    const link = n.link;
+    if (!link || typeof link !== 'string') return n;
+    const name = String(n.name || '');
+    const synthetic = !name || /^(VLESS|Trojan|VMess|VMESS|SS|Hysteria2|TUIC|AnyTLS|SOCKS|HTTP|HTTPS)-\d+$/i.test(name);
+    const broken = addrLooksBroken(n.addr);
+    if (!broken && !synthetic) return n;
+    const meta = shareDisplayMeta(link, 0);
+    if (!meta) return n;
+    if (broken) n.addr = meta.addr;
+    if (synthetic && meta.name) n.name = meta.name;
+    if (meta.type) n.type = meta.type;
+    return n;
   }
   function tryB64Decode(text) {
     const s = String(text || '').replace(/\s+/g, '');
@@ -4507,7 +4696,7 @@
     return t || 'VLESS';
   }
   function parseSubscriptionBody(raw) {
-    // HttpGet body → base64 / share-lines / JSON / clash proxies
+    // Sync path: share-lines / base64 / JSON. Clash YAML → parseSubscriptionBodyAsync (Rust).
     let text = String(raw || '').trim();
     if (!text) return [];
     // strip HTML error pages early
@@ -4530,8 +4719,58 @@
         if (nodes.length) return nodes;
       }
     } catch (_) {}
-    // Clash YAML proxies: inline - {..} or multi-line - name: (keep credentials → outbound)
-    if (/\bproxies\s*:/i.test(text) || /^\s*-\s*\{[^}]*name\s*:/m.test(text) || /^\s*-\s*name\s*:/m.test(text)) {
+    // Clash YAML handled in parseSubscriptionBodyAsync (Throne updateClash port)
+    return parseShareLines(text);
+  }
+  /** Throne-style body parse: share/JSON sync, Clash YAML via Rust sub_parse_clash. */
+  async function parseSubscriptionBodyAsync(raw) {
+    let text = String(raw || '').trim();
+    if (!text) return [];
+    if (/^<!DOCTYPE\s+html/i.test(text) || /^<html[\s>]/i.test(text)) return [];
+    // share lines first (free-list plaintext)
+    let nodes = parseShareLines(text);
+    if (nodes.length) return nodes;
+    const decoded = tryB64Decode(text);
+    if (decoded) {
+      nodes = parseShareLines(decoded);
+      if (nodes.length) return nodes;
+      text = decoded.trim();
+    }
+    try {
+      const j = JSON.parse(text);
+      const arr = Array.isArray(j) ? j : (j.proxies || j.outbounds || j.nodes || []);
+      if (Array.isArray(arr) && arr.length) {
+        nodes = arr.map((o, i) => nodeFromProxyObject(o, i)).filter(Boolean);
+        if (nodes.length) return nodes;
+      }
+    } catch (_) {}
+    // Clash: real YAML in Rust (Throne fkYAML path) — nested ws-opts/reality-opts/…
+    if (/\bproxies\s*:/i.test(text)) {
+      const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
+      if (typeof inv === 'function') {
+        try {
+          const res = await inv('sub_parse_clash', { body: text });
+          if (res && res.ok && Array.isArray(res.nodes) && res.nodes.length) {
+            return res.nodes.map((n) => {
+              const node = {
+                name: n.name || 'node',
+                type: normalizeNodeType(n.type || 'VLESS'),
+                addr: n.addr || '—',
+                lat: null,
+                flow: null,
+              };
+              if (n.outbound && typeof n.outbound === 'object') node.outbound = n.outbound;
+              if (node.outbound && node.outbound.type === 'http' && node.outbound.tls && node.outbound.tls.enabled) {
+                node.type = 'HTTPS';
+              }
+              return node;
+            });
+          }
+        } catch (e) {
+          console.warn('sub_parse_clash', e);
+        }
+      }
+      // last-resort flat heuristic if Rust unavailable (dev browser)
       const out = [];
       const re = /\{([^{}]*(?:name|server|type|port)[^{}]*)\}/g;
       let m;
@@ -4540,40 +4779,8 @@
         if (n) out.push(n);
       }
       if (out.length) return out;
-      let body = text;
-      const pi = text.search(/^\s*proxies\s*:/im);
-      if (pi >= 0) body = text.slice(pi);
-      const lines = body.split(/\r?\n/);
-      let cur = null;
-      const flush = () => {
-        if (cur && out.length < 5000) {
-          const n = clashBlockToNode(cur, out.length);
-          if (n) out.push(n);
-        }
-        cur = null;
-      };
-      for (const line of lines) {
-        if (/^\s*proxy-groups\s*:/i.test(line) || /^\s*rules\s*:/i.test(line) || /^\s*rule-providers\s*:/i.test(line)) {
-          flush();
-          break;
-        }
-        if (/^\s*-\s+/.test(line) && !/^\s{4,}-\s/.test(line)) {
-          flush();
-          cur = line.replace(/^\s*-\s+/, '');
-          continue;
-        }
-        if (cur !== null) {
-          if (/^\S/.test(line) && !/^\s*#/.test(line) && !/^proxies\s*:/i.test(line)) {
-            flush();
-            continue;
-          }
-          cur += '\n' + line;
-        }
-      }
-      flush();
-      if (out.length) return out;
     }
-    return parseShareLines(text);
+    return [];
   }
   async function fetchSubscriptionBody(url) {
     const u = String(url || '').trim();
@@ -4660,7 +4867,7 @@
             const before = (prof.nodes || []).length;
             // GroupUpdater: HttpGet then parse; on fail keep existing nodes
             const body = await fetchSubscriptionBody(g.url);
-            const next = parseSubscriptionBody(body);
+            const next = await parseSubscriptionBodyAsync(body);
             if (!next.length) {
               throw new Error('订阅内容无可解析节点（请检查链接或格式）');
             }
@@ -4818,6 +5025,7 @@
   function openDialog(id) {
     const el = document.getElementById(id);
     if (!el) return;
+    el.removeAttribute('hidden');
     el.hidden = false;
     el.classList.add('open');
   }
@@ -4826,6 +5034,7 @@
     if (!el) return;
     el.classList.remove('open');
     el.hidden = true;
+    el.setAttribute('hidden', '');
   }
   /** sing-box outbound → flat edit fields (upstream dialog_edit_profile subset). */
   function fieldsFromOutbound(ob, fallback) {
@@ -5054,7 +5263,7 @@
       if (connected && connectedName === oldName) {
         connectedName = name;
       }
-      if (typeof setConnected === 'function') setConnected(connected, { pin: false });
+      if (typeof setConnected === 'function') setConnected(connected, { pin: false, sideEffects: false });
     }
     const gid = typeof currentGid === 'function' ? currentGid() : 'default';
     const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
@@ -5199,14 +5408,8 @@
   }
   function saveCatalog(immediate) {
     const run = () => {
-      const blob = serializeCatalog();
-      // Rust store is source of truth; LS kept as best-effort mirror for non-Tauri preview
-      try { localStorage.setItem(CATALOG_KEY, JSON.stringify(blob)); } catch (_) {}
-      if (typeof nexusInvoke === 'function') {
-        nexusInvoke('catalog_put', { blob }).catch(e => {
-          try { log('SYS', 'warn', t('log.subStoreFail', { error: e && e.message || e })); } catch (_) {}
-        });
-      }
+      // Serialize at put time so chain always writes latest blob.
+      catalogPutChain = catalogPutChain.then(() => flushCatalogPut()).catch(() => {});
     };
     if (immediate) {
       if (_catalogSaveTimer) { clearTimeout(_catalogSaveTimer); _catalogSaveTimer = null; }
@@ -5273,6 +5476,8 @@
         }
         if (n.link) o.link = n.link;
         if (n.outbound) o.outbound = repairStoredOutbound(n.outbound);
+        // old parseShareLines used lastIndexOf('@') → query tail as addr (broke table cols)
+        if (typeof healNodeDisplay === 'function') healNodeDisplay(o);
         return o;
       }) : [];
       g.count = nodes.length;
@@ -5349,10 +5554,13 @@
     if (panel) {
       panel.hidden = true;
       panel.setAttribute('aria-hidden', 'true');
+      panel.classList.remove('active');
     }
     document.querySelectorAll('.side-item[data-settings="routing"]').forEach(el => {
       el.hidden = true;
       el.setAttribute('aria-hidden', 'true');
+      el.setAttribute('tabindex', '-1');
+      el.style.display = 'none';
     });
     // Tun fine settings already wrapped hidden; keep home Tun chip as control
     document.querySelectorAll('.set-unwired-tun').forEach(el => {
@@ -5562,38 +5770,37 @@
   let blocklistApplyBusy = false;
   async function applyBlocklistLive() {
     if (typeof connected === 'undefined' || !connected) return;
-    if (blocklistApplyBusy || (typeof powerBusy !== 'undefined' && powerBusy)) {
-      log('SYS', 'info', t('log.blockSavedLater'));
-      return;
-    }
     const name = (typeof connectedName !== 'undefined' && connectedName) || selectedName;
     const payload = (typeof nodeConnectPayload === 'function') ? nodeConnectPayload(name) : null;
     if (!payload) {
       log('SYS', 'warn', t('log.blockSavedManual'));
       return;
     }
-    blocklistApplyBusy = true;
-    if (typeof powerBusy !== 'undefined') powerBusy = true;
-    try {
-      log('CORE', 'info', t('log.blockApply'));
-      const r = await nexusInvoke('connect_selected', Object.assign({
-        profile_id: 1,
-        tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
-        system_proxy: !!document.getElementById('sysToggle')?.checked,
-      }, payload));
-      if (!r || r.offline || !r.ok || r.data?.start_error || !r.data?.started) {
-        log('SYS', 'warn', t('log.blockSavedManualMaybe', {
-            error: r?.data?.start_error ? ('：' + r.data.start_error) : (r?.error ? ('：' + r.error) : '')
-          }));
-        return;
+    // Queue (coalesce) — never drop after store write.
+    return runSessionOp('reconnect', async () => {
+      blocklistApplyBusy = true;
+      powerBusy = true;
+      try {
+        log('CORE', 'info', t('log.blockApply'));
+        const r = await nexusInvoke('connect_selected', Object.assign({
+          profile_id: 1,
+          tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
+          system_proxy: !!document.getElementById('sysToggle')?.checked,
+        }, payload));
+        if (!r || r.offline || !r.ok || r.data?.start_error || !r.data?.started) {
+          log('SYS', 'warn', t('log.blockSavedManualMaybe', {
+              error: r?.data?.start_error ? ('：' + r.data.start_error) : (r?.error ? ('：' + r.error) : '')
+            }));
+          return;
+        }
+        log('OK', 'ok', t('log.blockApplied'));
+      } catch (e) {
+        log('SYS', 'warn', t('log.blockSavedManualErr', { error: e && e.message || e }));
+      } finally {
+        blocklistApplyBusy = false;
+        powerBusy = false;
       }
-      log('OK', 'ok', t('log.blockApplied'));
-    } catch (e) {
-      log('SYS', 'warn', t('log.blockSavedManualErr', { error: e && e.message || e }));
-    } finally {
-      blocklistApplyBusy = false;
-      if (typeof powerBusy !== 'undefined') powerBusy = false;
-    }
+    });
   }
 
   async function saveBlocklist(items) {
@@ -5847,11 +6054,19 @@
     log('SYS', 'warn', t('log.groupDeleted', { name: g.name }));
   }
   function openGroupsDialog() {
-    renderGroupList();
-    setGroupUpdateStatus('', '');
+    try {
+      renderGroupList();
+      setGroupUpdateStatus('', '');
+    } catch (err) {
+      try { log('SYS', 'warn', 'groups: ' + (err && err.message || err)); } catch (_) {}
+    }
     openDialog('groupsMask');
   }
-  document.getElementById('groupsBtn')?.addEventListener('click', openGroupsDialog);
+  document.getElementById('groupsBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openGroupsDialog();
+  });
   document.getElementById('groupsClose')?.addEventListener('click', () => closeDialog('groupsMask'));
   document.getElementById('groupsMask')?.addEventListener('click', (e) => {
     if (e.target.id === 'groupsMask') closeDialog('groupsMask');
@@ -7018,17 +7233,21 @@
 
   function setSidebarCollapsed(collapsed) {
     win.classList.toggle('sidebar-collapsed', collapsed);
-    sideCollapse.setAttribute('aria-expanded', String(!collapsed));
-    sideCollapse.title = collapsed
-      ? (typeof t === 'function' ? t('nav.expandTitle') : '展开侧栏')
-      : (typeof t === 'function' ? t('nav.collapseTitle') : '收窄侧栏');
-    sideCollapse.setAttribute('aria-label', sideCollapse.title);
-    // Inline --sidebar (from drag/load) beats .sidebar-collapsed CSS.
-    // Collapse: drop inline so --sidebar-collapsed wins; expand: restore remembered width.
-    if (collapsed) win.style.removeProperty('--sidebar');
+    if (sideCollapse) {
+      sideCollapse.setAttribute('aria-expanded', String(!collapsed));
+      sideCollapse.title = collapsed
+        ? (typeof t === 'function' ? t('nav.expandTitle') : '展开侧栏')
+        : (typeof t === 'function' ? t('nav.collapseTitle') : '收窄侧栏');
+      sideCollapse.setAttribute('aria-label', sideCollapse.title);
+    }
+    // Inline --sidebar (from drag/load) beats class CSS. Force 72px on collapse so
+    // the grid track actually shrinks; expand restores remembered width.
+    if (collapsed) win.style.setProperty('--sidebar', SIDE_W_COLLAPSED + 'px');
     else loadSidebarWidth();
   }
-  sideCollapse.addEventListener('click', () => {
+  sideCollapse?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     setSidebarCollapsed(!win.classList.contains('sidebar-collapsed'));
   });
 
@@ -7044,12 +7263,23 @@
 
   const panelTitles = { basic: '设置', routing: '路由', vpn: '连接', sub: '订阅' };
   function showView(name, settingsPanel, focus) {
-    document.querySelectorAll('.view').forEach(v => {
-      const on = v.id === `view-${name}`;
+    const targetId = 'view-' + (name || 'home');
+    let target = document.getElementById(targetId);
+    if (!target) {
+      target = document.getElementById('view-home');
+    }
+    document.querySelectorAll('.main > .view, .view').forEach(v => {
+      const on = target && v === target;
       v.classList.toggle('active', on);
-      v.hidden = !on;
+      // a11y only — paint is driven solely by .active (see CSS)
+      if (on) v.removeAttribute('hidden');
+      else v.setAttribute('hidden', '');
     });
-    if (name === 'settings') {
+    if (target) {
+      target.classList.add('active');
+      target.removeAttribute('hidden');
+    }
+    if ((name || 'home') === 'settings') {
       const panel = settingsPanel || 'basic';
       const map = { general: 'basic', subscription: 'sub', advanced: 'sub', connection: 'vpn', core: 'basic', system: 'basic', about: 'basic' };
       const key = map[panel] || panel;
@@ -7062,46 +7292,6 @@
       if (key === 'sub' && typeof syncSubUrlField === 'function') syncSubUrlField();
     }
   }
-
-  document.querySelectorAll('.sidebar .side-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const go = () => {
-        document.querySelectorAll('.sidebar .side-item').forEach(b => {
-          b.classList.remove('active');
-          b.removeAttribute('aria-current');
-        });
-        btn.classList.add('active');
-        btn.setAttribute('aria-current', 'page');
-        const view = btn.dataset.view || 'home';
-        showView(view, btn.dataset.settings || 'basic', btn.dataset.focus || null);
-        if (view === 'settings') beginSettingsSession();
-        else setDirty(false);
-        if (view === 'block' && typeof ensureBlocklistOnView === 'function') {
-          ensureBlocklistOnView();
-        }
-      };
-      const nextView = btn.dataset.view || 'home';
-      const leavingSettings = document.getElementById('view-settings')?.classList.contains('active')
-        && nextView !== 'settings';
-      // switching among settings panels keeps session; leaving settings may prompt
-      if (leavingSettings && settingsDirty) {
-        requestLeaveSettings((action) => {
-          if (action === 'save') saveSettings();
-          else if (action === 'discard') discardSettings();
-          go();
-        });
-      } else {
-        // panel-to-panel within settings: keep dirty flag
-        const wasSettings = document.getElementById('view-settings')?.classList.contains('active');
-        go();
-        if (wasSettings && (btn.dataset.view || '') === 'settings') {
-          // keep dirty; re-snapshot only when first entering
-        } else if ((btn.dataset.view || '') === 'settings' && !wasSettings) {
-          beginSettingsSession();
-        }
-      }
-    });
-  });
 
   const routeProfileSelect = document.getElementById('routeProfileSelect');
   const bypassCnSwitch = document.getElementById('bypassCnSwitch');
@@ -7496,8 +7686,8 @@
       'log.logCopied': '已复制日志',
       'log.copyFail': '复制失败',
       'log.logSelectAll': '已全选日志',
-      'log.procPathWait': t('log.procPathWait'),
-      'log.procPathWaitAlt': t('log.procPathWaitAlt'),
+      'log.procPathWait': '完整进程路径尚未就绪，请稍候再试',
+      'log.procPathWaitAlt': '完整进程路径尚未就绪，请稍候或改用「拦截目标 · 全部进程」',
       'log.copiedHost1': '已复制域名/IP：{host}',
       'log.copiedHostN': '已复制 {n} 个域名/IP',
       'log.copiedHost': '已复制域名/IP',
@@ -9572,6 +9762,43 @@
     settingsSnapshot = snapshotSettings();
     setDirty(false);
   }
+  // Side nav: capture on document so SVG/label clicks always reach handler; never dirty-gated.
+  function onSideNavClick(e) {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const btn = t.closest('#sidebar .side-item');
+    if (!btn) return;
+    if (btn.hidden || btn.getAttribute('aria-hidden') === 'true') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const nextView = btn.dataset.view || 'home';
+    const settingsEl = document.getElementById('view-settings');
+    const inSettings = !!(settingsEl && settingsEl.classList.contains('active'));
+
+    document.querySelectorAll('#sidebar .side-item').forEach(b => {
+      b.classList.remove('active');
+      b.removeAttribute('aria-current');
+    });
+    btn.classList.add('active');
+    btn.setAttribute('aria-current', 'page');
+
+    showView(nextView, btn.dataset.settings || 'basic', btn.dataset.focus || null);
+
+    try {
+      if (typeof closeConfirm === 'function') closeConfirm();
+      pendingLeave = null;
+      if (nextView !== 'settings') setDirty(false);
+      else if (!inSettings) beginSettingsSession();
+      else if (btn.dataset.settings === 'sub' && !settingsDirty) beginSettingsSession();
+      if (nextView === 'block' && typeof ensureBlocklistOnView === 'function') ensureBlocklistOnView();
+    } catch (_) { /* view already switched */ }
+  }
+  function bindSideNav() {
+    if (document.documentElement.dataset.sideNavBound === '1') return;
+    document.documentElement.dataset.sideNavBound = '1';
+    document.addEventListener('click', onSideNavClick, true);
+  }
+  bindSideNav();
   function forceLeaveHome() {
     showView('home');
     document.querySelectorAll('.sidebar .side-item').forEach(b => {
@@ -9638,6 +9865,7 @@
     pendingLeave = then;
     const mask = document.getElementById('confirmMask');
     if (!mask) { then && then('discard'); return; }
+    mask.removeAttribute('hidden');
     mask.hidden = false;
     mask.classList.add('open');
   }
@@ -9646,6 +9874,7 @@
     if (!mask) return;
     mask.classList.remove('open');
     mask.hidden = true;
+    mask.setAttribute('hidden', '');
   }
   function requestLeaveSettings(then) {
     if (!settingsDirty) {
@@ -9829,6 +10058,14 @@
     if (ms < 220) return 'lat mid';
     return 'lat bad';
   }
+  function escHtml(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
   function renderNodes(subKey) {
     const prof = SUB_PROFILES[subKey] || SUB_PROFILES.default;
     const rows = prof.nodes.map((n, i) => {
@@ -9845,22 +10082,38 @@
         const parts = n.flow.split('·').map(s => s.trim());
         const up = parts[0] || '';
         const down = parts[1] || '';
-        flowHtml = `<span class="up">${up}</span>` + (down ? ` · <span class="down">${down}</span>` : '');
+        flowHtml = `<span class="up">${escHtml(up)}</span>` + (down ? ` · <span class="down">${escHtml(down)}</span>` : '');
       }
-      return `<tr data-name="${n.name}" data-lat="${latTxt}"${i===0?' class="selected"':''}>
+      const nm = n.name || '';
+      const ad = n.addr || '';
+      const ty = n.type || '';
+      return `<tr data-name="${escHtml(nm)}" data-lat="${escHtml(latTxt)}"${i===0?' class="selected"':''}>
                   <td class="idx">${i+1}</td>
-                  <td><span class="pill">${n.type}</span></td>
-                  <td class="addr">${n.addr}</td>
-                  <td class="name">${n.name}</td>
-                  <td class="${latCls}">${latTxt}</td>
+                  <td><span class="pill">${escHtml(ty)}</span></td>
+                  <td class="addr" title="${escHtml(ad)}">${escHtml(ad)}</td>
+                  <td class="name" title="${escHtml(nm)}">${escHtml(nm)}</td>
+                  <td class="${latCls}">${escHtml(latTxt)}</td>
                   <td class="${flowCls}">${flowHtml}</td>
                 </tr>`;
     }).join('');
     nodeTable.innerHTML = rows;
-    selectedName = prof.nodes[0]?.name || '—';
     {
-      const L = prof.nodes[0]?.lat;
-      selectedLat = (L != null && L >= 0 && isFinite(L)) ? (L + ' ms') : '—';
+      const keep = selectedName && prof.nodes.some(n => n.name === selectedName);
+      if (!keep) {
+        selectedName = prof.nodes[0]?.name || '—';
+        const L = prof.nodes[0]?.lat;
+        selectedLat = (L != null && L >= 0 && isFinite(L)) ? (L + ' ms') : '—';
+      } else {
+        const n = prof.nodes.find(x => x.name === selectedName);
+        const L = n?.lat;
+        if (L != null && L >= 0 && isFinite(L)) selectedLat = L + ' ms';
+        // re-mark selected row (rows only marked first by default)
+        const tr = [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === selectedName);
+        if (tr) {
+          nodeTable.querySelectorAll('tr.selected').forEach(r => r.classList.remove('selected'));
+          tr.classList.add('selected');
+        }
+      }
     }
     // keep session sort across group switch (do not reset sortKey)
     if (sortKey) {
@@ -9873,8 +10126,8 @@
     selectAnchorRow = nodeTable.querySelector('tr.selected')
       || [...nodeTable.querySelectorAll('tr')].find(r => r.dataset.name === selectedName)
       || null;
-    // refresh hero only — do not re-pin connectedName from list selection
-    if (typeof setConnected === 'function') setConnected(connected, { pin: false });
+    // refresh hero only — no poll restart / traffic baseline reset
+    if (typeof setConnected === 'function') setConnected(connected, { pin: false, sideEffects: false });
     else if (typeof refreshConnectedRow === 'function') refreshConnectedRow();
   }
   // single path: always setActiveGroup → nodes + 订阅设置同步
@@ -9892,9 +10145,17 @@
   // boot: store catalog first (LS migrate); hide unwired routing/DNS for release UI
   // blocklist loads in nexusBoot after invoke is live (early call often offline → blank 拦截)
   if (typeof hideUnwiredSettings === 'function') hideUnwiredSettings();
-  hydrateCatalogOnBoot();
-  window.addEventListener('pagehide', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
-  window.addEventListener('beforeunload', () => { if (typeof saveCatalog === 'function') saveCatalog(true); });
+  // Ordered boot: catalog hydrate before session restore.
+  (async () => {
+    try { await hydrateCatalogOnBoot(); } catch (_) {}
+    try { await nexusBoot(); } catch (_) {}
+  })();
+  if (!_catalogUnloadBound) {
+    _catalogUnloadBound = true;
+    const flush = () => { if (typeof saveCatalog === 'function') saveCatalog(true); };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+  }
 
 
 
@@ -10008,7 +10269,7 @@
           }
         }
         // share lines / JSON / clash — same path as sub update (keep credentials)
-        let nodes = parseSubscriptionBody(text);
+        let nodes = await parseSubscriptionBodyAsync(text);
         addNodesToCurrent(nodes, f.name);
       } catch (err) {
         log('SYS', 'warn', t('log.fileReadFail', { error: err && err.message || err }));
@@ -10286,29 +10547,30 @@
           log('SYS', 'warn', t('log.tunNoCfg'));
           return;
         }
-        log('CORE', 'info', on ? t('log.tunRestartOn') : t('log.tunRestartOff'));
-        const cr = await nexusInvoke('connect_selected', Object.assign({
-          profile_id: 1,
-          tun: !!on,
-          system_proxy: !!document.getElementById('sysToggle')?.checked,
-        }, payload));
-        if (!cr || cr.offline) return;
-        if (!cr.ok) {
-          log('CORE', 'warn', t('log.tunRestartFail', { error: cr.error }));
-          return;
-        }
-        if (cr.data?.start_error) {
-          log('CORE', 'warn', `Tun re-Start: ${cr.data.start_error}`);
-          // privilege/start fail with tun on → chip stays on (store already true); user can retry
-          return;
-        }
-        if (cr.data?.started) {
-          // Core box recreated — re-baseline QueryStats; keep per-node totals.
-          _coreBaseUp = null;
-          _coreBaseDown = null;
-          log('OK', 'ok', on ? t('log.tunApplied') : t('log.tunBackProxy'));
-          if (cr.data?.proxy_note) log('SYS', 'info', cr.data.proxy_note);
-        }
+        await runSessionOp('reconnect', async () => {
+          log('CORE', 'info', on ? t('log.tunRestartOn') : t('log.tunRestartOff'));
+          const cr = await nexusInvoke('connect_selected', Object.assign({
+            profile_id: 1,
+            tun: !!on,
+            system_proxy: !!document.getElementById('sysToggle')?.checked,
+          }, payload));
+          if (!cr || cr.offline) return;
+          if (!cr.ok) {
+            log('CORE', 'warn', t('log.tunRestartFail', { error: cr.error }));
+            return;
+          }
+          if (cr.data?.start_error) {
+            log('CORE', 'warn', `Tun re-Start: ${cr.data.start_error}`);
+            return;
+          }
+          if (cr.data?.started) {
+            // Tun recreate: re-baseline Core counters only (intentional).
+            _coreBaseUp = null;
+            _coreBaseDown = null;
+            log('OK', 'ok', on ? t('log.tunApplied') : t('log.tunBackProxy'));
+            if (cr.data?.proxy_note) log('SYS', 'info', cr.data.proxy_note);
+          }
+        });
       }
     });
   };
@@ -10322,8 +10584,8 @@
     });
   });
   syncSubUrlField();
-  nexusBoot();
 
+  if (typeof bindSideNav === 'function') bindSideNav();
   showView('home');
 </script>
 </body>

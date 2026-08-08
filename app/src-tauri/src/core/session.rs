@@ -146,7 +146,6 @@ impl CoreSession {
 
     /// Kill every other NexusCore before we spawn (keep `except` = our child).
     pub fn kill_stray_cores(except: Option<u32>) {
-        let _ = except;
         #[cfg(unix)]
         {
             let Ok(out) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
@@ -186,13 +185,38 @@ impl CoreSession {
         }
         #[cfg(windows)]
         {
-            let mut cmd = Command::new("taskkill");
-            crate::winhide::apply(&mut cmd);
-            let _ = cmd
-                .args(["/F", "/IM", "NexusCore.exe", "/T"])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
+            // Honor `except`: never blanket /IM (would kill the live child).
+            let me = std::process::id();
+            let mut list = Command::new("tasklist");
+            crate::winhide::apply(&mut list);
+            let Ok(out) = list
+                .args(["/FI", "IMAGENAME eq NexusCore.exe", "/FO", "CSV", "/NH"])
+                .output()
+            else {
+                return;
+            };
+            let text = String::from_utf8_lossy(&out.stdout);
+            for line in text.lines() {
+                // "NexusCore.exe","1234","Session Name","Session#","Mem Usage"
+                let cols: Vec<&str> = line.split(',').collect();
+                if cols.len() < 2 {
+                    continue;
+                }
+                let pid_s = cols[1].trim().trim_matches('"');
+                let Ok(pid) = pid_s.parse::<u32>() else {
+                    continue;
+                };
+                if pid == me || except == Some(pid) {
+                    continue;
+                }
+                let mut kill = Command::new("taskkill");
+                crate::winhide::apply(&mut kill);
+                let _ = kill
+                    .args(["/F", "/PID", &pid.to_string(), "/T"])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
             std::thread::sleep(Duration::from_millis(250));
         }
     }
@@ -238,6 +262,7 @@ impl CoreSession {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     if Instant::now() > deadline {
                         let _ = child.kill();
+                        let _ = child.wait();
                         return Err(io::Error::new(
                             io::ErrorKind::TimedOut,
                             "core did not connect to socket",
@@ -247,6 +272,7 @@ impl CoreSession {
                 }
                 Err(e) => {
                     let _ = child.kill();
+                    let _ = child.wait();
                     return Err(e);
                 }
             }
@@ -403,6 +429,14 @@ impl CoreSession {
             let _ = std::fs::remove_file(&self.listener_path);
         }
         Ok(())
+    }
+
+    /// True when owned child has exited (SESSION may still be Some).
+    pub fn child_exited(&mut self) -> bool {
+        match self.child.as_mut() {
+            Some(c) => matches!(c.try_wait(), Ok(Some(_))),
+            None => true,
+        }
     }
 
     pub fn core_process_alive() -> bool {

@@ -57,8 +57,12 @@ mod qr_tests {
 async fn core_start() -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(|| {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
-        if g.is_some() {
-            return Ok("already running".into());
+        if let Some(s) = g.as_mut() {
+            if !s.child_exited() {
+                return Ok("already running".into());
+            }
+            let _ = s.stop_core_process();
+            *g = None;
         }
         let bin = CoreSession::resolve_core_binary();
         if !bin.is_file() {
@@ -441,6 +445,13 @@ fn connect_selected_sync(
     // (blocks query_connections poll + other commands for ~0.2–1s+).
     let (start_err, running, qpid) = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
+        // Dead child still in SESSION → drop and respawn.
+        if let Some(s) = g.as_mut() {
+            if s.child_exited() {
+                let _ = s.stop_core_process();
+                *g = None;
+            }
+        }
         if g.is_none() {
             let bin = CoreSession::resolve_core_binary();
             if !bin.is_file() {
@@ -589,33 +600,28 @@ async fn disconnect_selected() -> Result<serde_json::Value, String> {
 }
 
 fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
-    use data::store::Store;
-
-    // SESSION for Stop; orphan Core (GUI relaunched) → kill process so power can go off.
-    let (stop_err, running, pid, clear_proxy) = {
+    // Align with teardown_session: soft Stop, always kill process + clear proxy.
+    let (stop_err, running, pid) = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         if g.is_none() {
             CoreSession::kill_stray_cores(None);
-            let clear_proxy = Store::load().system_proxy;
-            (None, false, -1i32, clear_proxy)
+            (None, false, -1i32)
         } else {
             let s = g.as_mut().unwrap();
-            let stop_err = s.stop_rpc()?;
+            let stop_err = s.stop_rpc().unwrap_or_else(|e| Some(e));
             let (running, pid) = s.query_state().unwrap_or((false, -1));
-            let clear_proxy = Store::load().system_proxy;
             let _ = s.stop_core_process();
             *g = None;
-            (stop_err, running, pid, clear_proxy)
+            CoreSession::kill_stray_cores(None);
+            (stop_err, running, pid)
         }
     };
 
-    let mut proxy_note = None;
-    if clear_proxy {
-        match sys::set_system_proxy(false, 2080) {
-            Ok(m) => proxy_note = Some(m),
-            Err(e) => proxy_note = Some(format!("clear system proxy: {e}")),
-        }
-    }
+    // Always best-effort clear OS proxy (store flag can lag).
+    let proxy_note = match sys::set_system_proxy(false, 2080) {
+        Ok(m) => Some(m),
+        Err(e) => Some(format!("clear system proxy: {e}")),
+    };
     tray_spin::set_spinning(false);
     Ok(serde_json::json!({
         "stopped": stop_err.is_none(),
@@ -632,6 +638,30 @@ async fn sub_fetch(url: String) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || sub::fetch(&url))
         .await
         .map_err(|e| format!("sub_fetch join: {e}"))?
+}
+
+/// Throne RawUpdater::updateClash — YAML proxies → catalog nodes with outbound JSON.
+#[tauri::command]
+async fn sub_parse_clash(body: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let nodes = data::clash::parse_clash_yaml(&body)?;
+        let arr: Vec<serde_json::Value> = nodes
+            .into_iter()
+            .map(|n| {
+                serde_json::json!({
+                    "name": n.name,
+                    "type": n.type_label,
+                    "addr": n.addr,
+                    "lat": null,
+                    "flow": null,
+                    "outbound": n.outbound,
+                })
+            })
+            .collect();
+        Ok(serde_json::json!({ "ok": true, "nodes": arr, "count": arr.len() }))
+    })
+    .await
+    .map_err(|e| format!("sub_parse_clash join: {e}"))?
 }
 
 /// TCP connect RTT probe. Emits `net-probe-result` per finished target (upstream progressive).
@@ -840,6 +870,7 @@ pub fn run() {
             query_connections,
             query_stats,
             sub_fetch,
+            sub_parse_clash,
             net_tcp_probe,
             net_tcp_probe_stop,
             net_resolve_host,

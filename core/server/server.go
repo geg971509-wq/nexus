@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -43,7 +44,37 @@ var (
 	instanceCancel  context.CancelFunc
 	debug           bool
 	activeProfileID atomic.Int32
+	// lifeMu serializes Start/Stop and snapshots for Query*/TestCurrent.
+	// ponytail: global lock; finer per-subsystem locks if Start latency matters.
+	lifeMu sync.RWMutex
 )
+
+// cleanupAll tears down box + extra + xray + DNS. Idempotent; call only while
+// holding lifeMu (or from a path that already owns exclusive lifecycle).
+func cleanupAll() {
+	if needUnsetDNS {
+		needUnsetDNS = false
+		if boxInstance != nil {
+			if err := sys.SetSystemDNS("Empty", boxInstance.Network().InterfaceMonitor()); err != nil {
+				log.Println("Failed to unset system DNS:", err)
+			}
+		}
+	}
+	if boxInstance != nil {
+		boxInstance.CloseWithTimeout(instanceCancel, time.Second*2, log.Println, true)
+		boxInstance = nil
+		instanceCancel = nil
+	} else if instanceCancel != nil {
+		instanceCancel()
+		instanceCancel = nil
+	}
+	if extraProcess != nil {
+		extraProcess.Stop()
+		extraProcess = nil
+	}
+	closeXray()
+	activeProfileID.Store(-1)
+}
 
 func init() {
 	activeProfileID.Store(-1)
@@ -161,12 +192,20 @@ func closeXrayInstances(instances []*core.Instance) {
 
 func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.ErrorResp, _ error) {
 	var err error
+	// skipCleanup: "already started" must not tear down the live tunnel.
+	skipCleanup := false
+
+	lifeMu.Lock()
+	defer lifeMu.Unlock()
 
 	defer func() {
 		out = &gen.ErrorResp{}
 		if err != nil {
 			out.Error = To(err.Error())
-			boxInstance = nil
+			if !skipCleanup {
+				// Single cleanup for every partial Start failure (extra/xray/box/DNS).
+				cleanupAll()
+			}
 		}
 	}()
 
@@ -179,6 +218,7 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 
 	if boxInstance != nil {
 		err = errors.New("instance already started")
+		skipCleanup = true
 		return
 	}
 
@@ -265,44 +305,27 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 
 	boxInstance, instanceCancel, err = boxmain.Create([]byte(*in.CoreConfig))
 	if err != nil {
-		if extraProcess != nil {
-			extraProcess.Stop()
-			extraProcess = nil
-		}
-		closeXray()
 		return
 	}
 	// After clash tracker: one exact process lookup per routed connection.
 	boxInstance.Router().AppendTracker(processOwnerEnricher{})
 
 	if runtime.GOOS == "darwin" && in.GetTunIpv4Cidr() != "" {
-		stopAllCores := func() {
-			boxInstance.CloseWithTimeout(instanceCancel, time.Second*2, log.Println, true)
-			boxInstance = nil
-			if extraProcess != nil {
-				extraProcess.Stop()
-				extraProcess = nil
-			}
-			closeXray()
-		}
-
 		tunCIDR := in.GetTunIpv4Cidr()
 		tunPrefix, parseErr := netip.ParsePrefix(tunCIDR)
 		if parseErr != nil || !tunPrefix.Addr().Is4() {
 			err = fmt.Errorf("invalid tun_ipv4_cidr %q", tunCIDR)
-			stopAllCores()
 			return
 		}
 
 		tunDNS := tunPrefix.Addr().Next()
 		if !tunDNS.IsValid() || !tunDNS.Is4() {
 			err = fmt.Errorf("got invalid DNS IP from tun_ipv4_cidr: %s", tunDNS)
-			stopAllCores()
 			return
 		}
 
-		if err := sys.SetSystemDNS(tunDNS.String(), boxInstance.Network().InterfaceMonitor()); err != nil {
-			log.Println("Failed to set system DNS:", err)
+		if e := sys.SetSystemDNS(tunDNS.String(), boxInstance.Network().InterfaceMonitor()); e != nil {
+			log.Println("Failed to set system DNS:", e)
 		}
 
 		needUnsetDNS = true
@@ -313,39 +336,11 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 }
 
 func (s *server) Stop(ctx context.Context, in *gen.EmptyReq) (out *gen.ErrorResp, _ error) {
-	var err error
-
-	defer func() {
-		out = &gen.ErrorResp{}
-		if err != nil {
-			out.Error = To(err.Error())
-		}
-	}()
-
-	if boxInstance == nil {
-		return
-	}
-
-	if needUnsetDNS {
-		needUnsetDNS = false
-		err := sys.SetSystemDNS("Empty", boxInstance.Network().InterfaceMonitor())
-		if err != nil {
-			log.Println("Failed to unset system DNS:", err)
-		}
-	}
-	boxInstance.CloseWithTimeout(instanceCancel, time.Second*2, log.Println, true)
-
-	boxInstance = nil
-	activeProfileID.Store(-1)
-
-	if extraProcess != nil {
-		extraProcess.Stop()
-		extraProcess = nil
-	}
-
-	closeXray()
-
-	return
+	lifeMu.Lock()
+	defer lifeMu.Unlock()
+	// Always cleanupAll — also clears orphan extra/xray when box is already nil.
+	cleanupAll()
+	return &gen.ErrorResp{}, nil
 }
 
 func (s *server) QueryState(ctx context.Context, in *gen.EmptyReq) (*gen.CoreStateResponse, error) {
@@ -392,14 +387,16 @@ func (s *server) Test(ctx context.Context, in *gen.TestReq) (*gen.TestResp, erro
 	var err error
 	twice := true
 	if *in.TestCurrent {
-		if boxInstance == nil {
+		lifeMu.RLock()
+		testInstance = boxInstance
+		lifeMu.RUnlock()
+		if testInstance == nil {
 			return &gen.TestResp{Results: []*gen.URLTestResp{{
 				OutboundTag: To("proxy"),
 				LatencyMs:   To(int32(0)),
 				Error:       To("Instance is not running"),
 			}}}, nil
 		}
-		testInstance = boxInstance
 		twice = false
 	} else {
 		if *in.NeedXray {
@@ -575,38 +572,43 @@ func (s *server) QueryStats(ctx context.Context, in *gen.EmptyReq) (out *gen.Que
 	out = &gen.QueryStatsResp{}
 	out.Ups = make(map[string]int64)
 	out.Downs = make(map[string]int64)
-	if boxInstance != nil {
-		clash := service.FromContext[adapter.ClashServer](boxInstance.Context())
-		if clash != nil {
-			cApi, ok := clash.(*clashapi.Server)
-			if !ok {
-				log.Println("Failed to assert clash server")
-				err = E.New("invalid clash server type")
-				return
-			}
-			outbounds := service.FromContext[adapter.OutboundManager](boxInstance.Context())
-			if outbounds == nil {
-				log.Println("Failed to get outbound manager")
-				err = E.New("nil outbound manager")
-				return
-			}
-			endpoints := service.FromContext[adapter.EndpointManager](boxInstance.Context())
-			if endpoints == nil {
-				log.Println("Failed to get endpoint manager")
-				err = E.New("nil endpoint manager")
-				return
-			}
-			for _, ob := range outbounds.Outbounds() {
-				u, d := cApi.TrafficManager().TotalOutbound(ob.Tag())
-				out.Ups[ob.Tag()] = u
-				out.Downs[ob.Tag()] = d
-			}
-			for _, ep := range endpoints.Endpoints() {
-				u, d := cApi.TrafficManager().TotalOutbound(ep.Tag())
-				out.Ups[ep.Tag()] = u
-				out.Downs[ep.Tag()] = d
-			}
-		}
+	lifeMu.RLock()
+	box := boxInstance
+	lifeMu.RUnlock()
+	if box == nil {
+		return
+	}
+	clash := service.FromContext[adapter.ClashServer](box.Context())
+	if clash == nil {
+		return
+	}
+	cApi, ok := clash.(*clashapi.Server)
+	if !ok {
+		log.Println("Failed to assert clash server")
+		err = E.New("invalid clash server type")
+		return
+	}
+	outbounds := service.FromContext[adapter.OutboundManager](box.Context())
+	if outbounds == nil {
+		log.Println("Failed to get outbound manager")
+		err = E.New("nil outbound manager")
+		return
+	}
+	endpoints := service.FromContext[adapter.EndpointManager](box.Context())
+	if endpoints == nil {
+		log.Println("Failed to get endpoint manager")
+		err = E.New("nil endpoint manager")
+		return
+	}
+	for _, ob := range outbounds.Outbounds() {
+		u, d := cApi.TrafficManager().TotalOutbound(ob.Tag())
+		out.Ups[ob.Tag()] = u
+		out.Downs[ob.Tag()] = d
+	}
+	for _, ep := range endpoints.Endpoints() {
+		u, d := cApi.TrafficManager().TotalOutbound(ep.Tag())
+		out.Ups[ep.Tag()] = u
+		out.Downs[ep.Tag()] = d
 	}
 	return
 }
@@ -652,10 +654,13 @@ func connMetaToProto(c *trafficontrol.TrackerMetadata) *gen.ConnectionMetaData {
 // connection that closed between polls). Process ownership is resolved at route
 // time (processOwnerEnricher); this RPC only reports stored fields.
 func (s *server) QueryConnections(ctx context.Context, in *gen.EmptyReq) (*gen.QueryConnectionsResp, error) {
-	if boxInstance == nil {
+	lifeMu.RLock()
+	box := boxInstance
+	lifeMu.RUnlock()
+	if box == nil {
 		return &gen.QueryConnectionsResp{}, nil
 	}
-	clashServer := service.FromContext[adapter.ClashServer](boxInstance.Context())
+	clashServer := service.FromContext[adapter.ClashServer](box.Context())
 	if clashServer == nil {
 		return &gen.QueryConnectionsResp{}, errors.New("no clash server found")
 	}
@@ -696,13 +701,15 @@ func (s *server) SpeedTest(ctx context.Context, in *gen.SpeedTestRequest) (*gen.
 	outboundTags := in.OutboundTags
 	var err error
 	if *in.TestCurrent {
-		if boxInstance == nil {
+		lifeMu.RLock()
+		testInstance = boxInstance
+		lifeMu.RUnlock()
+		if testInstance == nil {
 			return &gen.SpeedTestResponse{Results: []*gen.SpeedTestResult{{
 				OutboundTag: To("proxy"),
 				Error:       To("Instance is not running"),
 			}}}, nil
 		}
-		testInstance = boxInstance
 	} else {
 		if *in.NeedXray {
 			xrayTestIntance, err = xray.CreateXrayInstance(*in.XrayConfig)

@@ -30,6 +30,7 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # TCP probe must bind physical iface under Tun (IP_BOUND_IF); socket2 already transitive.
 socket2 = "0.6"
 libc = "0.2"
+serde_yaml = "0.9"
 
 # Named-pipe server for Core IPC (already in lock via tauri transitive tree).
 [target.'cfg(windows)'.dependencies]

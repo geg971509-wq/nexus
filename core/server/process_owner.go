@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"NexusCore/internal/boxbox"
+
 	"github.com/sagernet/sing-box/adapter"
 	sboxprocess "github.com/sagernet/sing-box/common/process"
 	"github.com/sagernet/sing-box/experimental/clashapi"
@@ -126,11 +128,11 @@ func lookupProcessPath(network string, source netip.AddrPort, dests []netip.Addr
 	return nil
 }
 
-func attachProcessToTrackers(source netip.AddrPort, info *adapter.ConnectionOwner) {
-	if info == nil || info.ProcessPath == "" || boxInstance == nil || !source.IsValid() {
+func attachProcessToTrackers(box *boxbox.Box, source netip.AddrPort, info *adapter.ConnectionOwner) {
+	if info == nil || info.ProcessPath == "" || box == nil || !source.IsValid() {
 		return
 	}
-	clashServer := service.FromContext[adapter.ClashServer](boxInstance.Context())
+	clashServer := service.FromContext[adapter.ClashServer](box.Context())
 	if clashServer == nil {
 		return
 	}
@@ -152,13 +154,25 @@ func attachProcessToTrackers(source netip.AddrPort, info *adapter.ConnectionOwne
 	}
 }
 
+// liveBoxSnapshot returns the current box pointer under lifeMu (may be nil).
+func liveBoxSnapshot() *boxbox.Box {
+	lifeMu.RLock()
+	box := boxInstance
+	lifeMu.RUnlock()
+	return box
+}
+
 // resolveOwnerOnce does a single multi-candidate lookup and attaches the result.
 // Returns true when a process path was written.
 func resolveOwnerOnce(conn net.Conn, metadata adapter.InboundContext) bool {
+	box := liveBoxSnapshot()
+	if box == nil {
+		return false
+	}
 	if metadata.ProcessInfo != nil && metadata.ProcessInfo.ProcessPath != "" {
 		// Already known from matchRule; still mirror onto tracker if needed.
 		if metadata.Source.IsValid() {
-			attachProcessToTrackers(metadata.Source.AddrPort(), metadata.ProcessInfo)
+			attachProcessToTrackers(box, metadata.Source.AddrPort(), metadata.ProcessInfo)
 		}
 		return true
 	}
@@ -167,7 +181,7 @@ func resolveOwnerOnce(conn net.Conn, metadata adapter.InboundContext) bool {
 	if info == nil {
 		return false
 	}
-	attachProcessToTrackers(source, info)
+	attachProcessToTrackers(box, source, info)
 	return true
 }
 
@@ -179,11 +193,16 @@ func (processOwnerEnricher) RoutedConnection(ctx context.Context, conn net.Conn,
 	}
 	// Single deferred attempt only if the PCB entry was not ready at route time.
 	// Not a poll: at most one extra lookup ~100ms later.
+	// Capture box at schedule time; skip if tunnel was replaced/stopped.
+	box := liveBoxSnapshot()
 	source, dests := exactSocketTuple(conn, metadata)
 	network := metadata.Network
 	time.AfterFunc(100*time.Millisecond, func() {
+		if box == nil || liveBoxSnapshot() != box {
+			return
+		}
 		if info := lookupProcessPath(network, source, dests); info != nil {
-			attachProcessToTrackers(source, info)
+			attachProcessToTrackers(box, source, info)
 		}
 	})
 	return conn
@@ -194,14 +213,18 @@ func (processOwnerEnricher) RoutedPacketConnection(ctx context.Context, conn N.P
 	if resolveOwnerOnce(nil, metadata) {
 		return conn
 	}
+	box := liveBoxSnapshot()
 	source, dests := exactSocketTuple(nil, metadata)
 	network := metadata.Network
 	if network == "" {
 		network = N.NetworkUDP
 	}
 	time.AfterFunc(100*time.Millisecond, func() {
+		if box == nil || liveBoxSnapshot() != box {
+			return
+		}
 		if info := lookupProcessPath(network, source, dests); info != nil {
-			attachProcessToTrackers(source, info)
+			attachProcessToTrackers(box, source, info)
 		}
 	})
 	return conn
