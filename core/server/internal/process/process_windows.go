@@ -11,10 +11,20 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
+
+// applyNoConsole hides the black console flash for non-elevated extra processes
+// (elevated path already uses CREATE_NO_WINDOW in CreateProcessWithTokenW).
+func applyNoConsole(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: windows.CREATE_NO_WINDOW,
+	}
+}
 
 // startChild launches the extra process de-elevated to the unprivileged
 // interactive user when the Core runs elevated, else as-is.

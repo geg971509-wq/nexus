@@ -81,6 +81,8 @@ func newCmd(path string, args []string, noOut bool) *exec.Cmd {
 	cmd.Stdout = &pipeLogger{prefix: extraCorePrefix, noOut: noOut}
 	cmd.Stderr = &pipeLogger{prefix: extraCorePrefix, noOut: noOut}
 	cmd.Env = childEnv()
+	// Windows: hide console for CUI children (netsh/extra core). No-op on unix.
+	applyNoConsole(cmd)
 	return cmd
 }
 

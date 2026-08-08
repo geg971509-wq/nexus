@@ -147,9 +147,11 @@ log "building NexusCore windows/amd64 (go · tags=$CORE_TAGS_WIN)…"
   export GOARCH=amd64
   # clear mac CGO env
   unset CC CGO_CFLAGS CGO_LDFLAGS || true
+  # -H=windowsgui: PE subsystem GUI — no black console when GUI/Core spawn helpers.
+  # stdout/stderr still work when parent redirects (session core_stdio_sinks).
   go build -trimpath \
     -tags "$CORE_TAGS_WIN" \
-    -ldflags "-s -w -X 'github.com/sagernet/sing-box/constant.Version=${VERSION_SINGBOX}' -X 'internal/godebug.defaultGODEBUG=multipathtcp=0' -checklinkname=0" \
+    -ldflags "-s -w -H=windowsgui -X 'github.com/sagernet/sing-box/constant.Version=${VERSION_SINGBOX}' -X 'internal/godebug.defaultGODEBUG=multipathtcp=0' -checklinkname=0" \
     -o "$CORE_WIN_OUT" \
     .
 )

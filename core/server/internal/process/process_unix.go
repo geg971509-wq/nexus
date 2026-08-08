@@ -12,6 +12,9 @@ import (
 	"syscall"
 )
 
+// applyNoConsole is a Windows-only console-hide hook; unix children need no flag.
+func applyNoConsole(_ *exec.Cmd) {}
+
 // startChild launches the extra process, dropped to the unprivileged real user
 // when the Core is setuid-root (see applyPrivilegeDrop), else as-is.
 func startChild(path string, args []string, noOut bool) (running, error) {
