@@ -33,8 +33,9 @@
     --separator-opaque: #d2d2d7;
     --label: #1d1d1f;
     --secondary: #6e6e73;
-    --tertiary: #6e6e73;
+    --tertiary: #8e8e93;
     --quaternary: #aeaeb2;
+    --muted: #8e8e93;
     --blue: #007aff;
     --blue-soft: rgba(0, 122, 255, 0.12);
     --green: #34c759;
@@ -119,6 +120,7 @@
     --secondary: #98989d;
     --tertiary: #8e8e93;
     --quaternary: #636366;
+    --muted: #8e8e93;
     --blue: #0a84ff;
     --blue-soft: rgba(10, 132, 255, 0.22);
     --green: #30d158;
@@ -288,13 +290,13 @@
     min-height: 0;
     overflow: visible;
   }
-  /* row 1: only window chrome (real macOS lights overlay this spacer) */
+  /* row 1: only window chrome (real macOS lights overlay this spacer; y=18 → need ~40 band) */
   .titlebar-chrome {
     display: flex;
     align-items: center;
-    height: 36px;
+    height: 40px;
     padding: 0 16px;
-    flex: 0 0 36px;
+    flex: 0 0 40px;
   }
   .traffic-lights {
     display: flex;
@@ -374,7 +376,11 @@
     font-size: 13px;
     font-weight: 500;
     color: var(--secondary);
-    transition: background .15s var(--ease), color .15s var(--ease), box-shadow .15s var(--ease);
+    transition: background .15s var(--ease), color .15s var(--ease), box-shadow .15s var(--ease), opacity .12s var(--ease);
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
   }
   .seg button:hover { color: var(--label); }
   .seg button.active {
@@ -382,6 +388,16 @@
     color: var(--label);
     box-shadow: 0 0.5px 1px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
   }
+  .seg button.dragging {
+    opacity: 0.45;
+    cursor: grabbing;
+  }
+  .seg button.drag-over {
+    box-shadow: inset 0 0 0 1.5px var(--blue);
+  }
+  .seg.seg-dragging { cursor: grabbing; }
+  .seg.seg-dragging button { cursor: grabbing; }
+  .seg.seg-dragging { user-select: none; -webkit-user-select: none; }
   .tb-btn {
     height: 36px;
     min-width: 36px;
@@ -651,6 +667,7 @@
   }
 
   .power {
+    position: relative;
     width: 36px;
     height: 36px;
     border-radius: 50%;
@@ -660,8 +677,16 @@
     color: var(--secondary);
     transition: transform .18s var(--ease), background .18s var(--ease), color .18s var(--ease), box-shadow .18s var(--ease);
   }
+  /* hit ≥44, visual stays 36 */
+  .power::before {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+  }
   .power:hover { transform: scale(1.04); background: rgba(120, 120, 128, 0.2); }
   .power:active { transform: scale(0.96); }
+  .power[disabled], .power[aria-busy="true"] { opacity: 0.72; cursor: progress; }
   .power svg { width: 18px; height: 18px; }
   .power.on {
     background: var(--green);
@@ -714,10 +739,12 @@
     gap: 6px;
   }
   .toggle {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 7px;
     height: 28px;
+    min-height: 28px;
     padding: 0 11px 0 8px;
     border-radius: 999px;
     background: rgba(120, 120, 128, 0.1);
@@ -726,6 +753,17 @@
     color: var(--secondary);
     transition: background .15s var(--ease), color .15s var(--ease);
     user-select: none;
+  }
+  /* hit ≥44 tall without growing chrome */
+  .toggle::before {
+    content: "";
+    position: absolute;
+    left: -2px;
+    right: -2px;
+    top: 50%;
+    height: 44px;
+    transform: translateY(-50%);
+    border-radius: 999px;
   }
   .toggle:hover { background: rgba(120, 120, 128, 0.16); color: var(--label); }
   .toggle.on {
@@ -970,9 +1008,11 @@
     color: var(--orange, #ff9f0a);
     font-weight: 600;
   }
-    /* flow = 流量列 (never reuse .traffic — clashes with traffic-lights) */
+    /* flow = 流量列 (never reuse .traffic — clashes with traffic-lights).
+     Dual "96.9 MB↑ · 1.2 GB↓" needs ~180px; min-width so fixed table cannot crush it. */
   .flow {
-    width: 140px;
+    width: 180px;
+    min-width: 180px;
     font-family: var(--mono);
     font-size: 11.5px;
     font-variant-numeric: tabular-nums;
@@ -1419,6 +1459,10 @@
     border-bottom: 0.5px solid var(--separator);
     min-height: 44px;
   }
+  /* long URL / path / DoH / bypass: give the control the real remaining width */
+  .set-row:has(.set-ctrl.wide) {
+    grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.4fr);
+  }
   .set-row:last-child { border-bottom: 0; }
   .set-row:hover { background: var(--row-hover); }
   .set-label {
@@ -1438,6 +1482,9 @@
     max-width: 340px;
     justify-self: end;
   }
+  .set-row:has(.set-ctrl.wide) .set-right {
+    max-width: none;
+  }
   .set-hint {
     display: block;
     margin: 0;
@@ -1452,6 +1499,12 @@
   }
   .set-ctrl { width: 100%; min-width: 0; }
   .set-ctrl.wide { max-width: none; }
+  /* short numeric / unit fields: don't stretch empty shells across the column */
+  .set-ctrl:has(> .field[data-type="number"]),
+  .set-ctrl:has(> .unit-field) {
+    width: auto;
+    max-width: 100%;
+  }
   .set-ctrl.inline { display: flex; justify-content: flex-end; }
   .toggle[title], .tb-btn[title], .side-item[title], .menu-item .grow[title] {
     cursor: default;
@@ -1498,8 +1551,8 @@
   /* Form controls — pure DOM text (span/div, not native form paint) */
   .field, .select {
     width: 100%;
-    min-height: 30px;
-    height: 30px;
+    min-height: 32px;
+    height: 32px;
     padding: 0 11px;
     border-radius: 8px;
     border: 1px solid var(--control-border);
@@ -1509,12 +1562,17 @@
     font-weight: 500;
     color: var(--control-text);
     outline: none;
-    display: inline-flex;
-    align-items: center;
     box-sizing: border-box;
     transition: border-color .12s var(--ease), box-shadow .12s var(--ease);
   }
+  /* block: long contenteditable can actually overflow-x scroll */
+  .field {
+    display: block;
+    line-height: 30px; /* 32 box − 1px borders */
+  }
   .select {
+    display: inline-flex;
+    align-items: center;
     justify-content: space-between;
     gap: 8px;
     cursor: pointer;
@@ -1586,22 +1644,40 @@
     color: var(--control-muted);
     font-weight: 400;
   }
+  /* URL/path always left-aligned; long text ellipsizes — never mid-string scroll "float" */
   .field {
     white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
   }
   .field .ph { pointer-events: none; }
+  /* short numbers: compact shell, not a 340 empty runway */
+  .field[data-type="number"] {
+    width: 96px;
+    max-width: 96px;
+    flex: 0 0 96px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
   .unit-field {
     display: flex;
     align-items: center;
     gap: 8px;
+    width: auto;
+    max-width: 160px;
   }
-  .unit-field .field { flex: 1; min-width: 0; }
+  .unit-field .field {
+    flex: 0 0 96px;
+    width: 96px;
+    max-width: 96px;
+    min-width: 0;
+  }
   .unit {
     font-size: 12px;
     color: var(--tertiary);
     font-weight: 500;
     min-width: 2em;
+    flex: 0 0 auto;
   }
   .switch-only {
     width: 38px;
@@ -1694,6 +1770,15 @@
   }
   /* !important: beat UA [hidden] if attribute clear races class toggle */
   .confirm-mask.open { display: flex !important; }
+  .confirm-mask.ask-mask { z-index: 320; } /* above groups/edit/quit */
+  .confirm-card.ask-danger h3 { color: var(--red, #ff3b30); }
+  .confirm-actions .btn-primary.danger {
+    background: linear-gradient(180deg, #ff6b63 0%, #ff3b30 100%);
+    box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 1px 2px rgba(180, 30, 20, .22);
+  }
+  .confirm-actions .btn-primary.danger:hover {
+    background: linear-gradient(180deg, #ff5a52 0%, #e0342b 100%);
+  }
   .confirm-card {
     width: min(360px, calc(100vw - 40px));
     padding: 18px 18px 14px;
@@ -1750,10 +1835,11 @@
   }
   .form-grid label.edit-check input { width: 14px; height: 14px; accent-color: var(--blue); }
   .form-grid .field {
-    min-height: 30px; padding: 6px 10px;
+    min-height: 32px; height: 32px; padding: 0 10px; line-height: normal;
     border-radius: 8px; border: 0.5px solid var(--control-border);
     background: var(--control-bg); color: var(--label); font-size: 13px;
-    width: 100%; min-width: 0; box-sizing: border-box;
+    width: 100%; max-width: none; min-width: 0; box-sizing: border-box;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .form-grid .field:focus { outline: none; border-color: var(--focus-border); box-shadow: var(--focus-ring); }
   .form-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-width: 0; }
@@ -1991,10 +2077,10 @@
     box-shadow: 0 1px 0 rgba(255,255,255,.2) inset, 0 1px 2px rgba(0, 90, 200, .2);
   }
   .btn-primary:hover { background: linear-gradient(180deg, #2f86ff 0%, #0071eb 100%); }
-  .path-row { display: flex; gap: 8px; align-items: center; }
-  .path-row .field { flex: 1; }
+  .path-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .path-row .field { flex: 1 1 auto; min-width: 0; width: auto; }
   .btn-mini {
-    height: 30px;
+    height: 32px;
     padding: 0 11px;
     border-radius: 8px;
     background: var(--fill);
@@ -2002,6 +2088,7 @@
     font-size: 12px;
     font-weight: 600;
     white-space: nowrap;
+    flex: 0 0 auto;
   }
   .btn-mini:hover { background: rgba(120, 120, 128, 0.18); }
 
@@ -2086,6 +2173,19 @@
     text-align: left;
   }
   .menu-item:hover { background: var(--blue); color: #fff; }
+  .menu-item:disabled,
+  .menu-item[disabled],
+  .menu-item[aria-disabled="true"] {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: not-allowed;
+  }
+  .menu-item:disabled:hover,
+  .menu-item[disabled]:hover,
+  .menu-item[aria-disabled="true"]:hover {
+    background: transparent;
+    color: var(--label);
+  }
   .menu-item .check {
     width: 14px;
     color: var(--blue);
@@ -2093,9 +2193,20 @@
     font-weight: 700;
   }
   .menu-item:hover .check { color: #fff; }
+  .menu-item:disabled:hover .check,
+  .menu-item[disabled]:hover .check,
+  .menu-item[aria-disabled="true"]:hover .check { color: var(--blue); }
   .menu-item .grow { flex: 1; }
   .menu-item .chev { color: var(--tertiary); font-size: 11px; }
   .menu-item:hover .chev { color: rgba(255,255,255,.85); }
+  .menu-item:disabled:hover .chev,
+  .menu-item[disabled]:hover .chev,
+  .menu-item[aria-disabled="true"]:hover .chev { color: var(--tertiary); }
+  .menu-item.has-sub[aria-disabled="true"] > .menu-sub,
+  .menu-item.has-sub[aria-disabled="true"]:hover > .menu-sub,
+  .menu-item.has-sub[aria-disabled="true"]:focus-within > .menu-sub {
+    display: none !important;
+  }
   .menu-sep {
     height: 0.5px;
     background: var(--separator);
@@ -2197,18 +2308,18 @@
               <button class="menu-item" data-act="add-clip" role="menuitem"><span class="grow" title="粘贴分享链接或 URI 导入" data-i18n="menu.addClip" data-i18n-title="title.addClip">从剪贴板添加配置</span></button>
               <button class="menu-item" data-act="add-file" role="menuitem"><span class="grow" title="选择本地订阅/配置文件" data-i18n="menu.addFile" data-i18n-title="title.addFile">从文件添加配置</span></button>
               <button class="menu-item" data-act="scan-qr" role="menuitem"><span class="grow" title="从屏幕或图片识别节点二维码" data-i18n="menu.scanQr" data-i18n-title="title.scanQr">扫描二维码</span></button>
-              <div class="menu-item has-sub" tabindex="0" role="menuitem" aria-haspopup="true">
-                <span class="grow" title="下载地区规则配置档" data-i18n="menu.dlProfile" data-i18n-title="title.dlProfile">下载配置档</span><span class="chev">›</span>
-                <div class="menu-sub" role="menu">
-                  <button class="menu-item" data-act="dl-china" role="menuitem"><span class="grow" title="中国场景规则集" data-i18n-title="title.dlChina">China</span></button>
-                  <button class="menu-item" data-act="dl-iran" role="menuitem"><span class="grow" title="伊朗场景规则集" data-i18n-title="title.dlIran">Iran</span></button>
-                  <button class="menu-item" data-act="dl-russia" role="menuitem"><span class="grow" title="俄罗斯场景规则集" data-i18n-title="title.dlRussia">Russia</span></button>
+              <div class="menu-item has-sub" tabindex="-1" role="menuitem" aria-haspopup="true" aria-disabled="true" disabled title="未实现" data-i18n-title="title.nyi">
+                <span class="grow" title="未实现" data-i18n="menu.dlProfile" data-i18n-title="title.nyi">下载配置档</span><span class="chev">›</span>
+                <div class="menu-sub" role="menu" hidden aria-hidden="true">
+                  <button class="menu-item" data-act="dl-china" role="menuitem" disabled aria-disabled="true" title="未实现" data-i18n-title="title.nyi"><span class="grow" data-i18n-title="title.nyi">China</span></button>
+                  <button class="menu-item" data-act="dl-iran" role="menuitem" disabled aria-disabled="true" title="未实现" data-i18n-title="title.nyi"><span class="grow" data-i18n-title="title.nyi">Iran</span></button>
+                  <button class="menu-item" data-act="dl-russia" role="menuitem" disabled aria-disabled="true" title="未实现" data-i18n-title="title.nyi"><span class="grow" data-i18n-title="title.nyi">Russia</span></button>
                 </div>
               </div>
               <div class="menu-sep"></div>
               <button class="menu-item" data-act="toggle-autostart" role="menuitem"><span class="check"></span><span class="grow" title="登录系统后自动打开 Nexus" data-i18n="menu.autostart" data-i18n-title="title.autostart">随系统启动</span></button>
-              <button class="menu-item checked" data-act="toggle-remember" role="menuitem"><span class="check">✓</span><span class="grow" title="未接线：当前不会在启动时恢复选中配置" data-i18n="menu.remember" data-i18n-title="title.remember">记住配置档</span></button>
-              <button class="menu-item checked" data-act="toggle-lan" role="menuitem"><span class="check">✓</span><span class="grow" title="其它设备可连本机入站端口" data-i18n="menu.allowLan" data-i18n-title="title.allowLan">允许局域网连接</span></button>
+              <button class="menu-item" data-act="toggle-remember" role="menuitem" disabled aria-disabled="true" title="未接线：当前不会在启动时恢复选中配置" data-i18n-title="title.remember"><span class="check"></span><span class="grow" data-i18n="menu.remember" data-i18n-title="title.remember">记住配置档</span></button>
+              <button class="menu-item" data-act="toggle-lan" role="menuitem" disabled aria-disabled="true" title="未实现" data-i18n-title="title.nyi"><span class="check"></span><span class="grow" data-i18n="menu.allowLan" data-i18n-title="title.nyi">允许局域网连接</span></button>
               <div class="menu-sep"></div>
               <button class="menu-item" data-act="manage-groups" role="menuitem"><span class="grow" title="新建、重命名、删除订阅分组" data-i18n="menu.groups" data-i18n-title="title.groups">管理分组…</span></button>
               <button class="menu-item" data-act="runtime-stats" role="menuitem"><span class="grow" title="核心与连接运行摘要" data-i18n="menu.stats" data-i18n-title="title.stats">运行状态…</span></button>
@@ -2218,7 +2329,7 @@
               <button class="menu-item" data-act="quit" role="menuitem"><span class="grow" title="退出 Nexus" data-i18n="menu.quit" data-i18n-title="title.quit">退出</span></button>
             </div>
           </div>
-          <div class="seg" role="tablist" aria-label="订阅" id="subSeg">
+          <div class="seg" role="tablist" aria-label="订阅" id="subSeg" data-tauri-drag-region="false">
             <button class="active" role="tab" aria-selected="true" data-sub="default" title="当前订阅：Default" data-i18n-title="title.subDefault">Default</button>
             <button role="tab" aria-selected="false" data-sub="backup" title="切换到备用订阅" data-i18n-title="title.subBackup"><span data-i18n="tb.backup">备用</span></button>
           </div>
@@ -2239,7 +2350,7 @@
             </div>
           </div>
           <button type="button" class="tb-btn" id="groupsBtn" title="管理订阅分组" data-i18n="tb.groups" data-i18n-title="title.manageGroups" data-tauri-drag-region="false">分组</button>
-          <button type="button" class="tb-btn solid" id="refreshBtn" title="立即更新订阅节点列表" data-i18n-title="title.refresh" data-tauri-drag-region="false"><span data-i18n="tb.refresh">更新</span></button>
+          <button type="button" class="tb-btn" id="refreshBtn" title="立即更新订阅节点列表" data-i18n-title="title.refresh" data-tauri-drag-region="false"><span data-i18n="tb.refresh">更新</span></button>
         </div>
       </div>
     </header>
@@ -2726,8 +2837,8 @@
                   <div class="set-row">
                     <div class="set-label" data-i18n="label.allowLan">允许局域网连接</div>
                     <div class="set-right">
-                      <span class="set-hint" data-i18n="hint.1a68215a">其它设备可通过本机 IP 使用代理</span>
-                      <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
+                      <span class="set-hint" data-i18n="hint.allowLanNyi">未实现：入站仍仅监听本机</span>
+                      <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false" disabled aria-disabled="true" title="未实现" data-i18n-title="title.nyi"></button></div>
                     </div>
                   </div>
                   <div class="set-row">
@@ -2848,11 +2959,10 @@
                   <div class="set-row">
                     <div class="set-label" data-i18n="label.728c7d71">订阅链接</div>
                     <div class="set-right">
-                      <span class="set-hint" data-i18n="hint.940fbe3c">当前顶栏分组的订阅 URL；粘贴后点应用</span>
+                      <span class="set-hint" data-i18n="hint.940fbe3c">当前顶栏分组的订阅 URL；编辑后点应用</span>
                       <div class="set-ctrl wide">
                         <div class="path-row">
                           <div class="field placeholder" id="subUrlField" contenteditable="true" spellcheck="false" role="textbox" data-type="url" data-placeholder="https://…/sub" data-readonly="false"><span class="ph">https://…/sub</span></div>
-                          <button type="button" class="btn-mini" id="subUrlPaste" title="从剪贴板粘贴" data-i18n="btn.paste" data-i18n-title="title.paste">粘贴</button>
                           <button type="button" class="btn-mini" id="subUrlApply" title="保存到当前分组" data-i18n="btn.apply" data-i18n-title="title.applySub">应用</button>
                         </div>
                       </div>
@@ -3013,6 +3123,18 @@
     </div>
   </div>
 
+  <!-- in-app confirm: window.confirm is often silent/false in Tauri WKWebView -->
+  <div class="confirm-mask ask-mask" id="askMask" role="dialog" aria-modal="true" aria-labelledby="askTitle" hidden>
+    <div class="confirm-card warn" id="askCard">
+      <h3 id="askTitle" data-i18n="confirm.askTitle">确认</h3>
+      <p id="askMsg"></p>
+      <div class="confirm-actions">
+        <button type="button" class="btn-ghost" id="askCancel" data-i18n="btn.cancel">取消</button>
+        <button type="button" class="btn-primary" id="askOk" data-i18n="btn.ok">确定</button>
+      </div>
+    </div>
+  </div>
+
   </div>
 
   <div class="confirm-mask" id="editMask" role="dialog" aria-modal="true" aria-labelledby="editTitle" hidden>
@@ -3160,6 +3282,7 @@
     tableCard.setAttribute('aria-label', '节点列表');
   }
   let connected = false;
+  let powerBusy = false;
   let selectedName = '—';
   let selectedLat = '—';
   // Hero "经 xxx" follows the tunnel actually started — not the list selection.
@@ -3345,30 +3468,57 @@
     if (row) row.classList.add('connected');
   }
   /** Connected line = tunnel node; disconnected line = list selection. */
-  function refreshHeroStatus() {
+  function setPowerBusy(on, wantConnect) {
+    powerBusy = !!on;
+    const pb = document.getElementById('powerBtn') || powerBtn;
+    if (!pb) return;
+    pb.disabled = !!on;
+    pb.setAttribute('aria-busy', on ? 'true' : 'false');
+    if (typeof refreshHeroStatus === 'function') refreshHeroStatus(wantConnect);
+  }
+
+  function refreshHeroStatus(busyWantConnect) {
     const via = connectedName || selectedName;
     const latShow = connected
       ? ((connectedLat && connectedLat !== '—' && connectedLat !== '…') ? connectedLat : '—')
       : ((selectedLat && selectedLat !== '—' && selectedLat !== '…') ? selectedLat : '—');
     const mismatch = !!(connected && connectedName && selectedName && selectedName !== '—' && selectedName !== connectedName);
+    const busy = !!powerBusy;
+    const wantOn = busyWantConnect != null ? !!busyWantConnect : !connected;
     if (typeof t === 'function') {
-      statusText.textContent = connected ? t('status.connected') : t('status.disconnected');
-      if (connected && mismatch) {
-        statusSub.innerHTML = t('status.subMismatch', { tunnel: connectedName, selected: selectedName, lat: latShow });
+      if (busy) {
+        statusText.textContent = wantOn ? t('status.connecting') : t('status.disconnecting');
+        statusSub.innerHTML = wantOn
+          ? t('status.subConnecting', { name: selectedName || via || '—' })
+          : t('status.subDisconnecting', { name: connectedName || via || '—' });
+        sbStatus.textContent = t('sb.busy');
       } else {
-        statusSub.innerHTML = connected
-          ? t('status.subOn', { name: via, lat: latShow })
-          : t('status.subOff', { name: selectedName });
+        statusText.textContent = connected ? t('status.connected') : t('status.disconnected');
+        if (connected && mismatch) {
+          statusSub.innerHTML = t('status.subMismatch', { tunnel: connectedName, selected: selectedName, lat: latShow });
+        } else {
+          statusSub.innerHTML = connected
+            ? t('status.subOn', { name: via, lat: latShow })
+            : t('status.subOff', { name: selectedName });
+        }
+        sbStatus.textContent = connected ? t('sb.running') : t('sb.stopped');
       }
-      sbStatus.textContent = connected ? t('sb.running') : t('sb.stopped');
     } else {
-      statusText.textContent = connected ? '已连接' : '未连接';
-      statusSub.innerHTML = connected
-        ? (mismatch
-          ? `当前隧道：<strong>${connectedName}</strong> · 选定：<strong>${selectedName}</strong>（需重新连接）· 延迟 ${latShow}`
-          : `经 <strong>${via}</strong> · 延迟 ${latShow}`)
-        : `选择节点后点左侧连接 · 当前 <strong>${selectedName}</strong>`;
-      sbStatus.textContent = connected ? '运行中' : '未在运行';
+      if (busy) {
+        statusText.textContent = wantOn ? '连接中…' : '断开中…';
+        statusSub.innerHTML = wantOn
+          ? `正在连接 <strong>${selectedName || via || '—'}</strong>`
+          : `正在断开 <strong>${connectedName || via || '—'}</strong>`;
+        sbStatus.textContent = '处理中';
+      } else {
+        statusText.textContent = connected ? '已连接' : '未连接';
+        statusSub.innerHTML = connected
+          ? (mismatch
+            ? `当前隧道：<strong>${connectedName}</strong> · 选定：<strong>${selectedName}</strong>（需重新连接）· 延迟 ${latShow}`
+            : `经 <strong>${via}</strong> · 延迟 ${latShow}`)
+          : `选择节点后点左侧连接 · 当前 <strong>${selectedName}</strong>`;
+        sbStatus.textContent = connected ? '运行中' : '未在运行';
+      }
     }
   }
 
@@ -3443,14 +3593,12 @@
     });
   }
 
-  let powerBusy = false;
   powerBtn.addEventListener('click', () => {
     // Always queue/coalesce — never drop a connect/disconnect intent.
     const wantConnect = !connected;
     const kind = wantConnect ? 'reconnect' : 'disconnect';
     runSessionOp(kind, async () => {
-      powerBusy = true;
-      powerBtn.disabled = true;
+      setPowerBusy(true, wantConnect);
       try {
         if (wantConnect) {
           const payload = (typeof nodeConnectPayload === 'function')
@@ -3506,8 +3654,7 @@
           if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
         }
       } finally {
-        powerBusy = false;
-        powerBtn.disabled = false;
+        setPowerBusy(false);
       }
     });
   });
@@ -3721,8 +3868,7 @@
             if (row) selectedLat = row.dataset.lat || '—';
           }
           runSessionOp('reconnect', async () => {
-            powerBusy = true;
-            powerBtn.disabled = true;
+            setPowerBusy(true, true);
             try {
               if (connected) {
                 const dr = await nexusInvoke('disconnect_selected');
@@ -3749,8 +3895,7 @@
               try { localStorage.setItem('nexus.lastConnected', connectedName || selectedName || ''); } catch (_) {}
               log('OK', 'ok', t('log.tunnelOn', { port: r.data?.listen_port || mixedPort(), name: connectedName || selectedName }));
             } finally {
-              powerBusy = false;
-              powerBtn.disabled = false;
+              setPowerBusy(false);
             }
           });
         },
@@ -3758,10 +3903,23 @@
           if (connected) powerBtn.click();
           else log('SYS', 'info', t('log.notConnected'));
         },
-        delete: () => {
+        delete: async () => {
           const rows = selectedRows();
           if (!rows.length) { log('SYS', 'warn', t('log.noNode')); return; }
-          const names = new Set(rows.map(r => r.dataset.name));
+          if (rows.length > 1) {
+            const msg = (typeof t === 'function')
+              ? t('confirm.deleteNodes', { n: rows.length })
+              : `删除选定的 ${rows.length} 个节点？`;
+            const ok = await askConfirm(msg, {
+              title: (typeof t === 'function') ? t('confirm.deleteNodesTitle') : '删除节点',
+              okText: (typeof t === 'function') ? t('ctx.delete') : '删除',
+              danger: true,
+            });
+            if (!ok) return;
+          }
+          // re-query selection after await (DOM may still match)
+          const live = selectedRows().length ? selectedRows() : rows;
+          const names = new Set(live.map(r => r.dataset.name));
           const gid = currentGid();
           const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
           if (prof && Array.isArray(prof.nodes)) {
@@ -3769,10 +3927,10 @@
             const g = GROUPS.find(x => x.id === gid);
             if (g) g.count = prof.nodes.length;
           }
-          rows.forEach(r => r.remove());
+          live.forEach(r => r.remove());
           renumberRows();
           if (typeof saveCatalog === 'function') saveCatalog(true);
-          log('SYS', 'warn', t('log.deletedN', { n: rows.length }));
+          log('SYS', 'warn', t('log.deletedN', { n: names.size }));
         },
         'select-all': () => { selectAllNodes(); },
         'refresh-sub': () => { updateSubscription(null); },
@@ -5093,6 +5251,45 @@
     el.hidden = true;
     el.setAttribute('hidden', '');
   }
+  /** In-app confirm. Native window.confirm is often a no-op / always-false in Tauri WKWebView. */
+  let _askResolve = null;
+  function closeAsk(result) {
+    const r = _askResolve;
+    _askResolve = null;
+    closeDialog('askMask');
+    const ok = document.getElementById('askOk');
+    if (ok) ok.classList.remove('danger');
+    if (r) r(!!result);
+  }
+  function askConfirm(message, opts) {
+    opts = opts || {};
+    return new Promise((resolve) => {
+      // collapse any prior ask
+      if (_askResolve) { const prev = _askResolve; _askResolve = null; prev(false); }
+      _askResolve = resolve;
+      const title = document.getElementById('askTitle');
+      const msg = document.getElementById('askMsg');
+      const ok = document.getElementById('askOk');
+      const card = document.getElementById('askCard');
+      if (title) title.textContent = opts.title || (typeof t === 'function' ? t('confirm.askTitle') : '确认');
+      if (msg) msg.textContent = message || '';
+      if (ok) {
+        ok.textContent = opts.okText || (typeof t === 'function' ? t('btn.ok') : '确定');
+        ok.classList.toggle('danger', !!opts.danger);
+      }
+      if (card) card.classList.toggle('ask-danger', !!opts.danger);
+      const cancel = document.getElementById('askCancel');
+      if (cancel) cancel.textContent = opts.cancelText || (typeof t === 'function' ? t('btn.cancel') : '取消');
+      openDialog('askMask');
+      // focus primary for keyboard
+      setTimeout(() => { try { (opts.danger ? cancel : ok)?.focus(); } catch (_) {} }, 0);
+    });
+  }
+  document.getElementById('askOk')?.addEventListener('click', () => closeAsk(true));
+  document.getElementById('askCancel')?.addEventListener('click', () => closeAsk(false));
+  document.getElementById('askMask')?.addEventListener('click', (e) => {
+    if (e.target.id === 'askMask') closeAsk(false);
+  });
   /** sing-box outbound → flat edit fields (upstream dialog_edit_profile subset). */
   function fieldsFromOutbound(ob, fallback) {
     const o = (ob && typeof ob === 'object') ? ob : {};
@@ -6104,20 +6301,154 @@
     const keep = GROUPS.some(g => g.id === cur) ? cur : GROUPS[0]?.id;
     seg.innerHTML = GROUPS.map((g, i) => {
       const on = g.id === keep || (!keep && i === 0);
-      return `<button type="button" data-sub="${g.id}" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'active' : ''}" title="${g.id === 'backup' && STOCK_BACKUP_NAMES.has(g.name) ? t('title.subBackup') : ''}">${groupDisplayName(g)}</button>`;
+      const tip = (g.id === 'backup' && STOCK_BACKUP_NAMES.has(g.name))
+        ? t('title.subBackup')
+        : (typeof t === 'function' ? t('title.subDrag') : '拖动可调整顺序');
+      return `<button type="button" data-sub="${g.id}" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'active' : ''}" title="${tip}">${groupDisplayName(g)}</button>`;
     }).join('');
-    seg.querySelectorAll('button[data-sub]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        setActiveGroup(btn.dataset.sub, { logIt: true });
-      });
-    });
+    bindSubSegInteractions(seg);
     if (keep && typeof renderNodes === 'function') renderNodes(keep);
   }
-  function deleteGroup(id) {
+  /** Reorder GROUPS so fromId sits immediately before toId. */
+  function reorderGroupBefore(fromId, toId) {
+    if (!fromId || !toId || fromId === toId || !Array.isArray(GROUPS)) return false;
+    const i = GROUPS.findIndex(g => g.id === fromId);
+    if (i < 0) return false;
+    const [item] = GROUPS.splice(i, 1);
+    const j = GROUPS.findIndex(g => g.id === toId);
+    if (j < 0) {
+      GROUPS.splice(i, 0, item); // restore
+      return false;
+    }
+    GROUPS.splice(j, 0, item);
+    return true;
+  }
+  /** Top-bar group tabs: click = switch; document pointer-drag = reorder (HTML5 DnD flaky in WKWebView). */
+  function bindSubSegInteractions(seg) {
+    if (!seg) return;
+    let dragId = null;
+    let startX = 0;
+    let dragging = false;
+    let suppressClick = false;
+    let overId = null;
+    let activePtr = null;
+
+    const clearDragUi = () => {
+      seg.classList.remove('seg-dragging');
+      seg.querySelectorAll('button.dragging, button.drag-over').forEach(el => {
+        el.classList.remove('dragging', 'drag-over');
+        el.style.pointerEvents = '';
+      });
+    };
+
+    const hitSubId = (x, y) => {
+      const src = seg.querySelector('button.dragging');
+      if (src) src.style.pointerEvents = 'none';
+      let id = null;
+      try {
+        const hit = document.elementFromPoint(x, y);
+        id = hit?.closest?.('#subSeg button[data-sub]')?.dataset?.sub || null;
+      } catch (_) {}
+      if (src) src.style.pointerEvents = '';
+      return id;
+    };
+
+    const paintOver = (id) => {
+      overId = (id && id !== dragId) ? id : null;
+      seg.querySelectorAll('button.drag-over').forEach(el => {
+        if (el.dataset.sub !== overId) el.classList.remove('drag-over');
+      });
+      if (overId) {
+        const el = seg.querySelector('button[data-sub="' + CSS.escape(overId) + '"]');
+        if (el) el.classList.add('drag-over');
+      }
+    };
+
+    const onMove = (e) => {
+      if (dragId == null || e.pointerId !== activePtr) return;
+      if (!dragging) {
+        if (Math.abs(e.clientX - startX) < 8) return;
+        dragging = true;
+        seg.classList.add('seg-dragging');
+        const src = seg.querySelector('button[data-sub="' + CSS.escape(dragId) + '"]');
+        if (src) src.classList.add('dragging');
+      }
+      e.preventDefault();
+      paintOver(hitSubId(e.clientX, e.clientY));
+    };
+
+    const onUp = (e) => {
+      if (dragId == null || (activePtr != null && e.pointerId !== activePtr)) return;
+      document.removeEventListener('pointermove', onMove, true);
+      document.removeEventListener('pointerup', onUp, true);
+      document.removeEventListener('pointercancel', onUp, true);
+      // final hit if pointer still over a tab
+      if (dragging && e && e.clientX != null) paintOver(hitSubId(e.clientX, e.clientY));
+      const from = dragId;
+      const to = overId;
+      const should = dragging && to && to !== from;
+      // clear BEFORE commit — avoids lostpointercapture / rebuild reentry
+      dragId = null;
+      dragging = false;
+      activePtr = null;
+      overId = null;
+      clearDragUi();
+      if (!should) return;
+      if (!reorderGroupBefore(from, to)) return;
+      suppressClick = true;
+      syncSubSegFromGroups();
+      if (document.getElementById('groupsMask')?.classList.contains('open')) renderGroupList();
+      if (typeof saveCatalog === 'function') saveCatalog(true);
+      if (typeof log === 'function') {
+        try { log('SYS', 'info', t('log.groupReordered')); } catch (_) {}
+      }
+    };
+
+    seg.querySelectorAll('button[data-sub]').forEach(btn => {
+      btn.removeAttribute('draggable');
+      btn.setAttribute('data-tauri-drag-region', 'false');
+      btn.addEventListener('click', (e) => {
+        if (suppressClick) {
+          e.preventDefault();
+          e.stopPropagation();
+          suppressClick = false;
+          return;
+        }
+        setActiveGroup(btn.dataset.sub, { logIt: true });
+      });
+      btn.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        // abandon any prior drag
+        document.removeEventListener('pointermove', onMove, true);
+        document.removeEventListener('pointerup', onUp, true);
+        document.removeEventListener('pointercancel', onUp, true);
+        dragId = btn.dataset.sub;
+        startX = e.clientX;
+        dragging = false;
+        overId = null;
+        activePtr = e.pointerId;
+        document.addEventListener('pointermove', onMove, true);
+        document.addEventListener('pointerup', onUp, true);
+        document.addEventListener('pointercancel', onUp, true);
+      });
+    });
+  }
+  async function deleteGroup(id) {
     const g = GROUPS.find(x => x.id === id);
     if (!g) return;
     if (GROUPS.length <= 1) { log('SYS', 'warn', t('log.keepOneGroup')); return; }
-    if (!confirm(`删除分组「${g.name}」？其中的节点列表将一并移除。`)) return;
+    const msg = (typeof t === 'function')
+      ? t('confirm.deleteGroup', { name: g.name })
+      : `删除分组「${g.name}」？其中的节点列表将一并移除。`;
+    const ok = await askConfirm(msg, {
+      title: (typeof t === 'function') ? t('confirm.deleteGroupTitle') : '删除分组',
+      okText: (typeof t === 'function') ? t('ctx.delete') : '删除',
+      danger: true,
+    });
+    if (!ok) return;
+    // re-check: list may have changed while dialog open
+    if (!GROUPS.some(x => x.id === id)) return;
+    if (GROUPS.length <= 1) { log('SYS', 'warn', t('log.keepOneGroup')); return; }
     const wasActive = activeGroupId() === id;
     GROUPS = GROUPS.filter(x => x.id !== id);
     if (typeof SUB_PROFILES !== 'undefined') delete SUB_PROFILES[id];
@@ -7092,6 +7423,8 @@
       el.textContent = t;
       el.classList.remove('placeholder');
     }
+    // contenteditable often scrolls caret-to-end after write → URL looks "floated" mid-string
+    try { el.scrollLeft = 0; } catch (_) {}
   }
   function syncSubUrlField() {
     // kept for callers; full settings sync below
@@ -7116,7 +7449,7 @@
     // hint shows which group is bound
     const hint = document.querySelector('#panel-sub .set-row .set-hint');
     if (hint && g) {
-      hint.textContent = '当前顶栏分组「' + g.name + '」的订阅 URL；粘贴后点应用';
+      hint.textContent = '当前顶栏分组「' + g.name + '」的订阅 URL；编辑后点应用';
     }
   }
   function applySubUrlFromField() {
@@ -7146,20 +7479,6 @@
     }
   }
   document.getElementById('subUrlApply')?.addEventListener('click', applySubUrlFromField);
-  document.getElementById('subUrlPaste')?.addEventListener('click', async () => {
-    const el = document.getElementById('subUrlField');
-    if (!el) return;
-    try {
-      const t = (await navigator.clipboard.readText()).trim();
-      if (!t) { log('SYS', 'warn', t('log.clipEmpty')); return; }
-      setFieldText(el, t);
-      el.focus();
-      log('SYS', 'info', t('log.clipPasted'));
-    } catch (_) {
-      log('SYS', 'warn', t('log.clipReadFail'));
-      el.focus();
-    }
-  });
   document.getElementById('subUrlField')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -7470,14 +7789,19 @@
       'tb.test': '连通',
       'status.connected': '已连接',
       'status.disconnected': '未连接',
+      'status.connecting': '连接中…',
+      'status.disconnecting': '断开中…',
       'status.subOff': '选择节点后点左侧连接 · 当前 <strong>{name}</strong>',
       'status.subOn': '经 <strong>{name}</strong> · 延迟 {lat}',
       'status.subMismatch': '当前隧道：<strong>{tunnel}</strong> · 选定：<strong>{selected}</strong>（需重新连接）· 延迟 {lat}',
+      'status.subConnecting': '正在连接 <strong>{name}</strong>…',
+      'status.subDisconnecting': '正在断开 <strong>{name}</strong>…',
       'sb.direct': '直连',
       'sb.mixed': '混合入站',
       'sb.proxy': '代理',
       'sb.running': '运行中',
       'sb.stopped': '未在运行',
+      'sb.busy': '处理中',
       'panel.basic': '设置',
       'panel.routing': '路由',
       'panel.sub': '订阅',
@@ -7586,10 +7910,18 @@
       'hint.7caf7245': '单连接承载多路请求；默认仅对探测支持 mux 的节点开启（unknown/no 不注入）',
       'hint.872c3afc': '自动刷新 GeoIP / 域名规则',
       'hint.91337c1a': '每行一条，如 domain:example.com 或 geoip:cn',
-      'hint.940fbe3c': '当前顶栏分组的订阅 URL；粘贴后点应用',
+      'hint.940fbe3c': '当前顶栏分组的订阅 URL；编辑后点应用',
       'hint.97fee25f': '越详细越占空间；排错可临时开 debug',
       'hint.a1daa533': '重置 Tun 相关设置并输出诊断信息',
       'hint.autoConnect': '未实现：不会在启动时自动连接上次节点',
+      'hint.allowLanNyi': '未实现：入站仍仅监听本机',
+      'confirm.deleteNodes': '删除选定的 {n} 个节点？',
+      'confirm.deleteNodesTitle': '删除节点',
+      'confirm.deleteGroup': '删除分组「{name}」？其中的节点列表将一并移除。',
+      'confirm.deleteGroupTitle': '删除分组',
+      'confirm.askTitle': '确认',
+      'btn.ok': '确定',
+      'log.coreLost': '核心已失联 — 正在断开',
       'hint.b0a3a450': 'gvisor 用户态栈更稳；system 性能更好',
       'hint.b565e862': '规则按列表分流；全局全走代理；直连不代理',
       'hint.bbe2ce8a': '在 Tun 上同时处理 IPv6 流量',
@@ -7792,6 +8124,8 @@
       'log.subSwitched': '已切换订阅：{name}',
       'log.keepOneGroup': '至少保留一个分组',
       'log.groupDeleted': '已删除分组：{name}',
+      'log.groupReordered': '已调整分组顺序',
+      'title.subDrag': '拖动可调整顺序；点击切换',
       'log.nothingCopy': '无可复制内容',
       'log.logCopied': '已复制日志',
       'log.copyFail': '复制失败',
@@ -8029,14 +8363,19 @@
       'tb.test': 'TCP',
       'status.connected': 'Connected',
       'status.disconnected': 'Disconnected',
+      'status.connecting': 'Connecting…',
+      'status.disconnecting': 'Disconnecting…',
       'status.subOff': 'Select a node, then connect · Current <strong>{name}</strong>',
       'status.subOn': 'Via <strong>{name}</strong> · Latency {lat}',
       'status.subMismatch': 'Tunnel: <strong>{tunnel}</strong> · Selected: <strong>{selected}</strong> (reconnect) · {lat}',
+      'status.subConnecting': 'Connecting to <strong>{name}</strong>…',
+      'status.subDisconnecting': 'Disconnecting <strong>{name}</strong>…',
       'sb.direct': 'Direct',
       'sb.mixed': 'Mixed inbound',
       'sb.proxy': 'Proxy',
       'sb.running': 'Running',
       'sb.stopped': 'Stopped',
+      'sb.busy': 'Busy',
       'panel.basic': 'Settings',
       'panel.routing': 'Routing',
       'panel.sub': 'Subscription',
@@ -8145,10 +8484,18 @@
       'hint.7caf7245': 'Multiplex many requests on one connection; only nodes probed as mux-capable (skip unknown/no)',
       'hint.872c3afc': 'Auto-refresh GeoIP / domain rules',
       'hint.91337c1a': 'One rule per line, e.g. domain:example.com or geoip:cn',
-      'hint.940fbe3c': 'Subscription URL for the current top-bar group; paste then Apply',
+      'hint.940fbe3c': 'Subscription URL for the current top-bar group; edit then Apply',
       'hint.97fee25f': 'More detail uses more space; use debug temporarily when troubleshooting',
       'hint.a1daa533': 'Reset Tun-related settings and dump diagnostics',
       'hint.autoConnect': 'Not implemented: will not auto-connect last node on launch',
+      'hint.allowLanNyi': 'Not implemented: inbound still binds localhost only',
+      'confirm.deleteNodes': 'Delete {n} selected nodes?',
+      'confirm.deleteNodesTitle': 'Delete nodes',
+      'confirm.deleteGroup': 'Delete group “{name}”? Its node list will be removed.',
+      'confirm.deleteGroupTitle': 'Delete group',
+      'confirm.askTitle': 'Confirm',
+      'btn.ok': 'OK',
+      'log.coreLost': 'Core lost — disconnecting',
       'hint.b0a3a450': 'gvisor user-space stack is stabler; system is faster',
       'hint.b565e862': 'Rule: match list; Global: all proxy; Direct: no proxy',
       'hint.bbe2ce8a': 'Also handle IPv6 traffic on Tun',
@@ -8351,6 +8698,8 @@
       'log.subSwitched': 'Switched subscription: {name}',
       'log.keepOneGroup': 'Keep at least one group',
       'log.groupDeleted': 'Deleted group: {name}',
+      'log.groupReordered': 'Group order updated',
+      'title.subDrag': 'Drag to reorder; click to switch',
       'log.nothingCopy': 'Nothing to copy',
       'log.logCopied': 'Log copied',
       'log.copyFail': 'Copy failed',
@@ -8588,14 +8937,19 @@
       'tb.test': 'TCP',
       'status.connected': 'Подключено',
       'status.disconnected': 'Отключено',
+      'status.connecting': 'Подключение…',
+      'status.disconnecting': 'Отключение…',
       'status.subOff': 'Выберите узел и подключитесь · Сейчас <strong>{name}</strong>',
       'status.subOn': 'Через <strong>{name}</strong> · Задержка {lat}',
       'status.subMismatch': 'Туннель: <strong>{tunnel}</strong> · Выбран: <strong>{selected}</strong> (переподключить) · {lat}',
+      'status.subConnecting': 'Подключение к <strong>{name}</strong>…',
+      'status.subDisconnecting': 'Отключение <strong>{name}</strong>…',
       'sb.direct': 'Прямой',
       'sb.mixed': 'Смешанный вход',
       'sb.proxy': 'Прокси',
       'sb.running': 'Работает',
       'sb.stopped': 'Остановлен',
+      'sb.busy': 'Занято',
       'panel.basic': 'Настройки',
       'panel.routing': 'Маршруты',
       'panel.sub': 'Подписки',
@@ -8704,10 +9058,13 @@
       'hint.7caf7245': 'Несколько запросов в одном соединении; только узлы с mux (unknown/no не включаются)',
       'hint.872c3afc': 'Автообновление GeoIP / доменных правил',
       'hint.91337c1a': 'По одной строке: domain:example.com или geoip:cn',
-      'hint.940fbe3c': 'URL подписки текущей группы; вставьте и нажмите «Применить»',
+      'hint.940fbe3c': 'URL подписки текущей группы; измените и нажмите «Применить»',
       'hint.97fee25f': 'Подробнее — больше места; debug только для разбора',
       'hint.a1daa533': 'Сбросить настройки Tun и вывести диагностику',
       'hint.autoConnect': 'Не реализовано: не подключает последний узел при запуске',
+      'hint.allowLanNyi': 'Не реализовано: inbound только localhost',
+      'confirm.deleteNodes': 'Удалить выбранные узлы ({n})?',
+      'log.coreLost': 'Ядро потеряно — отключение',
       'hint.b0a3a450': 'gvisor стабильнее; system быстрее',
       'hint.b565e862': 'Правила: по списку; Глобальный: весь прокси; Прямой: без прокси',
       'hint.bbe2ce8a': 'Также обрабатывать IPv6 на Tun',
@@ -9147,14 +9504,19 @@
       'tb.test': '連通',
       'status.connected': '已連線',
       'status.disconnected': '未連線',
+      'status.connecting': '連線中…',
+      'status.disconnecting': '中斷中…',
       'status.subOff': '選擇節點後點左側連線 · 目前 <strong>{name}</strong>',
       'status.subOn': '經 <strong>{name}</strong> · 延遲 {lat}',
       'status.subMismatch': '目前隧道：<strong>{tunnel}</strong> · 選定：<strong>{selected}</strong>（需重新連線）· 延遲 {lat}',
+      'status.subConnecting': '正在連線 <strong>{name}</strong>…',
+      'status.subDisconnecting': '正在中斷 <strong>{name}</strong>…',
       'sb.direct': '直連',
       'sb.mixed': '混合入站',
       'sb.proxy': '代理',
       'sb.running': '執行中',
       'sb.stopped': '未在執行',
+      'sb.busy': '處理中',
       'panel.basic': '設定',
       'panel.routing': '路由',
       'panel.sub': '訂閱',
@@ -9263,10 +9625,13 @@
       'hint.7caf7245': '單連線承載多路請求；預設僅對探測支援 mux 的節點開啟（unknown/no 不注入）',
       'hint.872c3afc': '自動重新整理 GeoIP / 網域規則',
       'hint.91337c1a': '每行一條，如 domain:example.com 或 geoip:cn',
-      'hint.940fbe3c': '目前頂欄分組的訂閱 URL；貼上後點套用',
+      'hint.940fbe3c': '目前頂欄分組的訂閱 URL；編輯後點套用',
       'hint.97fee25f': '越詳細越占空間；排錯可暫時開 debug',
       'hint.a1daa533': '重設 Tun 相關設定並輸出診斷資訊',
       'hint.autoConnect': '未實作：不會在啟動時自動連線上次節點',
+      'hint.allowLanNyi': '未實作：入站仍僅監聽本機',
+      'confirm.deleteNodes': '刪除選定的 {n} 個節點？',
+      'log.coreLost': '核心已失聯 — 正在中斷',
       'hint.b0a3a450': 'gvisor 使用者態堆疊更穩；system 效能更好',
       'hint.b565e862': '規則按列表分流；全域全走代理；直連不代理',
       'hint.bbe2ce8a': '在 Tun 上同時處理 IPv6 流量',
@@ -10147,6 +10512,7 @@
     el.addEventListener('focus', clearPh);
     el.addEventListener('blur', () => {
       if (!el.textContent.trim()) setEmpty();
+      try { el.scrollLeft = 0; } catch (_) {}
     });
   });
 
@@ -10423,9 +10789,9 @@
       'add-clip': () => { importFromClipboard(); },
       'add-file': () => { importFromFile(); },
       'scan-qr': () => { importScanQr(); },
-      'dl-china': () => log('SYS', 'ok', t('log.dlChina')),
-      'dl-iran': () => log('SYS', 'ok', t('log.dlIran')),
-      'dl-russia': () => log('SYS', 'ok', t('log.dlRussia')),
+      'dl-china': () => log('SYS', 'info', t('title.nyi')),
+      'dl-iran': () => log('SYS', 'info', t('title.nyi')),
+      'dl-russia': () => log('SYS', 'info', t('title.nyi')),
       'toggle-autostart': () => {
         const item = document.querySelector('[data-act="toggle-autostart"]');
         const on = !item.classList.contains('checked');
@@ -10433,18 +10799,8 @@
         item.querySelector('.check').textContent = on ? '✓' : '';
         log('SYS', 'info', on ? t('log.autostartOn') : t('log.autostartOff'));
       },
-      'toggle-remember': () => {
-        const item = document.querySelector('[data-act="toggle-remember"]');
-        const on = !item.classList.contains('checked');
-        item.classList.toggle('checked', on);
-        item.querySelector('.check').textContent = on ? '✓' : '';
-      },
-      'toggle-lan': () => {
-        const item = document.querySelector('[data-act="toggle-lan"]');
-        const on = !item.classList.contains('checked');
-        item.classList.toggle('checked', on);
-        item.querySelector('.check').textContent = on ? '✓' : '';
-      },
+      'toggle-remember': () => { log('SYS', 'info', t('title.remember')); },
+      'toggle-lan': () => { log('SYS', 'info', t('title.nyi')); },
       'proxy-on': () => {
         document.getElementById('sysToggle').checked = true;
         document.getElementById('sysChip').classList.add('on');
@@ -10502,6 +10858,13 @@
   // Esc: close menus / dialogs (minimal a11y)
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    // topmost in-app ask first (sits above groups/edit)
+    const ask = document.getElementById('askMask');
+    if (ask && ask.classList.contains('open')) {
+      if (typeof closeAsk === 'function') closeAsk(false);
+      e.preventDefault();
+      return;
+    }
     const conf = document.getElementById('confirmMask');
     if (conf && conf.classList.contains('open')) {
       closeConfirm();
@@ -10509,7 +10872,7 @@
       e.preventDefault();
       return;
     }
-    for (const id of ['editMask', 'groupsMask', 'qrMask', 'statsMask', 'exportMask', 'groupEditMask', 'quitMask']) {
+    for (const id of ['editMask', 'groupEditMask', 'groupsMask', 'qrMask', 'statsMask', 'exportMask', 'quitMask']) {
       const el = document.getElementById(id);
       if (el && el.classList.contains('open')) {
         closeDialog(id);
