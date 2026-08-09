@@ -1135,6 +1135,7 @@
   .conn-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed; /* fixed 时间/PID tracks; remaining cols share rest */
     font-variant-numeric: tabular-nums;
   }
   .conn-table th {
@@ -1155,23 +1156,58 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 160px;
   }
+  /* HH:MM:SS full digits — 5.5em was clipping to "13:14…" */
+  .conn-table th.time,
   .conn-table td.time {
+    width: 7.25em;
+    min-width: 7.25em;
+    max-width: 7.25em;
     font-variant-numeric: tabular-nums;
     color: var(--muted);
     white-space: nowrap;
-    width: 4.5em;
+    overflow: hidden;
+    text-overflow: clip; /* never ellipsize clock */
   }
-  .conn-table td.app { font-family: var(--font); color: var(--label); font-weight: 500; max-width: 100px; }
+  .conn-table td.app { font-family: var(--font); color: var(--label); font-weight: 500; }
+  /* PID: up to ~6 digits; 4.25em clipped to "220…" */
+  .conn-table th.pid,
   .conn-table td.pid {
+    width: 5.5em;
+    min-width: 5.5em;
+    max-width: 5.5em;
     font-variant-numeric: tabular-nums;
     color: var(--muted);
-    width: 4.5em;
-    max-width: 5em;
     text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
   }
-  .conn-table td.rule { color: var(--blue); font-family: var(--font); font-size: 11px; }
+  /* 出站: width from measure of finite tags (proxy/direct/—/header) */
+  .conn-table th.rule,
+  .conn-table td.rule {
+    width: var(--conn-out-w, 5.5em);
+    min-width: var(--conn-out-w, 5.5em);
+    max-width: var(--conn-out-w, 5.5em);
+    color: var(--blue);
+    font-family: var(--font);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+  }
+  /* 协议: width from measure of finite network(+sniff) labels */
+  .conn-table th.proto,
+  .conn-table td.proto {
+    width: var(--conn-proto-w, 6.5em);
+    min-width: var(--conn-proto-w, 6.5em);
+    max-width: var(--conn-proto-w, 6.5em);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+  }
   /* last col: keep 流量 + "0 B↑ 0 B↓" one line (never stack glyphs) */
   .conn-table th.flow,
   .conn-table td.flow {
@@ -1459,10 +1495,7 @@
     border-bottom: 0.5px solid var(--separator);
     min-height: 44px;
   }
-  /* long URL / path / DoH / bypass: give the control the real remaining width */
-  .set-row:has(.set-ctrl.wide) {
-    grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.4fr);
-  }
+  /* keep same 2-col grid as sibling rows so wide URL/path aligns with controls below */
   .set-row:last-child { border-bottom: 0; }
   .set-row:hover { background: var(--row-hover); }
   .set-label {
@@ -1482,9 +1515,7 @@
     max-width: 340px;
     justify-self: end;
   }
-  .set-row:has(.set-ctrl.wide) .set-right {
-    max-width: none;
-  }
+  /* wide controls stay inside the shared right column (align with switch/hint rows) */
   .set-hint {
     display: block;
     margin: 0;
@@ -1649,6 +1680,12 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    text-align: left;
+    direction: ltr;
+  }
+  .field[data-type="url"] {
+    text-align: left;
+    direction: ltr;
   }
   .field .ph { pointer-events: none; }
   /* short numbers: compact shell, not a 340 empty runway */
@@ -2077,8 +2114,14 @@
     box-shadow: 0 1px 0 rgba(255,255,255,.2) inset, 0 1px 2px rgba(0, 90, 200, .2);
   }
   .btn-primary:hover { background: linear-gradient(180deg, #2f86ff 0%, #0071eb 100%); }
-  .path-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
-  .path-row .field { flex: 1 1 auto; min-width: 0; width: auto; }
+  .path-row { display: flex; gap: 8px; align-items: center; min-width: 0; width: 100%; }
+  .path-row .field {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    text-align: left;
+    direction: ltr;
+  }
   .btn-mini {
     height: 32px;
     padding: 0 11px;
@@ -2477,12 +2520,12 @@
             <table class="conn-table" aria-label="活跃连接">
               <thead>
                 <tr>
-                  <th class="sortable" data-csort="time" role="columnheader" tabindex="0" title="连接建立时间" data-i18n="th.time" data-i18n-title="title.connTime">时间</th>
-                  <th class="sortable" data-csort="app" role="columnheader" tabindex="0" data-i18n="th.proc">进程</th>
-                  <th class="sortable" data-csort="pid" role="columnheader" tabindex="0" title="操作系统进程编号" data-i18n-title="title.connPid">PID</th>
+                  <th class="sortable time" data-csort="time" role="columnheader" tabindex="0" title="连接建立时间" data-i18n="th.time" data-i18n-title="title.connTime">时间</th>
+                  <th class="sortable app" data-csort="app" role="columnheader" tabindex="0" data-i18n="th.proc">进程</th>
+                  <th class="sortable pid" data-csort="pid" role="columnheader" tabindex="0" title="操作系统进程编号" data-i18n-title="title.connPid">PID</th>
                   <th class="sortable" data-csort="dest" role="columnheader" tabindex="0" data-i18n="th.dest">目标</th>
-                  <th class="sortable" data-csort="proto" role="columnheader" tabindex="0" data-i18n="th.proto">协议</th>
-                  <th class="sortable" data-csort="out" role="columnheader" tabindex="0" data-i18n="th.outbound">出站</th>
+                  <th class="sortable proto" data-csort="proto" role="columnheader" tabindex="0" data-i18n="th.proto">协议</th>
+                  <th class="sortable rule" data-csort="out" role="columnheader" tabindex="0" data-i18n="th.outbound">出站</th>
                   <th class="sortable flow" data-csort="flow" role="columnheader" tabindex="0" data-i18n="th.flow">流量</th>
                 </tr>
               </thead>
@@ -6824,6 +6867,50 @@
   });
 
   // ——— connection table: Core QueryConnections → rows ———
+  /**
+   * Finite-state conn cols: width = max(header, known labels) measured in paint font.
+   * 出站 tags from generate (proxy/direct); 协议 = network (+ sniff) from Core metadata.
+   */
+  const CONN_OUT_LABELS = ['proxy', 'direct', '—'];
+  // network × common sniff combos UI may paint as "tcp (http)"
+  const CONN_PROTO_LABELS = [
+    '—', 'tcp', 'udp',
+    'tcp (http)', 'tcp (tls)', 'tcp (dns)', 'tcp (ssh)', 'tcp (rdp)',
+    'udp (quic)', 'udp (dns)', 'udp (stun)', 'udp (dtls)', 'udp (bit-torrent)',
+  ];
+  let _connFiniteWReady = false;
+  function measureTextPx(text, style) {
+    const el = document.createElement('span');
+    el.textContent = String(text ?? '');
+    el.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;' + (style || '');
+    document.body.appendChild(el);
+    const w = Math.ceil(el.getBoundingClientRect().width);
+    el.remove();
+    return w;
+  }
+  function measureConnColPx(labels, headText, bodyStyle, headStyle) {
+    let max = 0;
+    for (const s of labels) max = Math.max(max, measureTextPx(s, bodyStyle));
+    max = Math.max(max, measureTextPx(headText || '', headStyle));
+    return max + 20; // pad 8+8 + sort chevron slack
+  }
+  function ensureConnFiniteColWidths() {
+    if (_connFiniteWReady) return;
+    const table = document.querySelector('.conn-table');
+    if (!table) return;
+    const sansBody = 'font:500 11px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
+    const sansHead = 'font:600 11px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
+    // proto cells use mono 11.5px (match .conn-table td)
+    const monoBody = 'font:500 11.5px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;';
+    const monoHead = sansHead; // header stays sans 11/600
+    const thOut = table.querySelector('th.rule');
+    const thProto = table.querySelector('th.proto');
+    const outHead = (thOut && thOut.textContent.trim()) || '出站';
+    const protoHead = (thProto && thProto.textContent.trim()) || '协议';
+    table.style.setProperty('--conn-out-w', measureConnColPx(CONN_OUT_LABELS, outHead, sansBody, sansHead) + 'px');
+    table.style.setProperty('--conn-proto-w', measureConnColPx(CONN_PROTO_LABELS, protoHead, monoBody, monoHead) + 'px');
+    _connFiniteWReady = true;
+  }
   let connSortKey = null, connSortDir = 1;
   let connPollTimer = null;
   // empty snapshots during Core Stop/Start can be brief; require 2 in a row while connected
@@ -6889,7 +6976,7 @@
         `<td class="app">${escHtml(app)}</td>` +
         `<td class="pid">${escHtml(pidText)}</td>` +
         `<td>${escHtml(dest)}</td>` +
-        `<td>${escHtml(proto)}</td>` +
+        `<td class="proto">${escHtml(proto)}</td>` +
         `<td class="rule">${escHtml(out)}</td>` +
         `<td class="flow">${escHtml(flow)}</td>`;
       return;
@@ -6911,6 +6998,7 @@
    * Empty snapshot → clear (truthful). Query failure must not call this.
    */
   function renderConnections(list) {
+    ensureConnFiniteColWidths();
     const tb = document.getElementById('connTable');
     if (!tb) return;
     const raw = Array.isArray(list) ? list : [];

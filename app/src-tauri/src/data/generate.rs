@@ -348,7 +348,15 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         }
     }
     route_rules.push(json!({"ip_is_private": true, "outbound": "direct"}));
-    let route = json!({
+    // process_path / process_name rules need find_process at *route* time.
+    // Connection-table processOwnerEnricher runs after routing and cannot retro-reject.
+    let needs_find_process = input.blocklist.iter().any(|e| {
+        e.process_path
+            .as_deref()
+            .map(|p| !p.trim().is_empty())
+            .unwrap_or(false)
+    });
+    let mut route = json!({
         "rules": route_rules,
         "final": "proxy",
         "auto_detect_interface": true,
@@ -356,6 +364,11 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
             "server": "dns-direct"
         }
     });
+    if needs_find_process {
+        if let Some(obj) = route.as_object_mut() {
+            obj.insert("find_process".into(), json!(true));
+        }
+    }
 
     // experimental.clash_api required for TrafficManager / QueryConnections
     // (even without external_controller — empty object still creates clash server).
@@ -896,6 +909,11 @@ mod tests {
             .expect("reject");
         assert!(first_reject < priv_idx, "reject must be before private direct");
         assert_eq!(v["route"]["final"], "proxy");
+        assert_eq!(
+            v["route"]["find_process"],
+            true,
+            "any process_path block entry enables find_process"
+        );
     }
 
     #[test]
@@ -932,6 +950,11 @@ mod tests {
                     })
                     .unwrap_or(false)
         }));
+        assert_eq!(
+            v["route"]["find_process"],
+            true,
+            "process_path reject needs route.find_process at match time"
+        );
     }
 
     #[test]
