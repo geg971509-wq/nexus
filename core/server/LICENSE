@@ -1,0 +1,29 @@
+NexusCore
+=========
+
+Copyright (c) 2026 Nexus authors, and copyright holders of incorporated
+third-party works (see `THIRD_PARTY_NOTICES.md` in the repository root).
+
+NexusCore (the Go module under this directory and the `NexusCore` /
+`NexusCore.exe` binaries built from it) is free software: you can redistribute
+it and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program (see `../../licenses/GPL-3.0.txt`). If not, see
+<https://www.gnu.org/licenses/>.
+
+Notes
+-----
+- Upstream engines such as sing-box are themselves GPLv3; linking them into
+  NexusCore makes the Core binary a GPLv3 covered work for distribution.
+- xray-core and some related libraries are under MPL-2.0; file-level MPL terms
+  continue to apply to those covered source files (`../../licenses/MPL-2.0.txt`).
+- Corresponding Source for a released NexusCore build includes this tree,
+  module versions (`go.mod` / `go.sum`), `../../build.sh` (or the commands used
+  to produce that binary), and any dependency patches applied at build time.

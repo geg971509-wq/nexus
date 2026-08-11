@@ -1,15 +1,59 @@
-Nexus Proprietary License
+Nexus multi-license notice
+==========================
+
+This repository and product are **not** under a single exclusive proprietary
+license. Components ship under different terms.
+
+1) NexusCore (engine)
+---------------------
+Directory: `core/server/`
+Binary: `NexusCore` / `NexusCore.exe` (and the copy embedded in the app bundle)
+
+The Core program is a combined work that **statically links GPLv3** components
+(including but not limited to sing-box / sing / sing-tun and related modules)
+and **MPL-2.0** components (including xray-core).
+
+**NexusCore is licensed under the GNU General Public License, version 3 or
+(at your option) any later version.** See:
+
+- `core/server/LICENSE`
+- `licenses/GPL-3.0.txt`
+
+If you distribute NexusCore or any package that includes it (for example
+`Nexus.app` containing `NexusCore`), you must comply with GPLv3 for that Core
+work, including the obligation to provide **Corresponding Source** that can
+rebuild the Core you shipped (this tree, `go.mod`/`go.sum`, build scripts, and
+any patches applied to dependencies).
+
+MPL-2.0 obligations for covered files (e.g. xray-core) also apply: see
+`licenses/MPL-2.0.txt` and `THIRD_PARTY_NOTICES.md`.
+
+2) Nexus shell and original product code
+----------------------------------------
+Directories: `app/` (Tauri shell, UI), product scripts, and other original
+Nexus code **not** listed as third-party.
+
 Copyright (c) 2026 Nexus authors. All rights reserved.
 
-Permission is granted to use and modify this software and its source code
-for personal or internal purposes only.
+Permission is granted to use and modify this original code for personal or
+internal purposes.
 
-You may NOT, without prior written permission from the copyright holder:
-  - redistribute, republish, re-release, sublicense, or share this software
-    (source or binary) with third parties;
-  - publish forks, mirrors, or public copies;
-  - sell, rent, or commercially redistribute the software.
+Without prior written permission from the copyright holder, you may not sell
+or commercially rebrand this original shell code as a competing product.
 
+**Exception required by open-source licenses:** nothing in this section limits
+rights you already have under GPLv3, MPL-2.0, or other licenses that apply to
+NexusCore or third-party components. In particular, recipients of a binary
+distribution that includes NexusCore retain all GPLv3 rights to that Core work
+and its Corresponding Source.
+
+3) Third-party open source
+--------------------------
+Listed in `THIRD_PARTY_NOTICES.md`. Full texts for key copyleft licenses are
+under `licenses/`.
+
+4) No warranty
+--------------
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -17,3 +61,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+This notice is an engineering compliance layout for Plan A (Core under GPLv3
+obligations + notices). It is not a substitute for legal advice.

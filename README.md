@@ -41,8 +41,24 @@ Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box 
 - `app/src-tauri/src/sys.rs` — system proxy (macOS networksetup / Windows WinINet registry)
 - `app/src-tauri/src/winhide.rs` — Windows no-console spawn helper
 - `app/src-tauri/windows/app.manifest` — Windows elevation + DPI
-- `core/server/` — Go core (`module NexusCore`)
+- `core/server/` — Go core (`module NexusCore`, **GPLv3** combined work)
+- `licenses/` — full GPLv3 / MPL-2.0 texts
+- `THIRD_PARTY_NOTICES.md` — third-party inventory
 - `bin/` — build outputs (gitignored)
+
+## License
+
+**Multi-license (Plan A).** Not a single proprietary blanket.
+
+| Part | Terms |
+|------|--------|
+| **NexusCore** (`core/server`, `NexusCore` binary) | **GPLv3+** — see [`core/server/LICENSE`](core/server/LICENSE), [`licenses/GPL-3.0.txt`](licenses/GPL-3.0.txt) |
+| **Shell / original product code** (`app/`, …) | Nexus original terms in root [`LICENSE`](LICENSE), with carve-outs for GPL/MPL rights |
+| **Third-party** | [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) |
+
+Distributing an app that embeds NexusCore requires GPLv3 compliance for Core
+(Corresponding Source for that build). MPL-2.0 applies to xray-core covered files.
+This is an engineering layout, not legal advice.
 
 ## Build
 
@@ -98,4 +114,4 @@ Operational for **macOS arm64** and **Windows x86_64** internal use. Not a notar
 
 ## License
 
-Proprietary — use and modify allowed; **redistribution / re-release is not permitted**. See [`LICENSE`](LICENSE).
+**Multi-license.** NexusCore is **GPLv3+**; shell original code has separate terms; third-party list in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). See root [`LICENSE`](LICENSE). Distributing Core requires Corresponding Source.
