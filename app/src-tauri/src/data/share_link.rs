@@ -1106,13 +1106,13 @@ mod tests {
     fn tuic_igg_style() {
         // tuic://uuid:pass@host:port?congestion_control=bbr&alpn=h3
         let o = parse_to_outbound(
-            "tuic://33D9EFC7-8BCD-F4A1-AAFF-D95A2F06970D:e4e6e20b-8713-4b3e-a12a-772b7e530c04@sing1.71edgeiqiyi.com:8443?congestion_control=bbr&alpn=h3#sg",
+            "tuic://11111111-1111-1111-1111-111111111111:22222222-2222-2222-2222-222222222222@tuic.example.com:8443?congestion_control=bbr&alpn=h3#sg",
         )
         .unwrap();
         assert_eq!(o["type"], "tuic");
-        assert_eq!(o["uuid"], "33D9EFC7-8BCD-F4A1-AAFF-D95A2F06970D");
-        assert_eq!(o["password"], "e4e6e20b-8713-4b3e-a12a-772b7e530c04");
-        assert_eq!(o["server"], "sing1.71edgeiqiyi.com");
+        assert_eq!(o["uuid"], "11111111-1111-1111-1111-111111111111");
+        assert_eq!(o["password"], "22222222-2222-2222-2222-222222222222");
+        assert_eq!(o["server"], "tuic.example.com");
         assert_eq!(o["server_port"], 8443);
         assert_eq!(o["congestion_control"], "bbr");
         assert_eq!(o["tls"]["enabled"], true);
