@@ -5,12 +5,10 @@ import os
 import pathlib
 import sys
 
+# Only Throneproj replace — never touch sagernet/sing-box@version (breaks go mod verify).
 patterns = [
     os.path.expanduser(
         "~/go/pkg/mod/github.com/!throneproj/sing-box@*/common/process/searcher_darwin_shared.go"
-    ),
-    os.path.expanduser(
-        "~/go/pkg/mod/github.com/*/sing-box@*/common/process/searcher_darwin_shared.go"
     ),
 ]
 files = []

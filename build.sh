@@ -98,8 +98,31 @@ log "building NexusCore macOS (go · tags=$CORE_TAGS_MAC)…"
 (
   cd "$CORE_SRC"
   go mod download
-  go mod verify
+  # Prior builds patch Throneproj sing-box in module cache; verify fails on dirty dirs.
+  # Drop modified cache dirs once, re-download, then verify clean modules.
+  # go module dirs are often mode 0555; prior ProcessID patch dirties them for verify.
+  if ! go mod verify >/tmp/nexus-gomod-verify.err 2>&1; then
+    while IFS= read -r line; do
+      case "$line" in
+        *"dir has been modified ("*)
+          dirty="${line#*dir has been modified (}"
+          dirty="${dirty%)}"
+          if [[ -n "$dirty" && -d "$dirty" ]]; then
+            log "module cache dirty, re-fetch: $dirty"
+            chmod -R u+w "$dirty" 2>/dev/null || true
+            rm -rf "$dirty"
+          fi
+          ;;
+      esac
+    done < /tmp/nexus-gomod-verify.err
+    go mod download
+    go mod verify || {
+      cat /tmp/nexus-gomod-verify.err 2>/dev/null || true
+      die "go mod verify failed after re-download"
+    }
+  fi
   # throng darwin searcher had pid but left ConnectionOwner.ProcessID=0
+  # Patch AFTER verify (Throneproj only). Next build re-fetches that dirty dir.
   python3 "$ROOT/script/patches/sing-box-darwin-process-id.py" || true
 
   VERSION_SINGBOX="$(go list -m -f '{{.Version}}' github.com/sagernet/sing-box)"
