@@ -91,8 +91,6 @@ verify_core_binary() {
 
 [[ -d "$CORE_SRC" ]] || die "core source missing: $CORE_SRC"
 [[ -f "$CORE_SRC/go.mod" ]] || die "missing $CORE_SRC/go.mod"
-[[ -d "$CORE_SRC/third_party/sing-tun" ]] || die "missing local replace path: $CORE_SRC/third_party/sing-tun"
-[[ -f "$CORE_SRC/third_party/sing-tun/go.mod" ]] || die "incomplete sing-tun vendored tree"
 [[ -f "$CORE_SRC/gen/libcore.pb.go" ]] || die "missing $CORE_SRC/gen/libcore.pb.go (pre-generated protobuf)"
 
 # --- 1a) NexusCore macOS host ---
