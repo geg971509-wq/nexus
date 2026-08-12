@@ -166,22 +166,36 @@ impl CoreSession {
                     .args(["-TERM", &pid.to_string()])
                     .status();
             }
-            std::thread::sleep(Duration::from_millis(250));
-            let Ok(out2) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
-                return;
-            };
-            for tok in String::from_utf8_lossy(&out2.stdout).split_whitespace() {
-                let Ok(pid) = tok.parse::<u32>() else {
-                    continue;
+            // Poll exit instead of fixed 250ms; only KILL survivors.
+            let deadline = Instant::now() + Duration::from_millis(400);
+            loop {
+                let Ok(out2) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
+                    return;
                 };
-                if pid == me || except == Some(pid) {
-                    continue;
+                let mut survivors = false;
+                for tok in String::from_utf8_lossy(&out2.stdout).split_whitespace() {
+                    let Ok(pid) = tok.parse::<u32>() else {
+                        continue;
+                    };
+                    if pid == me || except == Some(pid) {
+                        continue;
+                    }
+                    survivors = true;
+                    if Instant::now() >= deadline {
+                        let _ = Command::new("kill")
+                            .args(["-KILL", &pid.to_string()])
+                            .status();
+                    }
                 }
-                let _ = Command::new("kill")
-                    .args(["-KILL", &pid.to_string()])
-                    .status();
+                if !survivors {
+                    return;
+                }
+                if Instant::now() >= deadline {
+                    std::thread::sleep(Duration::from_millis(40));
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(40));
             }
-            std::thread::sleep(Duration::from_millis(100));
         }
         #[cfg(windows)]
         {

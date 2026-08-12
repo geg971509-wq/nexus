@@ -1,51 +1,9 @@
 //! Minimal app store (JSON file). Catalog blob is the node source of truth.
 //! Save uses exclusive advisory lock + atomic replace so concurrent writers cannot interleave.
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-
-/// One reject entry:
-/// - host only → any process hitting that host
-/// - host + process_path → that process hitting that host
-/// - process_path only (host empty) → that process, all destinations
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct BlockEntry {
-    #[serde(default)]
-    pub host: String,
-    /// Full executable path; omit = any process (host required then).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub process_path: Option<String>,
-}
-
-impl<'de> Deserialize<'de> for BlockEntry {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Raw {
-            Host(String),
-            Obj {
-                #[serde(default)]
-                host: String,
-                #[serde(default)]
-                process_path: Option<String>,
-            },
-        }
-        match Raw::deserialize(deserializer)? {
-            Raw::Host(host) => Ok(BlockEntry {
-                host,
-                process_path: None,
-            }),
-            Raw::Obj {
-                host,
-                process_path,
-            } => Ok(BlockEntry {
-                host,
-                process_path: process_path.filter(|p| !p.trim().is_empty()),
-            }),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Store {
@@ -58,9 +16,9 @@ pub struct Store {
     /// UI node catalog blob (`nexus.catalog.v1` shape).
     #[serde(default)]
     pub catalog: Option<serde_json::Value>,
-    /// User blocklist: host (any process) and optional process_path scope.
-    #[serde(default)]
-    pub blocklist: Vec<BlockEntry>,
+    /// Legacy field ignored (P2: domain/process blocklist removed).
+    #[serde(default, skip_serializing)]
+    pub blocklist: serde_json::Value,
 }
 
 fn default_true() -> bool {
@@ -73,7 +31,7 @@ impl Default for Store {
             system_proxy: true,
             tun: false,
             catalog: None,
-            blocklist: Vec::new(),
+            blocklist: serde_json::Value::Null,
         }
     }
 }

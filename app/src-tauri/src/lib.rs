@@ -7,20 +7,29 @@ mod sub;
 mod net;
 mod tray_spin;
 mod winhide;
+pub mod tunnel_sm;
+pub mod firewall;
 
 use core::session::{CoreSession, SESSION};
 use defaults::{APP_IDENTIFIER, APP_NAME, APP_VERSION, MIXED_PORT};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
-/// Connect generation: disconnect/teardown bumps this so in-flight Start cannot reinstall.
-static CONNECT_GEN: AtomicU64 = AtomicU64::new(1);
+/// 1A: true only after this session set system DNS bootstrap (Tun path).
+static DNS_BOOTSTRAP_SET: AtomicBool = AtomicBool::new(false);
 
 fn bump_connect_gen() -> u64 {
-    CONNECT_GEN.fetch_add(1, Ordering::SeqCst).wrapping_add(1)
+    tunnel_sm::bump_gen()
 }
 
 fn current_connect_gen() -> u64 {
-    CONNECT_GEN.load(Ordering::SeqCst)
+    tunnel_sm::current_gen()
+}
+
+/// Clear bootstrap DNS only if this session set it (1A: never wipe custom DNS).
+fn clear_dns_bootstrap_if_set() {
+    if DNS_BOOTSTRAP_SET.swap(false, AtomicOrdering::SeqCst) {
+        let _ = sys::set_system_dns_bootstrap(false);
+    }
 }
 
 #[tauri::command]
@@ -68,7 +77,12 @@ fn put_session_back(mut session: CoreSession, gen: u64) -> bool {
 
 /// 2A: apply proxy/spin only if this connect gen still owns the live session.
 /// After OS proxy write, re-check gen — disconnect can win during the call; undo enable.
-fn apply_post_start_side_effects(gen: u64, use_sys_proxy: bool, port: u16) -> Option<String> {
+fn apply_post_start_side_effects(
+    gen: u64,
+    use_sys_proxy: bool,
+    use_tun: bool,
+    port: u16,
+) -> Option<String> {
     if gen == 0 || gen != current_connect_gen() {
         return Some("skipped proxy: connect superseded".into());
     }
@@ -80,22 +94,35 @@ fn apply_post_start_side_effects(gen: u64, use_sys_proxy: bool, port: u16) -> Op
     if !still_ours || gen != current_connect_gen() {
         return Some("skipped proxy: session gone".into());
     }
+    let mut notes: Vec<String> = Vec::new();
     let proxy_note = if use_sys_proxy {
         match sys::set_system_proxy(true, port) {
-            Ok(m) => Some(m),
-            Err(e) => Some(format!("system proxy failed: {e}")),
+            Ok(m) => m,
+            Err(e) => format!("system proxy failed: {e}"),
         }
     } else {
         match sys::set_system_proxy(false, port) {
-            Ok(m) => Some(m),
-            Err(e) => Some(format!("clear system proxy: {e}")),
+            Ok(m) => m,
+            Err(e) => format!("clear system proxy: {e}"),
         }
     };
+    notes.push(proxy_note);
+    // 1A: Tun only — set bootstrap DNS; non-Tun never touch system DNS.
+    if use_tun {
+        match sys::set_system_dns_bootstrap(true) {
+            Ok(m) => {
+                DNS_BOOTSTRAP_SET.store(true, AtomicOrdering::SeqCst);
+                notes.push(m);
+            }
+            Err(e) => notes.push(format!("system dns failed: {e}")),
+        }
+    }
     // TOCTOU close: if disconnect bumped gen during set_system_proxy, undo enable.
     if gen != current_connect_gen() {
         if use_sys_proxy {
             let _ = sys::set_system_proxy(false, port);
         }
+        clear_dns_bootstrap_if_set();
         tray_spin::set_spinning(false);
         return Some("rolled back proxy: connect superseded".into());
     }
@@ -108,11 +135,12 @@ fn apply_post_start_side_effects(gen: u64, use_sys_proxy: bool, port: u16) -> Op
         if use_sys_proxy {
             let _ = sys::set_system_proxy(false, port);
         }
+        clear_dns_bootstrap_if_set();
         tray_spin::set_spinning(false);
         return Some("rolled back proxy: session gone".into());
     }
     tray_spin::set_spinning(true);
-    proxy_note
+    Some(notes.join(" · "))
 }
 
 /// Share-link → SVG QR (offline; for 显示二维码 dialog).
@@ -183,6 +211,7 @@ async fn core_query_state() -> Result<serde_json::Value, String> {
 
 /// Boot / power sync: store chips + live Core (SESSION QueryState, or orphan process).
 /// 4A: never treat mixed-port alone as live (unrelated listener on 2080).
+/// 2A: Connected/Connecting + Core dead → CoreLost → firewall Blocked (keep peer).
 #[tauri::command]
 async fn session_status() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(|| {
@@ -211,7 +240,22 @@ async fn session_status() -> Result<serde_json::Value, String> {
         let mixed_open = CoreSession::mixed_port_open(MIXED_PORT);
         // Prefer RPC truth; else owned/orphan process + mixed; never mixed alone.
         let live = rpc_running || (process_alive && mixed_open);
-        tray_spin::set_spinning(live);
+        // 2A: SM still Connected/Connecting but Core gone → Error + Blocked (peer kept).
+        let sm = tunnel_sm::state();
+        if !live
+            && matches!(
+                sm,
+                tunnel_sm::State::Connected | tunnel_sm::State::Connecting
+            )
+        {
+            let tr = tunnel_sm::apply(tunnel_sm::Event::CoreLost);
+            let params = tr.params.or_else(tunnel_sm::last_params);
+            let _ = firewall::apply(firewall::policy_from_sm(tr.to, params.as_ref()));
+            clear_dns_bootstrap_if_set();
+            tray_spin::set_spinning(false);
+        } else {
+            tray_spin::set_spinning(live);
+        }
         Ok(serde_json::json!({
             "running": live,
             "rpc_running": rpc_running,
@@ -221,6 +265,7 @@ async fn session_status() -> Result<serde_json::Value, String> {
             "profile_id": profile_id,
             "tun": st.tun,
             "system_proxy": st.system_proxy,
+            "tunnel_state": tunnel_sm::state().as_str(),
         }))
     })
     .await
@@ -304,7 +349,7 @@ async fn generate_preview(
         } else {
             return Err("no selected node link/outbound for preview".into());
         };
-        Ok(generate_with_outbound(ob, MIXED_PORT, st.tun, &st.blocklist))
+        Ok(generate_with_outbound(ob, MIXED_PORT, st.tun))
     })
     .await
     .map_err(|e| format!("generate_preview join: {e}"))?
@@ -338,32 +383,6 @@ async fn catalog_put(blob: serde_json::Value) -> Result<String, String> {
     .map_err(|e| format!("catalog_put join: {e}"))?
 }
 
-#[tauri::command]
-async fn blocklist_get() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        use data::store::Store;
-        let st = Store::load();
-        Ok(serde_json::json!({ "items": st.blocklist }))
-    })
-    .await
-    .map_err(|e| format!("blocklist_get join: {e}"))?
-}
-
-/// Full-replace blocklist. Items: `{host, process_path?}` (legacy bare host string still deserializes).
-#[tauri::command]
-async fn blocklist_put(items: Vec<data::store::BlockEntry>) -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        use data::generate::normalize_blocklist;
-        use data::store::Store;
-        let normalized = normalize_blocklist(&items)?;
-        Store::update(|st| {
-            st.blocklist = normalized.clone();
-            Ok(serde_json::json!({ "items": normalized }))
-        })
-    })
-    .await
-    .map_err(|e| format!("blocklist_put join: {e}"))?
-}
 
 /// Persist chip intent; OS apply only when Core is running (or always on disable).
 /// Runs off the async runtime so the webview keeps painting while networksetup works.
@@ -496,14 +515,14 @@ fn connect_selected_sync(
 
     // Start uses current checkbox state, not a stale disk flag.
     // Prefer explicit UI args; persist so next cold Start matches chips.
-    let (use_tun, use_sys_proxy, blocklist) = Store::update(|st| {
+    let (use_tun, use_sys_proxy) = Store::update(|st| {
         if let Some(v) = tun {
             st.tun = v;
         }
         if let Some(v) = system_proxy {
             st.system_proxy = v;
         }
-        Ok((st.tun, st.system_proxy, st.blocklist.clone()))
+        Ok((st.tun, st.system_proxy))
     })?;
     let port = MIXED_PORT;
     let pid = profile_id.unwrap_or(1);
@@ -523,7 +542,37 @@ fn connect_selected_sync(
     };
 
     // generate.cpp: tun inbound only if spmode_vpn
-    let cfg = generate_with_outbound(ob, port, use_tun, &blocklist);
+    let mut cfg = generate_with_outbound(ob.clone(), port, use_tun);
+
+    // mac Tun: pin next free utunN into Core config + PF Connected.
+    // Detection-only (172.19 / new-utun / stale core.log) left pure-Tun dead under
+    // fail-closed: no reliable `pass quick on utun…` while sysproxy still worked.
+    #[cfg(target_os = "macos")]
+    let planned_tun_if: Option<String> = if use_tun {
+        let name = next_free_utun().ok_or_else(|| "no free utun for Tun".to_string())?;
+        if let Some(arr) = cfg.get_mut("inbounds").and_then(|v| v.as_array_mut()) {
+            for ib in arr.iter_mut() {
+                if ib.get("type").and_then(|t| t.as_str()) == Some("tun") {
+                    if let Some(obj) = ib.as_object_mut() {
+                        obj.insert(
+                            "interface_name".into(),
+                            serde_json::Value::String(name.clone()),
+                        );
+                    }
+                }
+            }
+        }
+        Some(name)
+    } else {
+        None
+    };
+    #[cfg(not(target_os = "macos"))]
+    let planned_tun_if: Option<String> = if use_tun {
+        Some("nexus-tun".into())
+    } else {
+        None
+    };
+
     let json = serde_json::to_string(&cfg).map_err(|e| e.to_string())?;
 
     // Tun: setuid Core before LoadConfig (upstream profile_start elevation).
@@ -531,6 +580,51 @@ fn connect_selected_sync(
     if use_tun {
         CoreSession::ensure_privileged_core()?;
     }
+
+    // Firewall: helper ready → peer → Connecting before Core Start (C2 L3/L5).
+    firewall::require_ready_for_connect()?;
+    // Residual Blocked (esp. peer-less) can leave getaddrinfo dead if DNS was closed.
+    // Soft-open once so hostname peers (VMess CDN etc.) can resolve, then Connecting.
+    let peer = match firewall::peer_from_outbound(&ob) {
+        Ok(p) => p,
+        Err(e) => {
+            let _ = firewall::apply(firewall::Policy::Reset);
+            firewall::peer_from_outbound(&ob).map_err(|e2| format!("{e}; after reset: {e2}"))?
+        }
+    };
+    let connect_params = tunnel_sm::ConnectParams {
+        peer: peer.clone(),
+        tun: use_tun,
+        mixed_port: port,
+        // Planned ifname is known before Start; Connected uses it so pass-on-utun
+        // is not gated on post-Start detection races.
+        tun_if: planned_tun_if.clone(),
+    };
+    let tr = tunnel_sm::apply(tunnel_sm::Event::BeginConnect(connect_params.clone()));
+    if let Err(e) = firewall::apply(firewall::policy_from_sm(tr.to, Some(&connect_params))) {
+        // Connecting never applied — safe to Reset (network open).
+        let _ = tunnel_sm::apply(tunnel_sm::Event::Fail(e.clone()));
+        let _ = firewall::apply(firewall::Policy::Reset);
+        return Err(format!("firewall connecting: {e}"));
+    }
+    // After Connecting is live: failures stay fail-closed (Blocked), not Reset.
+    // Mullvad ErrorState keeps lockdown until user disconnects.
+    let fail_closed = |msg: String, params: &tunnel_sm::ConnectParams| {
+        let tr = tunnel_sm::apply(tunnel_sm::Event::Fail(msg.clone()));
+        let _ = firewall::apply(firewall::policy_from_sm(tr.to, Some(params)));
+        msg
+    };
+
+    // Snapshot utun names before Start — gvisor often never assigns 172.19.0.1
+    // on the kernel iface; we detect by new utun + core.log "started at utunN".
+    #[cfg(target_os = "macos")]
+    let utun_before = if use_tun {
+        list_utun_names()
+    } else {
+        Vec::new()
+    };
+    #[cfg(not(target_os = "macos"))]
+    let utun_before: Vec<String> = Vec::new();
 
     // 1A: take session out of SESSION so Start (≤60s) does not block poll/disconnect.
     // Setup under lock; mint connect gen so mid-Start disconnect invalidates put_session_back.
@@ -545,15 +639,23 @@ fn connect_selected_sync(
         if g.is_none() {
             let bin = CoreSession::resolve_core_binary();
             if !bin.is_file() {
-                return Err(format!("NexusCore not found at {}", bin.display()));
+                let msg = format!("NexusCore not found at {}", bin.display());
+                return Err(fail_closed(msg, &connect_params));
             }
-            *g = Some(CoreSession::start(&bin).map_err(|e| e.to_string())?);
+            match CoreSession::start(&bin) {
+                Ok(s) => *g = Some(s),
+                Err(e) => {
+                    return Err(fail_closed(e.to_string(), &connect_params));
+                }
+            }
         }
         let s = g.as_mut().unwrap();
         if use_tun {
             let priv_now = s.is_privileged().unwrap_or(false);
             if !priv_now {
-                s.recycle_privileged()?;
+                if let Err(e) = s.recycle_privileged() {
+                    return Err(fail_closed(e, &connect_params));
+                }
             }
         }
         if let Ok((running, _)) = s.query_state() {
@@ -562,7 +664,15 @@ fn connect_selected_sync(
             }
         }
         let gen = bump_connect_gen();
-        let session = g.take().ok_or_else(|| "session vanished before start".to_string())?;
+        let session = match g.take() {
+            Some(s) => s,
+            None => {
+                return Err(fail_closed(
+                    "session vanished before start".into(),
+                    &connect_params,
+                ));
+            }
+        };
         (session, gen)
     };
 
@@ -570,7 +680,7 @@ fn connect_selected_sync(
         Ok(e) => e,
         Err(e) => {
             let _ = put_session_back(session, connect_gen);
-            return Err(e);
+            return Err(fail_closed(e, &connect_params));
         }
     };
     // Orphan Core / stale bbolt → initialize cache-file: timeout. One recovery:
@@ -586,13 +696,15 @@ fn connect_selected_sync(
                 Ok(e) => e,
                 Err(e) => {
                     let _ = put_session_back(session, connect_gen);
-                    return Err(e);
+                    return Err(fail_closed(e, &connect_params));
                 }
             };
         }
     }
     if start_err.is_some() {
         let _ = put_session_back(session, connect_gen);
+        let msg = start_err.clone().unwrap_or_else(|| "start failed".into());
+        let _ = fail_closed(msg.clone(), &connect_params);
         return Ok(serde_json::json!({
             "started": false,
             "start_error": start_err,
@@ -600,12 +712,17 @@ fn connect_selected_sync(
             "profile_id": pid,
             "tun": use_tun,
             "system_proxy": use_sys_proxy,
+            "tunnel_state": tunnel_sm::state().as_str(),
         }));
     }
     let (running, qpid) = session.query_state().unwrap_or((false, -1));
     // 2A arch: started only if this gen still owns a reinstalled session.
     let owned = put_session_back(session, connect_gen);
     if !owned {
+        // Disconnect bumps gen and owns FW teardown. Other races stay fail-closed.
+        if current_connect_gen() == connect_gen {
+            let _ = fail_closed("session not owned after start".into(), &connect_params);
+        }
         return Ok(serde_json::json!({
             "started": false,
             "start_error": "connect superseded",
@@ -619,12 +736,69 @@ fn connect_selected_sync(
         }));
     }
 
+    // Prefer planned ifname (already in Core config). Fall back to detect only
+    // if pin failed or Core picked a different utun.
+    let tun_if = if use_tun {
+        planned_tun_if
+            .clone()
+            .or_else(|| detect_tun_ifname(&utun_before))
+    } else {
+        None
+    };
+    let mut params_connected = connect_params.clone();
+    params_connected.tun_if = tun_if.clone();
+    // Connected only if fail-closed policy applies (or platform Unsupported).
+    // 1A/6A: SM Connected only via MarkConnected after firewall OK (no set_state).
+    if let Err(e) = firewall::apply(firewall::policy_from_sm(
+        tunnel_sm::State::Connected,
+        Some(&params_connected),
+    )) {
+        // Tear down Core; stay Blocked rather than fake Connected without PF.
+        let _ = SESSION.lock().ok().and_then(|mut g| {
+            if let Some(mut s) = g.take() {
+                let _ = s.stop_rpc();
+                let _ = s.stop_core_process();
+            }
+            Some(())
+        });
+        CoreSession::kill_stray_cores(None);
+        let tr = tunnel_sm::apply(tunnel_sm::Event::Fail(format!("firewall connected: {e}")));
+        let _ = firewall::apply(firewall::policy_from_sm(tr.to, Some(&params_connected)));
+        let _ = sys::set_system_proxy(false, port);
+        clear_dns_bootstrap_if_set();
+        tray_spin::set_spinning(false);
+        return Ok(serde_json::json!({
+            "started": false,
+            "start_error": format!("firewall connected: {e}"),
+            "running": false,
+            "profile_id": qpid,
+            "listen_port": port,
+            "proxy_note": "firewall connected policy failed",
+            "tun": use_tun,
+            "tun_if": params_connected.tun_if,
+            "system_proxy": use_sys_proxy,
+            "config": cfg,
+            "tunnel_state": tr.to.as_str(),
+            "firewall": firewall_status_json(),
+        }));
+    }
+    let _ = tunnel_sm::apply(tunnel_sm::Event::MarkConnected {
+        tun_if: params_connected.tun_if.clone(),
+    });
+    // Verify live utun matches planned name; rebind if Core/log differ.
+    if use_tun {
+        spawn_tun_if_rebind(connect_gen, params_connected.clone(), utun_before.clone());
+    }
+
     // cycle2 2A: proxy/spin only if this connect gen still owns the live session.
-    let proxy_note = apply_post_start_side_effects(connect_gen, use_sys_proxy, port);
+    let proxy_note = apply_post_start_side_effects(connect_gen, use_sys_proxy, use_tun, port);
     // If proxy path rolled back because gen died mid-call, still report not started.
     let still = current_connect_gen() == connect_gen
         && SESSION.lock().ok().map(|g| g.is_some()).unwrap_or(false);
     if !still {
+        if current_connect_gen() == connect_gen {
+            let _ = fail_closed("session lost after connect".into(), &params_connected);
+        }
         return Ok(serde_json::json!({
             "started": false,
             "start_error": "connect superseded",
@@ -646,9 +820,276 @@ fn connect_selected_sync(
         "listen_port": port,
         "proxy_note": proxy_note,
         "tun": use_tun,
+        "tun_if": params_connected.tun_if,
         "system_proxy": use_sys_proxy,
         "config": cfg,
+        "tunnel_state": tunnel_sm::state().as_str(),
+        "firewall": firewall_status_json(),
     }))
+}
+
+fn detect_tun_ifname(before: &[String]) -> Option<String> {
+    // Fallback only: planned interface_name should already be set. Order:
+    // (1) 172.19.0.0/24 on utun (2) new utun vs pre-Start (3) live core.log utun.
+    #[cfg(target_os = "macos")]
+    {
+        detect_nexus_tun_ifname(20, before) // ~1s; late via spawn_tun_if_rebind
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = before;
+        Some("nexus-tun".into())
+    }
+}
+
+/// Background: if planned ifname missing or Core used another utun, rebind pass-on-utun.
+fn spawn_tun_if_rebind(gen: u64, params: tunnel_sm::ConnectParams, before: Vec<String>) {
+    std::thread::spawn(move || {
+        #[cfg(target_os = "macos")]
+        {
+            for _ in 0..100 {
+                if gen != current_connect_gen() || tunnel_sm::state() != tunnel_sm::State::Connected {
+                    return;
+                }
+                if let Some(name) = detect_nexus_tun_ifname(1, &before) {
+                    // Skip rebind if already matching a live planned/current ifname.
+                    if params.tun_if.as_deref() == Some(name.as_str()) && if_exists(&name) {
+                        return;
+                    }
+                    let mut p = params.clone();
+                    p.tun_if = Some(name);
+                    if gen != current_connect_gen() || tunnel_sm::state() != tunnel_sm::State::Connected
+                    {
+                        return;
+                    }
+                    tunnel_sm::update_tun_if(p.tun_if.clone());
+                    let _ = firewall::apply(firewall::policy_from_sm(
+                        tunnel_sm::State::Connected,
+                        Some(&p),
+                    ));
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (gen, params, before);
+        }
+    });
+}
+
+/// Poll for Core's tun after Start (iface appears slightly after LoadConfig).
+#[cfg(target_os = "macos")]
+fn detect_nexus_tun_ifname(attempts: u32, before: &[String]) -> Option<String> {
+    for i in 0..attempts {
+        if let Some(name) = ifname_nexus_tun_by_addr() {
+            return Some(name);
+        }
+        if let Some(name) = new_utun_since(before) {
+            return Some(name);
+        }
+        if let Some(name) = tun_if_from_core_log() {
+            return Some(name);
+        }
+        if i + 1 < attempts {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+    tun_if_from_core_log().or_else(|| new_utun_since(before))
+}
+
+/// Next free utunN (same algorithm as sing-tun CalculateInterfaceName on darwin).
+#[cfg(target_os = "macos")]
+fn next_free_utun() -> Option<String> {
+    let mut max_idx: i32 = -1;
+    for name in list_utun_names() {
+        if let Some(rest) = name.strip_prefix("utun") {
+            if let Ok(n) = rest.parse::<i32>() {
+                if n > max_idx {
+                    max_idx = n;
+                }
+            }
+        }
+    }
+    let candidate = format!("utun{}", max_idx + 1);
+    if firewall::is_safe_ifname(&candidate) {
+        Some(candidate)
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn if_exists(name: &str) -> bool {
+    unsafe {
+        let c = match std::ffi::CString::new(name) {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+        libc::if_nametoindex(c.as_ptr()) != 0
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn list_utun_names() -> Vec<String> {
+    let mut names = Vec::new();
+    unsafe {
+        let mut ifap: *mut libc::ifaddrs = std::ptr::null_mut();
+        if libc::getifaddrs(&mut ifap) != 0 || ifap.is_null() {
+            return names;
+        }
+        let mut cur = ifap;
+        while !cur.is_null() {
+            let ifa = &*cur;
+            cur = ifa.ifa_next;
+            if ifa.ifa_name.is_null() {
+                continue;
+            }
+            if let Ok(name) = std::ffi::CStr::from_ptr(ifa.ifa_name).to_str() {
+                if name.starts_with("utun")
+                    && firewall::is_safe_ifname(name)
+                    && !names.iter().any(|n| n == name)
+                {
+                    names.push(name.to_string());
+                }
+            }
+        }
+        libc::freeifaddrs(ifap);
+    }
+    names.sort();
+    names
+}
+
+#[cfg(target_os = "macos")]
+fn new_utun_since(before: &[String]) -> Option<String> {
+    let after = list_utun_names();
+    let mut added: Vec<String> = after
+        .into_iter()
+        .filter(|n| !before.iter().any(|b| b == n))
+        .collect();
+    // Prefer highest utunN (sing-box tends to pick next free)
+    added.sort_by(|a, b| {
+        let na = a.trim_start_matches("utun").parse::<u32>().unwrap_or(0);
+        let nb = b.trim_start_matches("utun").parse::<u32>().unwrap_or(0);
+        na.cmp(&nb)
+    });
+    added.pop()
+}
+
+#[cfg(target_os = "macos")]
+fn ifname_nexus_tun_by_addr() -> Option<String> {
+    unsafe {
+        let mut ifap: *mut libc::ifaddrs = std::ptr::null_mut();
+        if libc::getifaddrs(&mut ifap) != 0 || ifap.is_null() {
+            return None;
+        }
+        let mut found = None;
+        let mut cur = ifap;
+        while !cur.is_null() {
+            let ifa = &*cur;
+            cur = ifa.ifa_next;
+            if ifa.ifa_addr.is_null() || ifa.ifa_name.is_null() {
+                continue;
+            }
+            if (*ifa.ifa_addr).sa_family as i32 != libc::AF_INET {
+                continue;
+            }
+            let sin = &*(ifa.ifa_addr as *const libc::sockaddr_in);
+            let ip = u32::from_be(sin.sin_addr.s_addr).to_be_bytes();
+            // 172.19.0.0/24 (generate TUN_V4)
+            if ip[0] != 172 || ip[1] != 19 || ip[2] != 0 {
+                continue;
+            }
+            if let Ok(name) = std::ffi::CStr::from_ptr(ifa.ifa_name).to_str() {
+                if firewall::is_safe_ifname(name) && name.starts_with("utun") {
+                    found = Some(name.to_string());
+                    break;
+                }
+            }
+        }
+        libc::freeifaddrs(ifap);
+        found
+    }
+}
+
+/// Last live "started at utunN" from core.log. Ignores stale names (iface gone).
+#[cfg(target_os = "macos")]
+fn tun_if_from_core_log() -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let path = crate::paths::log_dir().join("core.log");
+    let mut f = std::fs::File::open(&path).ok()?;
+    let len = f.seek(SeekFrom::End(0)).ok()?;
+    let start = len.saturating_sub(65536);
+    f.seek(SeekFrom::Start(start)).ok()?;
+    let mut buf = String::new();
+    f.read_to_string(&mut buf).ok()?;
+    let mut last: Option<String> = None;
+    for line in buf.lines() {
+        // inbound/tun[tun-in]: started at utun5
+        if let Some(idx) = line.find("started at utun") {
+            let rest = &line[idx + "started at ".len()..];
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+                .collect();
+            if name.starts_with("utun") && firewall::is_safe_ifname(&name) && if_exists(&name) {
+                last = Some(name);
+            }
+        }
+    }
+    last
+}
+
+fn firewall_status_json() -> serde_json::Value {
+    let st = firewall::status();
+    let support = match st.support {
+        firewall::PlatformSupport::Active => "active",
+        firewall::PlatformSupport::Unsupported => "unsupported",
+    };
+    // 6A: desired (SM) vs applied (last successful apply) + mismatch.
+    let desired = firewall::desired_policy_name();
+    let applied = st.last_policy.clone();
+    let mismatch = !desired.is_empty() && !applied.is_empty() && desired != applied;
+    serde_json::json!({
+        "support": support,
+        "last_policy": st.last_policy,
+        "desired_policy": desired,
+        "applied_policy": applied,
+        "policy_mismatch": mismatch,
+        "last_error": st.last_error,
+        "peer": st.peer,
+        "tun_if": st.tun_if,
+        "tunnel_state": tunnel_sm::state().as_str(),
+        "helper_installed": st.helper_installed,
+        "helper_running": st.helper_running,
+        "helper_detail": st.helper_detail,
+    })
+}
+
+#[tauri::command]
+async fn firewall_status() -> Result<serde_json::Value, String> {
+    Ok(firewall_status_json())
+}
+
+#[tauri::command]
+async fn firewall_helper_install() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        firewall::install_helper()?;
+        Ok(firewall_status_json())
+    })
+    .await
+    .map_err(|e| format!("join: {e}"))?
+}
+
+#[tauri::command]
+async fn firewall_helper_uninstall() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        firewall::uninstall_helper()?;
+        Ok(firewall_status_json())
+    })
+    .await
+    .map_err(|e| format!("join: {e}"))?
 }
 
 /// Live connections from Core TrafficManager (needs experimental.clash_api).
@@ -736,8 +1177,19 @@ async fn disconnect_selected() -> Result<serde_json::Value, String> {
 }
 
 fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
+    let _ = tunnel_sm::apply(tunnel_sm::Event::BeginDisconnect);
     // Invalidate any in-flight Start before killing (1A residual).
     let _ = bump_connect_gen();
+    // L9: Blocked first so traffic cannot leak while Core/proxy tear down.
+    // eng 2A: keep last peer on intermediate Blocked when present.
+    let (peer, mixed_port) = match tunnel_sm::last_params() {
+        Some(p) => (Some(p.peer), p.mixed_port),
+        None => (None, MIXED_PORT),
+    };
+    let _ = firewall::apply(firewall::Policy::Blocked {
+        peer,
+        mixed_port,
+    });
     let (stop_err, running, pid) = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         if g.is_none() {
@@ -754,18 +1206,31 @@ fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
         }
     };
 
-    // Always best-effort clear OS proxy (store flag can lag).
-    let proxy_note = match sys::set_system_proxy(false, MIXED_PORT) {
-        Ok(m) => Some(m),
-        Err(e) => Some(format!("clear system proxy: {e}")),
-    };
+    // Always best-effort clear OS proxy; DNS only if this session set bootstrap (1A).
+    let mut notes = Vec::new();
+    match sys::set_system_proxy(false, MIXED_PORT) {
+        Ok(m) => notes.push(m),
+        Err(e) => notes.push(format!("clear system proxy: {e}")),
+    }
+    if DNS_BOOTSTRAP_SET.swap(false, AtomicOrdering::SeqCst) {
+        match sys::set_system_dns_bootstrap(false) {
+            Ok(m) => notes.push(m),
+            Err(e) => notes.push(format!("clear system dns: {e}")),
+        }
+    }
+    let proxy_note = Some(notes.join(" · "));
     tray_spin::set_spinning(false);
+    // After Core + proxy down: leave Idle and flush PF anchor (3A).
+    let _ = tunnel_sm::apply(tunnel_sm::Event::ResetIdle);
+    firewall::reset_best_effort();
     Ok(serde_json::json!({
         "stopped": stop_err.is_none(),
         "stop_error": stop_err,
         "running": running,
         "profile_id": pid,
         "proxy_note": proxy_note,
+        "tunnel_state": tunnel_sm::state().as_str(),
+        "firewall": firewall_status_json(),
     }))
 }
 
@@ -920,11 +1385,15 @@ static ALLOW_EXIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool
 
 /// Single quit/teardown path: stop Core + always best-effort clear OS proxy at MIXED_PORT.
 /// Used by app_quit, tray quit, and Exit (after confirm). Idempotent.
+/// 3A: quit → Reset (session kill-switch ends with app; not post-quit lockdown).
 fn teardown_session() {
     let _ = bump_connect_gen();
     tray_spin::set_spinning(false);
-    // Always clear — store flag can lag OS; exit must not leave browsers on dead mixed port.
+    let _ = tunnel_sm::apply(tunnel_sm::Event::ResetIdle);
+    firewall::reset_best_effort();
+    // Always clear proxy; DNS only if this session set bootstrap (1A).
     let _ = sys::set_system_proxy(false, MIXED_PORT);
+    clear_dns_bootstrap_if_set();
     let _ = (|| -> Result<(), String> {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         if let Some(mut s) = g.take() {
@@ -936,7 +1405,8 @@ fn teardown_session() {
     })();
 }
 
-/// Best-effort: RPC running, NexusCore process, or mixed port still accepting.
+/// Same live rule as session_status (4A/5A): never treat mixed-port alone as live.
+/// RPC running, or (Core process ∧ mixed open). Unrelated :2080 listener is not a tunnel.
 fn tunnel_is_live() -> bool {
     if let Ok(mut g) = SESSION.lock() {
         if let Some(s) = g.as_mut() {
@@ -947,7 +1417,7 @@ fn tunnel_is_live() -> bool {
             }
         }
     }
-    CoreSession::core_process_alive() || CoreSession::mixed_port_open(MIXED_PORT)
+    CoreSession::core_process_alive() && CoreSession::mixed_port_open(MIXED_PORT)
 }
 
 /// Native warning before full teardown (tray / Cmd+Q when webview dialog unavailable).
@@ -1029,8 +1499,9 @@ pub fn run() {
             generate_preview,
             catalog_get,
             catalog_put,
-            blocklist_get,
-            blocklist_put,
+            firewall_status,
+            firewall_helper_install,
+            firewall_helper_uninstall,
             set_system_proxy_cmd,
             set_tun_cmd,
             connect_selected,
@@ -1090,6 +1561,13 @@ pub fn run() {
             // tray registered with app on build; retain handle for process life
             app.manage(_tray);
             tray_spin::init(app.handle());
+            // 5A: cold boot residual PF — no active tunnel → best-effort Reset.
+            // Helper down → status only (reset_best_effort is soft).
+            std::thread::spawn(|| {
+                if !tunnel_is_live() {
+                    firewall::reset_best_effort();
+                }
+            });
             Ok(())
         })
         .build(tauri::generate_context!())

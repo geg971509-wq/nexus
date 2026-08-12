@@ -104,6 +104,11 @@
       radial-gradient(1100px 520px at 18% -8%, #e7eef9 0%, transparent 58%),
       radial-gradient(900px 480px at 100% 0%, #ece8f5 0%, transparent 52%),
       linear-gradient(180deg, #d5dae3 0%, #cfd4de 100%);
+    /* shared page chrome — form tabs + home gutters align */
+    --page-gutter-x: 24px;
+    --page-gutter-y: 20px;
+    --page-content-max: 680px;
+    --page-card-gap: 16px;
   }
   /* macOS-utility dark: layered charcoal, not pure black; elevated surfaces lighter */
   html[data-theme="dark"] {
@@ -644,7 +649,7 @@
 
   /* Hero connection bar — compact, list is primary */
   .hero {
-    padding: 14px 20px 10px;
+    padding: 14px var(--page-gutter-x) 10px;
   }
   .hero-card {
     background: var(--hero-card);
@@ -799,7 +804,7 @@
   .list-wrap {
     min-height: 0;
     min-width: 0; /* allow table-card to shrink + scroll instead of blowing main */
-    padding: 10px 22px 12px;
+    padding: 10px var(--page-gutter-x) 12px;
     display: grid;
     grid-template-rows: minmax(0, 1fr);
     gap: 0;
@@ -1308,6 +1313,99 @@
     font-size: 13px;
     font-weight: 400;
   }
+  /* Firewall values — same form rail as settings; pill/value hierarchy only */
+  .fw-val {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    text-align: end;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--label);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .fw-val.mono {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+  .fw-val.muted {
+    color: var(--tertiary);
+    font-weight: 400;
+  }
+  .fw-val.ok { color: var(--lat-good); }
+  .fw-val.warn { color: var(--orange); }
+  .fw-val.err { color: var(--red); }
+  .fw-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 22px;
+    padding: 0 9px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fw-pill.neutral {
+    background: var(--fill);
+    color: var(--secondary);
+    border: 0.5px solid var(--separator);
+  }
+  .fw-pill.ok {
+    background: var(--green-soft);
+    color: var(--lat-good);
+    border: 0.5px solid rgba(52, 199, 89, 0.22);
+  }
+  .fw-pill.warn {
+    background: rgba(255, 159, 10, 0.14);
+    color: #c77a00;
+    border: 0.5px solid rgba(255, 159, 10, 0.28);
+  }
+  .fw-pill.err {
+    background: rgba(255, 59, 48, 0.12);
+    color: var(--red);
+    border: 0.5px solid rgba(255, 59, 48, 0.22);
+  }
+  html[data-theme="dark"] .fw-pill.warn { color: #ffb340; }
+  .fw-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .fw-actions .btn-primary,
+  .fw-actions .btn-ghost {
+    min-width: 96px;
+    cursor: pointer;
+  }
+  .fw-actions .btn-primary:disabled,
+  .fw-actions .btn-ghost:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .fw-help {
+    margin: 14px 4px 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--fill-3);
+    border: 0.5px solid var(--hairline);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--secondary);
+    font-weight: 400;
+  }
   /* shared grid: 目标 | 进程 | 删除 — process narrow; delete col fits 删除 not stacked */
   .block-cols {
     display: grid;
@@ -1405,7 +1503,7 @@
     height: 44px;
     display: flex;
     align-items: center;
-    padding: 0 20px;
+    padding: 0 var(--page-gutter-x);
     font-size: 15px;
     font-weight: 600;
     letter-spacing: -0.02em;
@@ -1420,61 +1518,25 @@
     height: 100%;
     background: var(--bg);
   }
-  .pref-toolbar {
-    display: flex;
-    justify-content: center;
-    gap: 22px;
-    padding: 16px 16px 12px;
-    border-bottom: 0.5px solid var(--separator);
-    background: var(--chrome);
+  /* firewall has no foot row — still fill the view */
+  .view-block .settings {
+    grid-template-rows: auto minmax(0, 1fr);
   }
-  .pref-tab {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 7px;
-    width: 76px;
-    padding: 4px 0;
-    border-radius: 10px;
-    color: var(--secondary);
-    font-size: 11px;
-    font-weight: 500;
-    transition: color .12s var(--ease);
-  }
-  .pref-tab:hover { color: var(--label); }
-  .pref-tab.active { color: var(--label); font-weight: 600; }
-  .pref-ico {
-    width: 52px;
-    height: 52px;
-    border-radius: 12px;
-    display: grid;
-    place-items: center;
-    background:
-      linear-gradient(180deg, rgba(255,255,255,.9) 0%, rgba(255,255,255,.35) 45%, transparent 100%),
-      linear-gradient(180deg, #eceef3 0%, #dfe2ea 100%);
-    border: 0.5px solid rgba(0,0,0,.07);
-    box-shadow: 0 1px 1px rgba(255,255,255,.7) inset, 0 1px 2px rgba(0,0,0,.05);
-    color: #3a3a3c;
-    transition: transform .15s var(--ease), box-shadow .15s var(--ease), background .15s var(--ease), color .15s var(--ease);
-  }
-  .pref-tab:hover .pref-ico { transform: translateY(-1px); }
-  .pref-tab.active .pref-ico {
-    background:
-      linear-gradient(180deg, rgba(255,255,255,.28) 0%, transparent 42%),
-      linear-gradient(180deg, #5ab0ff 0%, #0a74ff 100%);
-    color: #fff;
-    border-color: rgba(0, 90, 200, .22);
-    box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 6px 16px rgba(0, 122, 255, .28);
-  }
-  .pref-ico svg { width: 26px; height: 26px; stroke-width: 1.65; }
   .settings-body {
     min-width: 0;
     min-height: 0;
     overflow: auto;
     /* bottom breathing room so last set-card does not kiss the footer */
-    padding: 20px 28px 32px;
+    padding: var(--page-gutter-y) var(--page-gutter-x) 32px;
   }
-  .set-panel { display: none; max-width: 680px; margin: 0 auto; }
+  /* one content rail for 连接/订阅/设置/防火墙 — width outside padding */
+  .set-panel {
+    display: none;
+    max-width: var(--page-content-max);
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
   .set-panel.active { display: block; }
   .set-card {
     background: var(--surface);
@@ -1483,6 +1545,7 @@
     box-shadow: var(--shadow-sm);
     overflow: visible; /* allow select popups to escape rows */
   }
+  .set-card + .set-card { margin-top: var(--page-card-gap); }
   .set-card > .set-section:first-child { border-radius: var(--r-lg) var(--r-lg) 0 0; }
   .set-card > .set-row:first-child { border-radius: var(--r-lg) var(--r-lg) 0 0; }
   .set-card > .set-row:last-child { border-radius: 0 0 var(--r-lg) var(--r-lg); }
@@ -1779,7 +1842,7 @@
     display: none;
     align-items: center;
     gap: 10px;
-    padding: 8px 22px;
+    padding: 8px var(--page-gutter-x);
     border-top: 0.5px solid var(--dirty-border);
     background: var(--dirty-bg);
     color: var(--dirty-text);
@@ -2093,7 +2156,7 @@
     gap: 10px;
     /* separate action bar from scroll content (user: 上下分开 + 拉开距离) */
     margin-top: 0;
-    padding: 16px 22px 18px;
+    padding: 16px var(--page-gutter-x) 18px;
     border-top: 0.5px solid var(--separator);
     background: var(--foot-bg);
     flex-shrink: 0;
@@ -2416,9 +2479,9 @@
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5h15M4.5 12h15M4.5 16.5h10"/><path d="m16.5 15 2.5 2.5L22 14"/></svg></span>
           <span class="side-label" data-i18n="nav.sub">订阅</span>
         </button>
-        <button type="button" class="side-item" data-view="block" title="拦截域名与 IP" data-i18n-title="title.navBlock" data-tauri-drag-region="false">
+        <button type="button" class="side-item" data-view="block" title="防火墙" data-i18n-title="title.navFirewall" data-tauri-drag-region="false">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.25"/><path d="M6.2 6.2 17.8 17.8"/></svg></span>
-          <span class="side-label" data-i18n="nav.block">拦截</span>
+          <span class="side-label" data-i18n="nav.firewall">防火墙</span>
         </button>
         <button type="button" class="side-item" data-view="settings" data-settings="basic" title="界面、启动与核心" data-i18n-title="title.navSettings" data-tauri-drag-region="false">
           <span class="side-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.24.3.4.65.5 1.02.1.36.15.74.15 1.13s-.05.77-.15 1.13c-.1.37-.26.72-.5 1.02Z"/></svg></span>
@@ -2538,35 +2601,86 @@
         </section>
 
         <section class="view view-block" id="view-block" hidden>
-          <div class="settings">
-            <div class="settings-head" data-tauri-drag-region="deep" data-i18n="block.title">拦截列表</div>
-            <div class="settings-body">
-              <div class="block-panel" style="max-width:720px;margin:0 auto;">
+          <div class="settings" data-tauri-drag-region="deep">
+            <div class="settings-head" data-tauri-drag-region="deep" data-i18n="fw.title">防火墙</div>
+            <div class="settings-body" data-tauri-drag-region="false">
+              <div class="set-panel active" id="panel-firewall">
                 <div class="set-card">
-                  <div class="block-toolbar">
-                    <div class="block-add">
-                      <input class="field" type="text" id="blockHostInput" placeholder="域名或 IP" title="例如 ads.example.com 或 1.2.3.4" autocomplete="off" spellcheck="false" data-i18n-placeholder="ph.blockHost" data-i18n-title="title.blockPh" />
-                      <button type="button" class="tb-btn solid" id="blockAddBtn" data-i18n="block.add">添加</button>
+                  <div class="set-section" data-i18n="fw.secStatus">运行状态</div>
+                  <div class="set-row">
+                    <div class="set-label" data-i18n="fw.state">状态</div>
+                    <div class="set-right">
+                      <div class="set-ctrl inline"><span id="fwState" class="fw-pill neutral">—</span></div>
                     </div>
                   </div>
-                  <div class="list-head block-list-head" data-tauri-drag-region="deep">
-                    <div class="list-title" data-i18n="block.count">已拦截</div>
-                    <span class="list-count" id="blockCount">0</span>
-                    <div class="grow" data-tauri-drag-region aria-hidden="true"></div>
-                    <div class="search" data-tauri-drag-region="false">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                      <input type="search" id="blockFilterInput" placeholder="过滤域名 / IP / 应用" title="按域名、IP 或应用筛选" autocomplete="off" data-i18n-placeholder="ph.blockFilter" data-i18n-title="title.blockSearch" />
+                  <div class="set-row">
+                    <div class="set-label" data-i18n="fw.support">平台</div>
+                    <div class="set-right">
+                      <div class="set-ctrl"><span id="fwSupport" class="fw-val muted">—</span></div>
                     </div>
                   </div>
-                  <div class="block-cols block-colhead" id="blockColHead" aria-hidden="true" hidden>
-                    <span title="* = 任意目标" data-i18n="th.dest" data-i18n-title="title.blockAnyHost">目标</span>
-                    <span title="* = 任意进程" data-i18n="th.proc" data-i18n-title="title.blockAnyProc">进程</span>
-                    <span></span>
+                  <div class="set-row">
+                    <div class="set-label" data-i18n="fw.policy">策略</div>
+                    <div class="set-right">
+                      <div class="set-ctrl"><span id="fwPolicy" class="fw-val mono muted">—</span></div>
+                    </div>
                   </div>
-                  <div id="blockEmpty" class="block-empty" hidden data-i18n-html="block.emptyFull">暂无拦截项。<br/>在底部「连接」表右键：拦截目标 / 拦截应用（可多选后批量拦截），或在上方手动添加域名。</div>
-                  <div id="blockFilterEmpty" class="block-empty" hidden data-i18n="block.empty">无匹配项</div>
-                  <ul id="blockList" class="block-list" aria-label="拦截域名、IP 与应用"></ul>
+                  <div class="set-row">
+                    <div class="set-label" data-i18n="fw.desired">期望</div>
+                    <div class="set-right">
+                      <div class="set-ctrl"><span id="fwDesired" class="fw-val mono muted">—</span></div>
+                    </div>
+                  </div>
+                  <div class="set-row">
+                    <div class="set-label" data-i18n="fw.applied">已应用</div>
+                    <div class="set-right">
+                      <div class="set-ctrl"><span id="fwApplied" class="fw-val mono muted">—</span></div>
+                    </div>
+                  </div>
+                  <div class="set-row">
+                    <div class="set-label" data-i18n="fw.peer">对端</div>
+                    <div class="set-right">
+                      <div class="set-ctrl"><span id="fwPeer" class="fw-val mono muted">—</span></div>
+                    </div>
+                  </div>
+                  <div class="set-row">
+                    <div class="set-label" data-i18n="fw.tun">隧道接口</div>
+                    <div class="set-right">
+                      <div class="set-ctrl"><span id="fwTun" class="fw-val mono muted">—</span></div>
+                    </div>
+                  </div>
+                  <div class="set-row">
+                    <div class="set-label" data-i18n="fw.error">上次错误</div>
+                    <div class="set-right">
+                      <div class="set-ctrl"><span id="fwErr" class="fw-val muted">—</span></div>
+                    </div>
+                  </div>
                 </div>
+
+                <div class="set-card">
+                  <div class="set-section" data-i18n="fw.secHelper">守护进程</div>
+                  <div class="set-row">
+                    <div class="set-label" data-i18n="fw.helper">守护进程</div>
+                    <div class="set-right">
+                      <div class="set-ctrl inline"><span id="fwHelper" class="fw-pill neutral">—</span></div>
+                    </div>
+                  </div>
+                  <div class="set-row" id="fwHelperActions">
+                    <div class="set-label" data-i18n="fw.actions">操作</div>
+                    <div class="set-right">
+                      <div class="set-ctrl">
+                        <div class="fw-actions">
+                          <button type="button" class="btn-primary" id="fwInstallBtn" data-i18n="fw.install">安装守护</button>
+                          <button type="button" class="btn-ghost" id="fwUninstallBtn" data-i18n="fw.uninstall">卸载守护</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <p class="fw-help" data-i18n="fw.help">
+                  连接/断开/异常时系统包过滤 fail-closed（macOS PF）。域名/进程拦截已移除。Windows 暂不启用。
+                </p>
               </div>
             </div>
           </div>
@@ -3138,15 +3252,6 @@
       <span class="grow" data-i18n="conn.copyRow">复制整行</span>
     </button>
     <div class="menu-sep"></div>
-    <button class="menu-item danger" data-conn-ctx="block-any" role="menuitem" title="拦截该目标：任意进程访问此域名/IP 均拒绝" data-i18n-title="title.blockAny">
-      <span class="grow" data-i18n="conn.blockAny">拦截目标 · 全部进程</span>
-    </button>
-    <button class="menu-item danger" data-conn-ctx="block-proc" role="menuitem" title="拦截该目标：仅此应用访问此域名/IP 时拒绝（需完整进程路径）" data-i18n-title="title.blockProc">
-      <span class="grow" data-i18n="conn.blockProc">拦截目标 · 仅此应用</span>
-    </button>
-    <button class="menu-item danger" data-conn-ctx="block-app" role="menuitem" title="拦截该应用：此进程的全部网络连接均拒绝（需完整进程路径）" data-i18n-title="title.blockApp">
-      <span class="grow" data-i18n="conn.blockApp">拦截应用 · 全部连接</span>
-    </button>
   </div>
 
   <div class="confirm-mask" id="confirmMask" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden>
@@ -3650,6 +3755,15 @@
       setPowerBusy(true, wantConnect);
       try {
         if (wantConnect) {
+          // Power with no row selected: use first listed node.
+          if ((!selectedName || selectedName === '—') && typeof findNodeByName === 'function') {
+            const first = document.querySelector('#nodeTable tr[data-name]');
+            if (first && first.dataset.name) {
+              selectedName = first.dataset.name;
+              selectedLat = first.dataset.lat || '—';
+              if (typeof selectNodeRow === 'function') selectNodeRow(first);
+            }
+          }
           const payload = (typeof nodeConnectPayload === 'function')
             ? nodeConnectPayload(selectedName)
             : null;
@@ -3665,11 +3779,13 @@
             }
             return;
           }
-          const r = await nexusInvoke('connect_selected', Object.assign({
+          const connectArgs = Object.assign({
             profile_id: 1,
             tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
             system_proxy: !!document.getElementById('sysToggle')?.checked,
-          }, payload));
+          }, payload);
+          const r = await connectSelectedWithHelper(connectArgs);
+          if (typeof refreshFirewall === 'function') refreshFirewall();
           if (!r || r.offline) {
             log('CORE', 'warn', t('log.backendDown'));
             return;
@@ -3677,10 +3793,15 @@
           if (!r.ok) { log('CORE', 'warn', t('log.startFail', { error: r.error })); return; }
           if (r.data?.start_error) {
             log('CORE', 'warn', `Start: ${r.data.start_error}`);
+            // Start failed after Connecting/Blocked — open network so user can fix node/DNS.
+            try { await nexusInvoke('disconnect_selected'); } catch (_) {}
+            if (typeof refreshFirewall === 'function') refreshFirewall();
             return;
           }
           if (!r.data?.started) {
             log('CORE', 'warn', t('log.startNoOk'));
+            try { await nexusInvoke('disconnect_selected'); } catch (_) {}
+            if (typeof refreshFirewall === 'function') refreshFirewall();
             return;
           }
           setConnected(true);
@@ -3688,6 +3809,8 @@
           const port = r.data?.listen_port || mixedPort();
           log('OK', 'ok', t('log.tunnelOn', { port, name: connectedName || selectedName }));
           if (r.data?.proxy_note) log('SYS', 'info', r.data.proxy_note);
+          if (r.data?.tun && r.data?.tun_if) log('SYS', 'info', `Tun iface: ${r.data.tun_if}`);
+          else if (r.data?.tun) log('SYS', 'warn', 'Tun on — waiting for utun (firewall rebind)');
           if (typeof fillRuntimeStats === 'function') fillRuntimeStats();
         } else {
           log('CORE', 'warn', t('log.stopProfile', { name: connectedName || selectedName }));
@@ -3697,6 +3820,7 @@
           } else if (r && !r.ok) {
             await nexusInvoke('core_stop');
           }
+          if (typeof refreshFirewall === 'function') refreshFirewall();
           setConnected(false);
           try { localStorage.removeItem('nexus.lastConnected'); } catch (_) {}
           log('OK', 'ok', t('log.stopped'));
@@ -3931,15 +4055,25 @@
                 return;
               }
               log('CORE', 'info', t('log.startProfile', { name: selectedName }));
-              const r = await nexusInvoke('connect_selected', Object.assign({
+              const r = await connectSelectedWithHelper(Object.assign({
                 profile_id: 1,
                 tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
                 system_proxy: !!document.getElementById('sysToggle')?.checked,
               }, payload));
               if (!r || r.offline) { log('CORE', 'warn', t('log.backendDown')); return; }
               if (!r.ok) { log('CORE', 'warn', t('log.startFail', { error: r.error })); return; }
-              if (r.data?.start_error) { log('CORE', 'warn', `Start: ${r.data.start_error}`); return; }
-              if (!r.data?.started) { log('CORE', 'warn', t('log.startNoOk')); return; }
+              if (r.data?.start_error) {
+                log('CORE', 'warn', `Start: ${r.data.start_error}`);
+                try { await nexusInvoke('disconnect_selected'); } catch (_) {}
+                if (typeof refreshFirewall === 'function') refreshFirewall();
+                return;
+              }
+              if (!r.data?.started) {
+                log('CORE', 'warn', t('log.startNoOk'));
+                try { await nexusInvoke('disconnect_selected'); } catch (_) {}
+                if (typeof refreshFirewall === 'function') refreshFirewall();
+                return;
+              }
               setConnected(true);
               try { localStorage.setItem('nexus.lastConnected', connectedName || selectedName || ''); } catch (_) {}
               log('OK', 'ok', t('log.tunnelOn', { port: r.data?.listen_port || mixedPort(), name: connectedName || selectedName }));
@@ -5272,7 +5406,13 @@
         const id = node.outbound.uuid || '';
         if (id && !looksLikeUuid(id)) return null;
       }
-      return { outbound: node.outbound };
+      // Catalog display IP (右键解析) → PF peer allow when server is hostname/CDN.
+      const o = Object.assign({}, node.outbound);
+      const m = String(node.addr || '').match(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/);
+      if (m && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(String(o.server || ''))) {
+        o.server_ip = m[1];
+      }
+      return { outbound: o };
     }
     if (isShareUri(node.link)) return { link: node.link };
     return null;
@@ -5891,7 +6031,14 @@
   function applyHydratedCatalog(data, src) {
     if (!data || !applyCatalog(data)) return false;
     const stripped = stripDemoSeedNodes();
-    try { if (typeof saveCatalog === 'function') saveCatalog(true); } catch (_) {}
+    // Never persist empty shell over store just because hydrate painted defaults.
+    // Persist when: demo stripped, or LS→store migrate, or catalog has nodes/URLs.
+    const n = GROUPS.reduce((s, g) => s + (g.count | 0), 0);
+    const hasUrl = GROUPS.some(g => g.url && String(g.url).trim());
+    const shouldPut = stripped || src === 'local→store' || n > 0 || hasUrl;
+    if (shouldPut) {
+      try { if (typeof saveCatalog === 'function') saveCatalog(true); } catch (_) {}
+    }
     if (typeof syncSubSegFromGroups === 'function') syncSubSegFromGroups();
     const want = data.active && GROUPS.some(g => g.id === data.active)
       ? data.active
@@ -5902,347 +6049,9 @@
       renderNodes(want);
     }
     if (typeof syncSubSettingsFromActiveGroup === 'function') syncSubSettingsFromActiveGroup();
-    const n = GROUPS.reduce((s, g) => s + (g.count | 0), 0);
     try { log('SYS', 'info', t('log.subRestored', { groups: GROUPS.length, n, src: src ? ' · ' + src : '', stripped: stripped ? t('log.demoStripped') : '' })); } catch (_) {}
     return true;
   }
-  let blocklistItems = [];
-  let blocklistLoaded = false;
-
-  /** Normalize store/UI entry → {host, process_path?} ; process-only uses empty host. */
-  function coerceBlockEntry(raw) {
-    if (raw == null) return null;
-    if (typeof raw === 'string') {
-      const host = String(raw).trim();
-      return host ? { host, process_path: null } : null;
-    }
-    if (typeof raw === 'object') {
-      const host = String(raw.host || '').trim();
-      const pp = raw.process_path != null ? String(raw.process_path).trim() : '';
-      if (!host && !pp) return null;
-      if (!host && pp) return { host: '', process_path: pp };
-      return { host, process_path: pp || null };
-    }
-    return null;
-  }
-
-  function blockEntryKey(ent) {
-    const e = coerceBlockEntry(ent);
-    if (!e) return '';
-    if (!e.host && e.process_path) return `\0${e.process_path}`;
-    return e.process_path ? `${e.host.toLowerCase()}\0${e.process_path}` : e.host.toLowerCase();
-  }
-
-  function blockEntryLabel(ent) {
-    const e = coerceBlockEntry(ent);
-    if (!e) return '';
-    if (!e.host && e.process_path) {
-      const base = e.process_path.split(/[/\\]/).filter(Boolean).pop() || e.process_path;
-      return `应用 · ${base}`;
-    }
-    if (!e.process_path) return e.host;
-    const base = e.process_path.split(/[/\\]/).filter(Boolean).pop() || e.process_path;
-    return `${e.host} · ${base}`;
-  }
-
-  function extractBlocklistItems(data) {
-    if (!data) return null;
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data.items)) return data.items;
-    if (Array.isArray(data.blocklist)) return data.blocklist;
-    return null;
-  }
-
-  let blocklistLoadPromise = null;
-  async function loadBlocklist() {
-    // share in-flight get; if it finished offline, callers may re-enter after finally
-    if (blocklistLoadPromise) return blocklistLoadPromise;
-    blocklistLoadPromise = (async () => {
-      try {
-        let items = null;
-        const r = await nexusInvoke('blocklist_get');
-        if (r && r.offline) {
-          if (blocklistItems.length) renderBlocklist(blocklistItems);
-          else applyBlocklistFilter();
-          return blocklistItems;
-        }
-        if (r && r.ok) items = extractBlocklistItems(r.data);
-        if (items == null) {
-          // fallback: store_snapshot also carries blocklist (older/partial get shapes)
-          try {
-            const st = await nexusInvoke('store_snapshot');
-            if (st && st.ok) items = extractBlocklistItems(st.data);
-          } catch (_) {}
-        }
-        if (items == null) {
-          if (r && r.error) log('SYS', 'warn', t('log.blockLoadFail', { error: r.error }));
-          if (blocklistItems.length) renderBlocklist(blocklistItems);
-          else applyBlocklistFilter();
-          return blocklistItems;
-        }
-        blocklistItems = items.map(coerceBlockEntry).filter(Boolean);
-        blocklistLoaded = true;
-        renderBlocklist(blocklistItems);
-        return blocklistItems;
-      } catch (e) {
-        try { log('SYS', 'warn', t('log.blockLoadFail', { error: e && e.message || e })); } catch (_) {}
-        if (blocklistItems.length) renderBlocklist(blocklistItems);
-        else applyBlocklistFilter();
-        return blocklistItems;
-      } finally {
-        blocklistLoadPromise = null;
-      }
-    })();
-    return blocklistLoadPromise;
-  }
-
-  /** Tab enter: paint cache, then get; one retry if first attempt was offline. */
-  async function ensureBlocklistOnView() {
-    if (blocklistItems.length) renderBlocklist(blocklistItems);
-    else applyBlocklistFilter();
-    await loadBlocklist();
-    if (!blocklistLoaded) await loadBlocklist();
-  }
-
-  function blockFilterQuery() {
-    return (document.getElementById('blockFilterInput')?.value || '').trim().toLowerCase();
-  }
-
-  function applyBlocklistFilter() {
-    const ul = document.getElementById('blockList');
-    const empty = document.getElementById('blockEmpty');
-    const filterEmpty = document.getElementById('blockFilterEmpty');
-    const countEl = document.getElementById('blockCount');
-    const colHead = document.getElementById('blockColHead');
-    if (!ul) return;
-    const q = blockFilterQuery();
-    const rows = ul.querySelectorAll('.block-row');
-    let shown = 0;
-    rows.forEach((row) => {
-      const hay = (row.dataset.filter || row.textContent || '').toLowerCase();
-      const show = !q || hay.includes(q);
-      row.hidden = !show;
-      if (show) shown++;
-    });
-    const total = rows.length;
-    if (countEl) countEl.textContent = q ? `${shown}/${total}` : String(total);
-    if (empty) empty.hidden = total > 0;
-    if (filterEmpty) filterEmpty.hidden = !(total > 0 && shown === 0);
-    ul.hidden = total === 0;
-    if (colHead) colHead.hidden = total === 0;
-  }
-
-  function renderBlocklist(items) {
-    const ul = document.getElementById('blockList');
-    if (!ul) return;
-    const list = (Array.isArray(items) ? items : []).map(coerceBlockEntry).filter(Boolean);
-    ul.innerHTML = list.map((e) => {
-      const base = e.process_path
-        ? (e.process_path.split(/[/\\]/).filter(Boolean).pop() || e.process_path)
-        : '';
-      const hostOnly = !!e.host && !e.process_path;
-      const hostProc = !!e.host && !!e.process_path;
-      const procOnly = !e.host && !!e.process_path;
-      // fixed columns: 目标 | 进程 — never put process basename in the host column
-      // * = wildcard: host-only → any process; process-only → any destination
-      const destLabel = procOnly ? '*' : e.host;
-      const destTitle = procOnly
-        ? t('block.tip.anyDest')
-        : (e.host || '');
-      const destCls = procOnly ? 'block-host is-any' : 'block-host';
-      const procLabel = hostOnly ? '*' : (base || '—');
-      const procTitle = e.process_path
-        ? e.process_path
-        : (hostOnly ? t('block.tip.anyProc') : '');
-      const procCls = hostOnly ? 'block-scope is-any' : 'block-scope proc';
-      const filter = [
-        e.host, e.process_path || '', base, destLabel, procLabel,
-        procOnly ? '应用 全部目标 *' : '',
-        hostOnly ? '全部进程 *' : '',
-        hostProc ? '仅此应用' : '',
-      ].join(' ');
-      return `<li class="block-row" data-host="${escHtml(e.host)}" data-proc="${escHtml(e.process_path || '')}" data-filter="${escHtml(filter)}">
-        <span class="${destCls}" title="${escHtml(destTitle)}">${escHtml(destLabel)}</span>
-        <span class="${procCls}" title="${escHtml(procTitle)}">${escHtml(procLabel)}</span>
-        <button type="button" class="tb-btn" data-block-del title="${escHtml(t('title.blockRemove'))}">${escHtml(t('ctx.delete'))}</button>
-      </li>`;
-    }).join('');
-    ul.querySelectorAll('[data-block-del]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const row = btn.closest('.block-row');
-        const host = row?.dataset.host || '';
-        const proc = row?.dataset.proc || '';
-        if (!host && !proc) return;
-        if (!blocklistLoaded) await loadBlocklist();
-        if (!blocklistLoaded) {
-          log('SYS', 'warn', t('log.blockRefuseDel'));
-          return;
-        }
-        const key = blockEntryKey({ host, process_path: proc || null });
-        const next = blocklistItems.filter(x => blockEntryKey(x) !== key);
-        const ok = await saveBlocklist(next);
-        if (ok) log('SYS', 'ok', t('log.blockRemoved'));
-      });
-    });
-    applyBlocklistFilter();
-  }
-
-  let blocklistApplyBusy = false;
-  async function applyBlocklistLive() {
-    if (typeof connected === 'undefined' || !connected) return;
-    const name = (typeof connectedName !== 'undefined' && connectedName) || selectedName;
-    const payload = (typeof nodeConnectPayload === 'function') ? nodeConnectPayload(name) : null;
-    if (!payload) {
-      log('SYS', 'warn', t('log.blockSavedManual'));
-      return;
-    }
-    // Queue (coalesce) — never drop after store write.
-    return runSessionOp('reconnect', async () => {
-      blocklistApplyBusy = true;
-      powerBusy = true;
-      try {
-        log('CORE', 'info', t('log.blockApply'));
-        const r = await nexusInvoke('connect_selected', Object.assign({
-          profile_id: 1,
-          tun: typeof isTunOn === 'function' ? isTunOn() : !!document.getElementById('tunToggle')?.checked,
-          system_proxy: !!document.getElementById('sysToggle')?.checked,
-        }, payload));
-        if (!r || r.offline || !r.ok || r.data?.start_error || !r.data?.started) {
-          log('SYS', 'warn', t('log.blockSavedManualMaybe', {
-              error: r?.data?.start_error ? ('：' + r.data.start_error) : (r?.error ? ('：' + r.error) : '')
-            }));
-          return;
-        }
-        log('OK', 'ok', t('log.blockApplied'));
-      } catch (e) {
-        log('SYS', 'warn', t('log.blockSavedManualErr', { error: e && e.message || e }));
-      } finally {
-        blocklistApplyBusy = false;
-        powerBusy = false;
-      }
-    });
-  }
-
-  async function saveBlocklist(items) {
-    try {
-      // full-replace put: never write before a successful get (would wipe store)
-      if (!blocklistLoaded) await loadBlocklist();
-      if (!blocklistLoaded) {
-        log('SYS', 'warn', t('log.blockRefuseWrite'));
-        return false;
-      }
-      const payload = (Array.isArray(items) ? items : [])
-        .map(coerceBlockEntry)
-        .filter(Boolean)
-        .map((e) => {
-          const o = { host: e.host };
-          if (e.process_path) o.process_path = e.process_path;
-          return o;
-        });
-      const r = await nexusInvoke('blocklist_put', { items: payload });
-      if (r && r.offline) {
-        log('SYS', 'warn', t('log.blockBackendDown'));
-        return false;
-      }
-      if (!r || !r.ok || !r.data || !Array.isArray(r.data.items)) {
-        log('SYS', 'warn', r && r.error ? t('log.blockSaveFailErr', { error: r.error }) : t('log.blockSaveFail'));
-        return false;
-      }
-      blocklistItems = r.data.items.map(coerceBlockEntry).filter(Boolean);
-      blocklistLoaded = true;
-      renderBlocklist(blocklistItems);
-      // success log is caller-owned (add/delete) — avoid double generic lines
-      await applyBlocklistLive();
-      return true;
-    } catch (e) {
-      log('SYS', 'warn', t('log.blockSaveFailErr', { error: e && e.message || e }));
-      return false;
-    }
-  }
-
-  /**
-   * Batch-add reject entries (one put / one live apply).
-   * Each: host-only | host+path | process-only (empty host).
-   * Invalid rows skipped; existing keys skipped; returns true if nothing new needed.
-   */
-  async function addBlockEntries(rawEntries) {
-    const batch = [];
-    const seen = new Set();
-    let badHostN = 0, badPathN = 0;
-    for (const raw of (Array.isArray(rawEntries) ? rawEntries : [])) {
-      const host = String(raw?.host ?? '').trim();
-      const pp = raw?.process_path != null ? String(raw.process_path).trim() : '';
-      if (!host && !pp) continue;
-      if (host && (host.includes('://') || host.includes('/') || /\s/.test(host))) {
-        badHostN++;
-        continue;
-      }
-      if (pp && (pp.includes('\0') || /[\r\n]/.test(pp))) {
-        badPathN++;
-        continue;
-      }
-      const entry = { host: host || '', process_path: pp || null };
-      const key = blockEntryKey(entry);
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      batch.push(entry);
-    }
-    if (!batch.length) {
-      if (badHostN && !badPathN) log('SYS', 'warn', t('log.invalidAddr'));
-      else if (badPathN && !badHostN) log('SYS', 'warn', t('log.invalidProc'));
-      else if (badHostN || badPathN) log('SYS', 'warn', t('log.invalidBlock'));
-      else log('SYS', 'warn', t('log.invalidBlock'));
-      return false;
-    }
-    if (!blocklistLoaded) await loadBlocklist();
-    if (!blocklistLoaded) {
-      log('SYS', 'warn', t('log.blockRefuseAdd'));
-      return false;
-    }
-    const have = new Set(blocklistItems.map(blockEntryKey));
-    const fresh = [];
-    let skipped = 0;
-    for (const e of batch) {
-      const k = blockEntryKey(e);
-      if (have.has(k)) { skipped++; continue; }
-      have.add(k);
-      fresh.push(e);
-    }
-    if (!fresh.length) {
-      log('SYS', 'info', skipped === 1
-        ? t('log.blockAlready1', { label: blockEntryLabel(batch[0]) })
-        : t('log.blockAlreadyN', { n: skipped }));
-      return true;
-    }
-    const ok = await saveBlocklist(blocklistItems.concat(fresh));
-    if (ok) {
-      if (fresh.length === 1 && !skipped) {
-        log('SYS', 'ok', t('log.blockAdded1', { label: blockEntryLabel(fresh[0]) }));
-      } else {
-        log('SYS', 'ok', t('log.blockAddedN', { n: fresh.length, skip: skipped ? t('log.blockSkip', { n: skipped }) : '' }));
-      }
-    }
-    return ok;
-  }
-
-  /** Single-entry wrapper (manual add / legacy callers). */
-  async function addBlockHost(raw, processPath) {
-    const host = String(raw || '').trim();
-    const pp = processPath != null ? String(processPath).trim() : '';
-    return addBlockEntries([{ host, process_path: pp || null }]);
-  }
-
-  document.getElementById('blockAddBtn')?.addEventListener('click', () => {
-    const inp = document.getElementById('blockHostInput');
-    addBlockHost(inp?.value).then(ok => { if (ok && inp) inp.value = ''; });
-  });
-  document.getElementById('blockHostInput')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      document.getElementById('blockAddBtn')?.click();
-    }
-  });
-  document.getElementById('blockFilterInput')?.addEventListener('input', () => applyBlocklistFilter());
 
   async function hydrateCatalogOnBoot() {
     // store first; migrate LS → store once if store empty
@@ -6254,10 +6063,15 @@
         if (blob && typeof blob === 'object' && !Array.isArray(blob) && blob.v === 1) fromStore = blob;
       }
     } catch (_) {}
-    if (fromStore && applyHydratedCatalog(fromStore, 'store')) return true;
+    const storeUseful = fromStore && Array.isArray(fromStore.groups) && fromStore.groups.length && (
+      (fromStore.groups.some(g => g && g.url && String(g.url).trim())) ||
+      (fromStore.profiles && Object.values(fromStore.profiles).some(p => p && Array.isArray(p.nodes) && p.nodes.length))
+    );
+    if (storeUseful && applyHydratedCatalog(fromStore, 'store')) return true;
+    // empty/default store: try LS before painting empty groups
+
     const ls = loadCatalogFromLocal();
     if (ls && applyHydratedCatalog(ls, 'local→store')) {
-      // saveCatalog already put to store; drop LS only after successful put attempt
       try {
         if (typeof nexusInvoke === 'function') {
           await nexusInvoke('catalog_put', { blob: serializeCatalog() });
@@ -6270,336 +6084,151 @@
     return false;
   }
 
-  // stock group labels follow locale; user renames stay as stored
-  const STOCK_BACKUP_NAMES = new Set(['备用', 'Backup', 'Резерв', '備用']);
-  function groupDisplayName(g) {
-    if (!g) return '';
-    if (g.id === 'backup' && STOCK_BACKUP_NAMES.has(g.name)) return t('tb.backup');
-    return g.name;
+  /** mac kill-switch: missing NexusFwD blocks connect — install once then retry. */
+  function firewallHelperMissingErr(err) {
+    return /firewall helper not running|NexusFwD|install via/i.test(String(err || ''));
   }
-  function activeGroupId() {
-    return document.querySelector('#subSeg button.active')?.dataset.sub || GROUPS[0]?.id || 'default';
-  }
-  function setActiveGroup(id, { render = true, logIt = false } = {}) {
-    // current_group switch → node list + subscription settings for that group
-    const seg = document.getElementById('subSeg');
-    if (!seg) return;
-    const btn = seg.querySelector(`button[data-sub="${id}"]`);
-    if (!btn) return;
-    seg.querySelectorAll('button').forEach(b => {
-      b.classList.remove('active');
-      b.setAttribute('aria-selected', 'false');
-    });
-    btn.classList.add('active');
-    btn.setAttribute('aria-selected', 'true');
-    if (render && typeof renderNodes === 'function') renderNodes(id);
-    if (logIt) {
-      const g = GROUPS.find(x => x.id === id);
-      log('SYS', 'info', t('log.subSwitched', { name: g?.name || id }));
-    }
-    if (document.getElementById('groupsMask')?.classList.contains('open')) renderGroupList();
-    // settings 订阅 panel must follow top-bar group (URL + auto-update)
-    if (typeof syncSubSettingsFromActiveGroup === 'function') syncSubSettingsFromActiveGroup();
-    else if (typeof syncSubUrlField === 'function') syncSubUrlField();
-    if (typeof saveCatalog === 'function') saveCatalog(); // persist active group id
-  }
-  function renderGroupList() {
-    const list = document.getElementById('groupList');
-    if (!list) return;
-    const activeKey = activeGroupId();
-    list.innerHTML = GROUPS.map(g => `
-      <div class="group-row${g.id === activeKey ? ' active' : ''}" data-gid="${g.id}" role="listitem" tabindex="0">
-        <span class="g-name" title="${groupDisplayName(g)}">${groupDisplayName(g)}</span>
-        <span class="g-meta">${g.count} ${t('js.nodes')}</span>
-        <span class="g-acts">
-          <button type="button" class="btn-row" data-gact="edit" data-gid="${g.id}" data-i18n="ctx.edit">编辑</button>
-          <button type="button" class="btn-row" data-gact="rename" data-gid="${g.id}" data-i18n="btn.rename">重命名</button>
-          <button type="button" class="btn-row danger" data-gact="del" data-gid="${g.id}" data-i18n="ctx.delete">删除</button>
-        </span>
-      </div>`).join('');
-
-    list.querySelectorAll('.group-row').forEach(row => {
-      row.addEventListener('click', (e) => {
-        if (e.target.closest('[data-gact]')) return;
-        setActiveGroup(row.dataset.gid, { logIt: true });
-      });
-      row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          setActiveGroup(row.dataset.gid, { logIt: true });
-        }
-      });
-    });
-    list.querySelectorAll('[data-gact]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = btn.dataset.gid;
-        const act = btn.dataset.gact;
-        const g = GROUPS.find(x => x.id === id);
-        if (!g) return;
-        if (act === 'edit') openGroupEdit(id, 'edit');
-        else if (act === 'rename') openGroupEdit(id, 'rename');
-        else if (act === 'del') deleteGroup(id);
-      });
-    });
-  }
-  function syncSubSegFromGroups() {
-    const seg = document.getElementById('subSeg');
-    if (!seg) return;
-    const cur = seg.querySelector('button.active')?.dataset.sub;
-    const keep = GROUPS.some(g => g.id === cur) ? cur : GROUPS[0]?.id;
-    seg.innerHTML = GROUPS.map((g, i) => {
-      const on = g.id === keep || (!keep && i === 0);
-      const tip = (g.id === 'backup' && STOCK_BACKUP_NAMES.has(g.name))
-        ? t('title.subBackup')
-        : (typeof t === 'function' ? t('title.subDrag') : '拖动可调整顺序');
-      return `<button type="button" data-sub="${g.id}" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'active' : ''}" title="${tip}">${groupDisplayName(g)}</button>`;
-    }).join('');
-    bindSubSegInteractions(seg);
-    if (keep && typeof renderNodes === 'function') renderNodes(keep);
-  }
-  /** Reorder GROUPS so fromId sits immediately before toId. */
-  function reorderGroupBefore(fromId, toId) {
-    if (!fromId || !toId || fromId === toId || !Array.isArray(GROUPS)) return false;
-    const i = GROUPS.findIndex(g => g.id === fromId);
-    if (i < 0) return false;
-    const [item] = GROUPS.splice(i, 1);
-    const j = GROUPS.findIndex(g => g.id === toId);
-    if (j < 0) {
-      GROUPS.splice(i, 0, item); // restore
-      return false;
-    }
-    GROUPS.splice(j, 0, item);
-    return true;
-  }
-  /** Top-bar group tabs: click = switch; document pointer-drag = reorder (HTML5 DnD flaky in WKWebView). */
-  function bindSubSegInteractions(seg) {
-    if (!seg) return;
-    let dragId = null;
-    let startX = 0;
-    let dragging = false;
-    let suppressClick = false;
-    let overId = null;
-    let activePtr = null;
-
-    const clearDragUi = () => {
-      seg.classList.remove('seg-dragging');
-      seg.querySelectorAll('button.dragging, button.drag-over').forEach(el => {
-        el.classList.remove('dragging', 'drag-over');
-        el.style.pointerEvents = '';
-      });
-    };
-
-    const hitSubId = (x, y) => {
-      const src = seg.querySelector('button.dragging');
-      if (src) src.style.pointerEvents = 'none';
-      let id = null;
+  async function connectSelectedWithHelper(connectArgs) {
+    let r = await nexusInvoke('connect_selected', connectArgs);
+    if (r && !r.offline && !r.ok && firewallHelperMissingErr(r.error)) {
+      log('SYS', 'warn', t('fw.needHelper') || '防火墙守护未运行，正在安装 NexusFwD（需管理员授权）…');
       try {
-        const hit = document.elementFromPoint(x, y);
-        id = hit?.closest?.('#subSeg button[data-sub]')?.dataset?.sub || null;
-      } catch (_) {}
-      if (src) src.style.pointerEvents = '';
-      return id;
-    };
-
-    const paintOver = (id) => {
-      overId = (id && id !== dragId) ? id : null;
-      seg.querySelectorAll('button.drag-over').forEach(el => {
-        if (el.dataset.sub !== overId) el.classList.remove('drag-over');
-      });
-      if (overId) {
-        const el = seg.querySelector('button[data-sub="' + CSS.escape(overId) + '"]');
-        if (el) el.classList.add('drag-over');
+        const ir = await nexusInvoke('firewall_helper_install');
+        if (ir && ir.ok === false) throw new Error(ir.error || 'install failed');
+        log('SYS', 'info', t('fw.installOk') || 'firewall helper installed');
+        r = await nexusInvoke('connect_selected', connectArgs);
+      } catch (e) {
+        return {
+          ok: false,
+          error: (t('fw.installFirst') || '请先打开「防火墙」安装守护') + ': ' + String(e && e.message || e),
+        };
       }
-    };
-
-    const onMove = (e) => {
-      if (dragId == null || e.pointerId !== activePtr) return;
-      if (!dragging) {
-        if (Math.abs(e.clientX - startX) < 8) return;
-        dragging = true;
-        seg.classList.add('seg-dragging');
-        const src = seg.querySelector('button[data-sub="' + CSS.escape(dragId) + '"]');
-        if (src) src.classList.add('dragging');
-      }
-      e.preventDefault();
-      paintOver(hitSubId(e.clientX, e.clientY));
-    };
-
-    const onUp = (e) => {
-      if (dragId == null || (activePtr != null && e.pointerId !== activePtr)) return;
-      document.removeEventListener('pointermove', onMove, true);
-      document.removeEventListener('pointerup', onUp, true);
-      document.removeEventListener('pointercancel', onUp, true);
-      // final hit if pointer still over a tab
-      if (dragging && e && e.clientX != null) paintOver(hitSubId(e.clientX, e.clientY));
-      const from = dragId;
-      const to = overId;
-      const should = dragging && to && to !== from;
-      // clear BEFORE commit — avoids lostpointercapture / rebuild reentry
-      dragId = null;
-      dragging = false;
-      activePtr = null;
-      overId = null;
-      clearDragUi();
-      if (!should) return;
-      if (!reorderGroupBefore(from, to)) return;
-      suppressClick = true;
-      syncSubSegFromGroups();
-      if (document.getElementById('groupsMask')?.classList.contains('open')) renderGroupList();
-      if (typeof saveCatalog === 'function') saveCatalog(true);
-      if (typeof log === 'function') {
-        try { log('SYS', 'info', t('log.groupReordered')); } catch (_) {}
-      }
-    };
-
-    seg.querySelectorAll('button[data-sub]').forEach(btn => {
-      btn.removeAttribute('draggable');
-      btn.setAttribute('data-tauri-drag-region', 'false');
-      btn.addEventListener('click', (e) => {
-        if (suppressClick) {
-          e.preventDefault();
-          e.stopPropagation();
-          suppressClick = false;
-          return;
-        }
-        setActiveGroup(btn.dataset.sub, { logIt: true });
-      });
-      btn.addEventListener('pointerdown', (e) => {
-        if (e.button != null && e.button !== 0) return;
-        // abandon any prior drag
-        document.removeEventListener('pointermove', onMove, true);
-        document.removeEventListener('pointerup', onUp, true);
-        document.removeEventListener('pointercancel', onUp, true);
-        dragId = btn.dataset.sub;
-        startX = e.clientX;
-        dragging = false;
-        overId = null;
-        activePtr = e.pointerId;
-        document.addEventListener('pointermove', onMove, true);
-        document.addEventListener('pointerup', onUp, true);
-        document.addEventListener('pointercancel', onUp, true);
-      });
-    });
-  }
-  async function deleteGroup(id) {
-    const g = GROUPS.find(x => x.id === id);
-    if (!g) return;
-    if (GROUPS.length <= 1) { log('SYS', 'warn', t('log.keepOneGroup')); return; }
-    const msg = (typeof t === 'function')
-      ? t('confirm.deleteGroup', { name: g.name })
-      : `删除分组「${g.name}」？其中的节点列表将一并移除。`;
-    const ok = await askConfirm(msg, {
-      title: (typeof t === 'function') ? t('confirm.deleteGroupTitle') : '删除分组',
-      okText: (typeof t === 'function') ? t('ctx.delete') : '删除',
-      danger: true,
-    });
-    if (!ok) return;
-    // re-check: list may have changed while dialog open
-    if (!GROUPS.some(x => x.id === id)) return;
-    if (GROUPS.length <= 1) { log('SYS', 'warn', t('log.keepOneGroup')); return; }
-    const wasActive = activeGroupId() === id;
-    GROUPS = GROUPS.filter(x => x.id !== id);
-    if (typeof SUB_PROFILES !== 'undefined') delete SUB_PROFILES[id];
-    syncSubSegFromGroups();
-    if (wasActive && GROUPS[0]) setActiveGroup(GROUPS[0].id, { logIt: false });
-    renderGroupList();
-    if (typeof saveCatalog === 'function') saveCatalog(true);
-    log('SYS', 'warn', t('log.groupDeleted', { name: g.name }));
-  }
-  function openGroupsDialog() {
-    try {
-      renderGroupList();
-      setGroupUpdateStatus('', '');
-    } catch (err) {
-      try { log('SYS', 'warn', 'groups: ' + (err && err.message || err)); } catch (_) {}
     }
-    openDialog('groupsMask');
+    return r;
   }
-  document.getElementById('groupsBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    openGroupsDialog();
-  });
-  document.getElementById('groupsClose')?.addEventListener('click', () => closeDialog('groupsMask'));
-  document.getElementById('groupsMask')?.addEventListener('click', (e) => {
-    if (e.target.id === 'groupsMask') closeDialog('groupsMask');
-  });
-  document.getElementById('groupAdd')?.addEventListener('click', () => openGroupEdit(null, 'create'));
-  document.getElementById('groupUpdateAll')?.addEventListener('click', () => {
-    // DialogManageGroups::on_update_all_clicked → UI_update_all_groups()
-    updateSubscription(null, { all: true });
-  });
 
-  // ——— log right-click: Copy / Select All / 清除 ———
-  const logCtxMenu = document.getElementById('logCtxMenu');
-  function closeLogCtxMenu() {
-    if (!logCtxMenu) return;
-    logCtxMenu.classList.remove('open');
-    logCtxMenu.hidden = true;
+  function paintFirewallStatus(st) {
+    const tone = (el, kind) => {
+      if (!el) return;
+      el.classList.remove('ok', 'warn', 'err', 'neutral', 'muted');
+      if (kind) el.classList.add(kind);
+    };
+    const setText = (id, v, kind) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const empty = v == null || v === '';
+      el.textContent = empty ? '—' : String(v);
+      tone(el, empty ? (el.classList.contains('fw-pill') ? 'neutral' : 'muted') : kind);
+    };
+    if (!st || typeof st !== 'object') {
+      setText('fwState', '—', 'neutral');
+      setText('fwSupport', '—', 'muted');
+      setText('fwPolicy', '—', 'muted');
+      setText('fwPeer', '—', 'muted');
+      setText('fwTun', '—', 'muted');
+      setText('fwDesired', '—', 'muted');
+      setText('fwApplied', '—', 'muted');
+      setText('fwErr', '—', 'muted');
+      setText('fwHelper', '—', 'neutral');
+      return;
+    }
+    const stateRaw = String(st.tunnel_state || '').toLowerCase();
+    let stateTone = 'neutral';
+    if (stateRaw === 'connected') stateTone = 'ok';
+    else if (stateRaw === 'error' || stateRaw === 'blocked') stateTone = 'err';
+    else if (stateRaw === 'connecting' || stateRaw === 'disconnecting') stateTone = 'warn';
+    setText('fwState', st.tunnel_state, stateTone);
+
+    const support = st.support === 'active'
+      ? (t('fw.active') || st.support)
+      : (st.support === 'unsupported' ? (t('fw.unsupported') || st.support) : st.support);
+    setText('fwSupport', support, st.support === 'active' ? 'ok' : (st.support === 'unsupported' ? 'warn' : null));
+    const mismatch = !!st.policy_mismatch;
+    const pol = mismatch
+      ? ((st.desired_policy || '—') + ' ≠ ' + (st.applied_policy || st.last_policy || '—'))
+      : (st.last_policy || st.applied_policy || '—');
+    setText('fwPolicy', pol, mismatch ? 'warn' : (st.last_policy ? null : 'muted'));
+    setText('fwDesired', st.desired_policy, st.desired_policy ? (mismatch ? 'warn' : null) : 'muted');
+    setText('fwApplied', st.applied_policy || st.last_policy, (st.applied_policy || st.last_policy) ? (mismatch ? 'warn' : null) : 'muted');
+    setText('fwPeer', st.peer, st.peer ? null : 'muted');
+    setText('fwTun', st.tun_if, st.tun_if ? null : 'muted');
+    setText('fwErr', st.last_error, st.last_error ? 'err' : 'muted');
+
+    const h = st.helper_running
+      ? (t('fw.helperOn') || 'running')
+      : (st.helper_installed
+        ? (t('fw.helperOff') || 'installed, not running')
+        : (t('fw.helperMissing') || 'not installed'));
+    const helperTone = st.helper_running ? 'ok' : (st.helper_installed ? 'warn' : 'err');
+    setText('fwHelper', st.helper_detail ? (h + ' · ' + st.helper_detail) : h, helperTone);
+
+    const ins = document.getElementById('fwInstallBtn');
+    const un = document.getElementById('fwUninstallBtn');
+    if (ins) ins.disabled = !!st.helper_running;
+    if (un) un.disabled = !(st.helper_installed || st.helper_running);
   }
-  function openLogCtxMenu(x, y) {
-    if (!logCtxMenu) return;
-    closeMenus();
-    closeCtxMenu();
-    logCtxMenu.hidden = false;
-    logCtxMenu.classList.add('open');
-    const w = logCtxMenu.offsetWidth || 160;
-    const h = logCtxMenu.offsetHeight || 100;
-    logCtxMenu.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
-    logCtxMenu.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
-  }
-  function logPlainText(root) {
-    return [...(root || logPanel).querySelectorAll('.log-line')].map(line => {
-      return line.innerText.replace(/\s+/g, ' ').trim();
-    }).join('\n');
-  }
-  logPanel?.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!dock.classList.contains('open')) setDockOpen(true);
-    setDockPanel('log');
-    openLogCtxMenu(e.clientX, e.clientY);
-  });
-  document.querySelectorAll('#logCtxMenu [data-log-ctx]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const act = btn.dataset.logCtx;
-      closeLogCtxMenu();
-      if (act === 'copy') {
-        const sel = window.getSelection();
-        let text = (sel && !sel.isCollapsed && logPanel.contains(sel.anchorNode))
-          ? sel.toString()
-          : logPlainText(logPanel);
-        if (!text) { log('SYS', 'info', t('log.nothingCopy')); return; }
-        copyText(text).then(() => log('SYS', 'ok', t('log.logCopied'))).catch(() => log('SYS', 'info', t('log.copyFail')));
-      } else if (act === 'select-all') {
-        const range = document.createRange();
-        range.selectNodeContents(logPanel);
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-        log('SYS', 'info', t('log.logSelectAll'));
-      } else if (act === 'clear') {
-        logPanel.innerHTML = '';
-        log('SYS', 'info', t('log.logCleared'));
+  async function refreshFirewall() {
+    try {
+      const r = await nexusInvoke('firewall_status');
+      // nexusInvoke wraps command result as { ok, data }
+      if (!r || r.offline) {
+        paintFirewallStatus({ last_error: t('log.backendDown') || 'backend offline' });
+        return;
       }
-    });
-  });
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#logCtxMenu')) closeLogCtxMenu();
-    if (!e.target.closest('#connCtxMenu')) closeConnCtxMenu?.();
-  });
-
-  // ——— connection row right-click: 复制域名/IP · 复制整行 · 拦截 ———
-  const connPanel = document.getElementById('connPanel');
-  const connTable = document.getElementById('connTable');
-  const connCtxMenu = document.getElementById('connCtxMenu');
-  let connCtxRow = null;
-  function closeConnCtxMenu() {
-    if (!connCtxMenu) return;
-    connCtxMenu.classList.remove('open');
-    connCtxMenu.hidden = true;
+      if (!r.ok) {
+        paintFirewallStatus({ last_error: r.error || 'firewall_status failed' });
+        return;
+      }
+      paintFirewallStatus(r.data || {});
+    } catch (e) {
+      paintFirewallStatus({ last_error: String(e && e.message || e) });
+    }
   }
+
+  function enterBlockView() {
+    refreshFirewall();
+  }
+  (function bindFwHelperBtns() {
+    const ins = document.getElementById('fwInstallBtn');
+    const un = document.getElementById('fwUninstallBtn');
+    if (ins && !ins._fwBound) {
+      ins._fwBound = true;
+      ins.addEventListener('click', async () => {
+        try {
+          const r = await nexusInvoke('firewall_helper_install');
+          if (r && r.ok) {
+            paintFirewallStatus(r.data || {});
+            if (typeof log === 'function') log('SYS', 'info', t('fw.installOk') || 'firewall helper installed');
+          } else {
+            if (typeof log === 'function') log('SYS', 'error', String(r && (r.error || r.data) || 'install failed'));
+            refreshFirewall();
+          }
+        } catch (e) {
+          if (typeof log === 'function') log('SYS', 'error', String(e && e.message || e));
+          refreshFirewall();
+        }
+      });
+    }
+    if (un && !un._fwBound) {
+      un._fwBound = true;
+      un.addEventListener('click', async () => {
+        try {
+          const r = await nexusInvoke('firewall_helper_uninstall');
+          if (r && r.ok) {
+            paintFirewallStatus(r.data || {});
+            if (typeof log === 'function') log('SYS', 'info', t('fw.uninstallOk') || 'firewall helper removed');
+          } else {
+            if (typeof log === 'function') log('SYS', 'error', String(r && (r.error || r.data) || 'uninstall failed'));
+            refreshFirewall();
+          }
+        } catch (e) {
+          if (typeof log === 'function') log('SYS', 'error', String(e && e.message || e));
+          refreshFirewall();
+        }
+      });
+    }
+  })();
+
   function openConnCtxMenu(x, y) {
     if (!connCtxMenu) return;
     closeMenus();
@@ -6752,39 +6381,11 @@
       '复制整行连接信息' + multi(copyRows.length),
       '无可复制连接'
     );
-    setConnMenuItemState(
-      connCtxMenu.querySelector('[data-conn-ctx="block-any"]'),
-      nHost > 0,
-      '拦截目标 · 全部进程' + multi(nHost),
-      '拦截目标：任意进程访问此域名/IP 均拒绝' + multi(nHost),
-      '无效目标地址'
-    );
-    setConnMenuItemState(
-      connCtxMenu.querySelector('[data-conn-ctx="block-proc"]'),
-      nHostPath > 0,
-      '拦截目标 · 仅此应用' + multi(nHostPath),
-      '拦截目标：仅此应用访问此域名/IP 时拒绝' + multi(nHostPath),
-      nPath > 0 ? '选中行缺少有效目标' : t('log.procPathWaitAlt')
-    );
-    setConnMenuItemState(
-      connCtxMenu.querySelector('[data-conn-ctx="block-app"]'),
-      nPath > 0,
-      '拦截应用 · 全部连接' + multi(nPath),
-      '拦截应用：此进程的全部网络连接均拒绝' + multi(nPath),
-      t('log.procPathWait')
-    );
   }
   document.querySelectorAll('#connCtxMenu [data-conn-ctx]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const act = btn.dataset.connCtx;
-      if ((act === 'block-proc' || act === 'block-app') && btn.disabled) {
-        log('SYS', 'warn', act === 'block-app'
-          ? t('log.procPathWait')
-          : t('log.procPathWaitAlt'));
-        closeConnCtxMenu();
-        return;
-      }
-      if ((act === 'copy-host' || act === 'block-any') && btn.disabled) {
+      if ((act === 'copy-host' ) && btn.disabled) {
         log('SYS', 'warn', t('log.invalidAddr'));
         closeConnCtxMenu();
         return;
@@ -6819,34 +6420,6 @@
           ? t('log.copiedRow1', { line: lines[0].replace(/\t/g, ' · ') })
           : t('log.copiedRowN', { n: lines.length })))
           .catch(() => log('SYS', 'ok', t('log.copiedRow')));
-      } else if (act === 'block-any' || act === 'block-proc' || act === 'block-app') {
-        const rows = connBlockTargetRows();
-        const specs = [];
-        let miss = 0;
-        for (const row of rows) {
-          const host = hostFromConnRow(row);
-          const pp = processPathFromConnRow(row);
-          if (act === 'block-any') {
-            if (!host) { miss++; continue; }
-            specs.push({ host, process_path: null });
-          } else if (act === 'block-proc') {
-            if (!host || !pp) { miss++; continue; }
-            specs.push({ host, process_path: pp });
-          } else {
-            if (!pp) { miss++; continue; }
-            specs.push({ host: '', process_path: pp });
-          }
-        }
-        if (!specs.length) {
-          log('SYS', 'warn', act === 'block-app'
-            ? t('log.procPathWait')
-            : (act === 'block-proc'
-              ? t('log.procPathWaitAlt')
-              : t('log.invalidAddr')));
-          return;
-        }
-        await addBlockEntries(specs);
-        if (miss) log('SYS', 'info', t('log.skippedRows', { n: miss }));
       }
     });
   });
@@ -7288,7 +6861,8 @@
   let lastExitIp = null;
   let lastCountry = null;
   async function fillRuntimeStats() {
-    // 8A: single status consumer — session_status (tightened live).
+    // eng 5A: status/uptime/proxy trust session_status.running only;
+    // local `connected` is chrome — reconcile when poll disagrees.
     let coreLabel = '已停止';
     let coreRunning = false;
     try {
@@ -7300,25 +6874,34 @@
           coreLabel = (st.profile_id != null && st.profile_id >= 0)
             ? `运行中 · profile ${st.profile_id}`
             : '运行中';
-        } else if (connected) {
-          coreLabel = '核心未响应';
         } else if (st && st.process_alive) {
           coreLabel = '进程在线 · 空闲';
         } else {
           coreLabel = '已停止';
         }
-      } else if (connected) {
-        coreLabel = '已连接（状态未知）';
+        if (typeof setConnected === 'function') {
+          if (coreRunning && !connected) {
+            let pinName = '';
+            try { pinName = localStorage.getItem('nexus.lastConnected') || ''; } catch (_) {}
+            if (pinName) {
+              connectedName = pinName;
+              if (typeof selectedName !== 'undefined') selectedName = pinName;
+            }
+            setConnected(true, { pin: !!pinName });
+          } else if (!coreRunning && connected) {
+            setConnected(false);
+            try { localStorage.removeItem('nexus.lastConnected'); } catch (_) {}
+          }
+        }
       }
     } catch (e) {
-      if (connected) coreLabel = '核心未响应';
-      else coreLabel = '已停止';
+      coreLabel = connected ? '核心未响应' : '已停止';
     }
     document.getElementById('stCore').textContent = coreLabel;
     document.getElementById('stConn').textContent = String(document.querySelectorAll('#connTable tr').length);
     const px = document.getElementById('sbProxy')?.textContent;
     const dx = document.getElementById('sbDirect')?.textContent;
-    const live = coreRunning || connected;
+    const live = coreRunning;
     document.getElementById('stProxy').textContent = (live && px && px !== '—') ? px : '—';
     document.getElementById('stDirect').textContent = (live && dx && dx !== '—') ? dx : '—';
     if (live && statsStarted != null) {
@@ -7395,6 +6978,267 @@
   });
   document.getElementById('exportMask')?.addEventListener('click', e => {
     if (e.target.id === 'exportMask') closeDialog('exportMask');
+  });
+
+  // stock group labels follow locale; user renames stay as stored
+  const STOCK_BACKUP_NAMES = new Set(['备用', 'Backup', 'Резерв', '備用']);
+  function groupDisplayName(g) {
+    if (!g) return '';
+    if (g.id === 'backup' && STOCK_BACKUP_NAMES.has(g.name)) return t('tb.backup');
+    return g.name;
+  }
+  function activeGroupId() {
+    return document.querySelector('#subSeg button.active')?.dataset.sub || GROUPS[0]?.id || 'default';
+  }
+  function setActiveGroup(id, { render = true, logIt = false } = {}) {
+    // current_group switch → node list + subscription settings for that group
+    const seg = document.getElementById('subSeg');
+    if (!seg) return;
+    const btn = seg.querySelector(`button[data-sub="${id}"]`);
+    if (!btn) return;
+    seg.querySelectorAll('button').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', 'false');
+    });
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+    if (render && typeof renderNodes === 'function') renderNodes(id);
+    if (logIt) {
+      const g = GROUPS.find(x => x.id === id);
+      log('SYS', 'info', t('log.subSwitched', { name: g?.name || id }));
+    }
+    if (document.getElementById('groupsMask')?.classList.contains('open')) renderGroupList();
+    // settings 订阅 panel must follow top-bar group (URL + auto-update)
+    if (typeof syncSubSettingsFromActiveGroup === 'function') syncSubSettingsFromActiveGroup();
+    else if (typeof syncSubUrlField === 'function') syncSubUrlField();
+    if (typeof saveCatalog === 'function') saveCatalog(); // persist active group id
+  }
+  function renderGroupList() {
+    const list = document.getElementById('groupList');
+    if (!list) return;
+    const activeKey = activeGroupId();
+    list.innerHTML = GROUPS.map(g => `
+      <div class="group-row${g.id === activeKey ? ' active' : ''}" data-gid="${g.id}" role="listitem" tabindex="0">
+        <span class="g-name" title="${groupDisplayName(g)}">${groupDisplayName(g)}</span>
+        <span class="g-meta">${g.count} ${t('js.nodes')}</span>
+        <span class="g-acts">
+          <button type="button" class="btn-row" data-gact="edit" data-gid="${g.id}" data-i18n="ctx.edit">编辑</button>
+          <button type="button" class="btn-row" data-gact="rename" data-gid="${g.id}" data-i18n="btn.rename">重命名</button>
+          <button type="button" class="btn-row danger" data-gact="del" data-gid="${g.id}" data-i18n="ctx.delete">删除</button>
+        </span>
+      </div>`).join('');
+
+    list.querySelectorAll('.group-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('[data-gact]')) return;
+        setActiveGroup(row.dataset.gid, { logIt: true });
+      });
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setActiveGroup(row.dataset.gid, { logIt: true });
+        }
+      });
+    });
+    list.querySelectorAll('[data-gact]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.gid;
+        const act = btn.dataset.gact;
+        const g = GROUPS.find(x => x.id === id);
+        if (!g) return;
+        if (act === 'edit') openGroupEdit(id, 'edit');
+        else if (act === 'rename') openGroupEdit(id, 'rename');
+        else if (act === 'del') deleteGroup(id);
+      });
+    });
+  }
+  function syncSubSegFromGroups() {
+    const seg = document.getElementById('subSeg');
+    if (!seg) return;
+    const cur = seg.querySelector('button.active')?.dataset.sub;
+    const keep = GROUPS.some(g => g.id === cur) ? cur : GROUPS[0]?.id;
+    seg.innerHTML = GROUPS.map((g, i) => {
+      const on = g.id === keep || (!keep && i === 0);
+      const tip = (g.id === 'backup' && STOCK_BACKUP_NAMES.has(g.name))
+        ? t('title.subBackup')
+        : (typeof t === 'function' ? t('title.subDrag') : '拖动可调整顺序');
+      return `<button type="button" data-sub="${g.id}" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'active' : ''}" title="${tip}">${groupDisplayName(g)}</button>`;
+    }).join('');
+    bindSubSegInteractions(seg);
+    if (keep && typeof renderNodes === 'function') renderNodes(keep);
+  }
+  /** Reorder GROUPS so fromId sits immediately before toId. */
+  function reorderGroupBefore(fromId, toId) {
+    if (!fromId || !toId || fromId === toId || !Array.isArray(GROUPS)) return false;
+    const i = GROUPS.findIndex(g => g.id === fromId);
+    if (i < 0) return false;
+    const [item] = GROUPS.splice(i, 1);
+    const j = GROUPS.findIndex(g => g.id === toId);
+    if (j < 0) {
+      GROUPS.splice(i, 0, item); // restore
+      return false;
+    }
+    GROUPS.splice(j, 0, item);
+    return true;
+  }
+  /** Top-bar group tabs: click = switch; document pointer-drag = reorder (HTML5 DnD flaky in WKWebView). */
+  function bindSubSegInteractions(seg) {
+    if (!seg) return;
+    let dragId = null;
+    let startX = 0;
+    let dragging = false;
+    let suppressClick = false;
+    let overId = null;
+    let activePtr = null;
+
+    const clearDragUi = () => {
+      seg.classList.remove('seg-dragging');
+      seg.querySelectorAll('button.dragging, button.drag-over').forEach(el => {
+        el.classList.remove('dragging', 'drag-over');
+        el.style.pointerEvents = '';
+      });
+    };
+
+    const hitSubId = (x, y) => {
+      const src = seg.querySelector('button.dragging');
+      if (src) src.style.pointerEvents = 'none';
+      let id = null;
+      try {
+        const hit = document.elementFromPoint(x, y);
+        id = hit?.closest?.('#subSeg button[data-sub]')?.dataset?.sub || null;
+      } catch (_) {}
+      if (src) src.style.pointerEvents = '';
+      return id;
+    };
+
+    const paintOver = (id) => {
+      overId = (id && id !== dragId) ? id : null;
+      seg.querySelectorAll('button.drag-over').forEach(el => {
+        if (el.dataset.sub !== overId) el.classList.remove('drag-over');
+      });
+      if (overId) {
+        const el = seg.querySelector('button[data-sub="' + CSS.escape(overId) + '"]');
+        if (el) el.classList.add('drag-over');
+      }
+    };
+
+    const onMove = (e) => {
+      if (dragId == null || e.pointerId !== activePtr) return;
+      if (!dragging) {
+        if (Math.abs(e.clientX - startX) < 8) return;
+        dragging = true;
+        seg.classList.add('seg-dragging');
+        const src = seg.querySelector('button[data-sub="' + CSS.escape(dragId) + '"]');
+        if (src) src.classList.add('dragging');
+      }
+      e.preventDefault();
+      paintOver(hitSubId(e.clientX, e.clientY));
+    };
+
+    const onUp = (e) => {
+      if (dragId == null || (activePtr != null && e.pointerId !== activePtr)) return;
+      document.removeEventListener('pointermove', onMove, true);
+      document.removeEventListener('pointerup', onUp, true);
+      document.removeEventListener('pointercancel', onUp, true);
+      // final hit if pointer still over a tab
+      if (dragging && e && e.clientX != null) paintOver(hitSubId(e.clientX, e.clientY));
+      const from = dragId;
+      const to = overId;
+      const should = dragging && to && to !== from;
+      // clear BEFORE commit — avoids lostpointercapture / rebuild reentry
+      dragId = null;
+      dragging = false;
+      activePtr = null;
+      overId = null;
+      clearDragUi();
+      if (!should) return;
+      if (!reorderGroupBefore(from, to)) return;
+      suppressClick = true;
+      syncSubSegFromGroups();
+      if (document.getElementById('groupsMask')?.classList.contains('open')) renderGroupList();
+      if (typeof saveCatalog === 'function') saveCatalog(true);
+      if (typeof log === 'function') {
+        try { log('SYS', 'info', t('log.groupReordered')); } catch (_) {}
+      }
+    };
+
+    seg.querySelectorAll('button[data-sub]').forEach(btn => {
+      btn.removeAttribute('draggable');
+      btn.setAttribute('data-tauri-drag-region', 'false');
+      btn.addEventListener('click', (e) => {
+        if (suppressClick) {
+          e.preventDefault();
+          e.stopPropagation();
+          suppressClick = false;
+          return;
+        }
+        setActiveGroup(btn.dataset.sub, { logIt: true });
+      });
+      btn.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        // abandon any prior drag
+        document.removeEventListener('pointermove', onMove, true);
+        document.removeEventListener('pointerup', onUp, true);
+        document.removeEventListener('pointercancel', onUp, true);
+        dragId = btn.dataset.sub;
+        startX = e.clientX;
+        dragging = false;
+        overId = null;
+        activePtr = e.pointerId;
+        document.addEventListener('pointermove', onMove, true);
+        document.addEventListener('pointerup', onUp, true);
+        document.addEventListener('pointercancel', onUp, true);
+      });
+    });
+  }
+  async function deleteGroup(id) {
+    const g = GROUPS.find(x => x.id === id);
+    if (!g) return;
+    if (GROUPS.length <= 1) { log('SYS', 'warn', t('log.keepOneGroup')); return; }
+    const msg = (typeof t === 'function')
+      ? t('confirm.deleteGroup', { name: g.name })
+      : `删除分组「${g.name}」？其中的节点列表将一并移除。`;
+    const ok = await askConfirm(msg, {
+      title: (typeof t === 'function') ? t('confirm.deleteGroupTitle') : '删除分组',
+      okText: (typeof t === 'function') ? t('ctx.delete') : '删除',
+      danger: true,
+    });
+    if (!ok) return;
+    // re-check: list may have changed while dialog open
+    if (!GROUPS.some(x => x.id === id)) return;
+    if (GROUPS.length <= 1) { log('SYS', 'warn', t('log.keepOneGroup')); return; }
+    const wasActive = activeGroupId() === id;
+    GROUPS = GROUPS.filter(x => x.id !== id);
+    if (typeof SUB_PROFILES !== 'undefined') delete SUB_PROFILES[id];
+    syncSubSegFromGroups();
+    if (wasActive && GROUPS[0]) setActiveGroup(GROUPS[0].id, { logIt: false });
+    renderGroupList();
+    if (typeof saveCatalog === 'function') saveCatalog(true);
+    log('SYS', 'warn', t('log.groupDeleted', { name: g.name }));
+  }
+  function openGroupsDialog() {
+    try {
+      renderGroupList();
+      setGroupUpdateStatus('', '');
+    } catch (err) {
+      try { log('SYS', 'warn', 'groups: ' + (err && err.message || err)); } catch (_) {}
+    }
+    openDialog('groupsMask');
+  }
+  document.getElementById('groupsBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openGroupsDialog();
+  });
+  document.getElementById('groupsClose')?.addEventListener('click', () => closeDialog('groupsMask'));
+  document.getElementById('groupsMask')?.addEventListener('click', (e) => {
+    if (e.target.id === 'groupsMask') closeDialog('groupsMask');
+  });
+  document.getElementById('groupAdd')?.addEventListener('click', () => openGroupEdit(null, 'create'));
+  document.getElementById('groupUpdateAll')?.addEventListener('click', () => {
+    // DialogManageGroups::on_update_all_clicked → UI_update_all_groups()
+    updateSubscription(null, { all: true });
   });
 
   // ——— group edit / create / rename ———
@@ -7802,6 +7646,9 @@
       target.classList.add('active');
       target.removeAttribute('hidden');
     }
+    if ((name || 'home') === 'block' && typeof enterBlockView === 'function') {
+      enterBlockView();
+    }
     if ((name || 'home') === 'settings') {
       const panel = settingsPanel || 'basic';
       const map = { general: 'basic', subscription: 'sub', advanced: 'sub', connection: 'vpn', core: 'basic', system: 'basic', about: 'basic' };
@@ -7876,7 +7723,33 @@
       'nav.routing': '路由',
       'nav.settings': '设置',
       'nav.sub': '订阅',
-      'nav.block': '拦截',
+      'nav.firewall': '防火墙',
+      'fw.title': '防火墙',
+      'fw.state': '状态',
+      'fw.support': '平台',
+      'fw.policy': '策略',
+      'fw.desired': '期望',
+      'fw.applied': '已应用',
+      'fw.peer': '对端',
+      'fw.tun': '隧道接口',
+      'fw.error': '上次错误',
+      'fw.help': '连接/断开/异常时系统包过滤 fail-closed（macOS PF）。域名/进程拦截已移除。Windows 暂不启用。',
+      'fw.unsupported': '此平台未启用 OS 防火墙',
+      'fw.active': 'macOS PF 已接入',
+      'fw.needHelper': '防火墙守护未运行，正在安装 NexusFwD（需管理员授权）…',
+      'fw.installFirst': '请先打开「防火墙」安装守护，或点电源时允许管理员授权',
+      'fw.installOk': '防火墙守护已安装',
+      'fw.uninstallOk': '防火墙守护已卸载',
+      'fw.helper': '守护进程',
+      'fw.install': '安装守护',
+      'fw.uninstall': '卸载守护',
+      'fw.helperOn': '运行中',
+      'fw.helperOff': '已安装未运行',
+      'fw.helperMissing': '未安装',
+      'fw.secStatus': '运行状态',
+      'fw.secHelper': '守护进程',
+      'fw.actions': '操作',
+
       'nav.vpn': '连接',
       'tb.backup': '备用',
       'tb.refresh': '更新',
@@ -8097,7 +7970,7 @@
           'block.add': '添加',
       'block.count': '已拦截',
       'block.empty': '无匹配项',
-      'block.title': '拦截列表',
+      'fw.title': '防火墙',
       'btn.apply': '应用',
       'btn.cancel': '取消',
       'btn.paste': '粘贴',
@@ -8362,7 +8235,7 @@
       'title.hide': '隐藏到菜单栏，不退出',
       'title.logClear': '清空日志内容',
       'title.manageGroups': '管理订阅分组',
-      'title.navBlock': '拦截域名与 IP',
+      'title.navFirewall': '防火墙',
       'title.navHome': '节点列表与连接状态',
       'title.navRouting': '分流、DNS 与规则',
       'title.navSettings': '界面、启动与核心',
@@ -8452,7 +8325,33 @@
       'nav.routing': 'Routing',
       'nav.settings': 'Settings',
       'nav.sub': 'Subscription',
-      'nav.block': 'Block',
+      'nav.firewall': 'Firewall',
+      'fw.title': 'Firewall',
+      'fw.state': 'State',
+      'fw.support': 'Platform',
+      'fw.policy': 'Policy',
+      'fw.desired': 'Desired',
+      'fw.applied': 'Applied',
+      'fw.peer': 'Peer',
+      'fw.tun': 'Tunnel iface',
+      'fw.error': 'Last error',
+      'fw.helper': 'Helper',
+      'fw.install': 'Install helper',
+      'fw.uninstall': 'Uninstall helper',
+      'fw.help': 'Fail-closed OS packet filter on connect/disconnect/error (macOS PF). Domain/process blocklist removed. Windows not enabled yet.',
+      'fw.unsupported': 'OS firewall not enabled on this platform',
+      'fw.active': 'macOS PF active',
+      'fw.needHelper': 'Firewall helper not running — installing NexusFwD (admin required)…',
+      'fw.installFirst': 'Install the helper from Firewall tab, or allow admin on connect',
+      'fw.installOk': 'Firewall helper installed',
+      'fw.uninstallOk': 'Firewall helper removed',
+      'fw.helperOn': 'running',
+      'fw.helperOff': 'installed, not running',
+      'fw.helperMissing': 'not installed',
+      'fw.secStatus': 'Status',
+      'fw.secHelper': 'Helper',
+      'fw.actions': 'Actions',
+
       'nav.vpn': 'Connection',
       'tb.backup': 'Backup',
       'tb.refresh': 'Update',
@@ -9028,7 +8927,31 @@
       'nav.routing': 'Маршруты',
       'nav.settings': 'Настройки',
       'nav.sub': 'Подписки',
-      'nav.block': 'Блок',
+      'nav.firewall': 'Файрвол',
+      'fw.title': 'Файрвол',
+      'fw.state': 'Состояние',
+      'fw.support': 'Платформа',
+      'fw.policy': 'Политика',
+      'fw.desired': 'Ожидаемая',
+      'fw.applied': 'Применённая',
+      'fw.peer': 'Пир',
+      'fw.tun': 'Туннель',
+      'fw.error': 'Последняя ошибка',
+      'fw.helper': 'Демон',
+      'fw.install': 'Установить',
+      'fw.uninstall': 'Удалить',
+      'fw.help': 'PF fail-closed (macOS).',
+      'fw.unsupported': 'OS-файрвол недоступен',
+      'fw.active': 'macOS PF активен',
+      'fw.helperOn': 'запущен',
+      'fw.helperOff': 'установлен, не запущен',
+      'fw.helperMissing': 'не установлен',
+      'fw.secStatus': 'Состояние',
+      'fw.secHelper': 'Демон',
+      'fw.actions': 'Действия',
+      'fw.installOk': 'Демон установлен',
+      'fw.uninstallOk': 'Демон удалён',
+
       'nav.vpn': 'Подключение',
       'tb.backup': 'Резерв',
       'tb.refresh': 'Обновить',
@@ -9597,7 +9520,31 @@
       'nav.routing': '路由',
       'nav.settings': '設定',
       'nav.sub': '訂閱',
-      'nav.block': '攔截',
+      'nav.firewall': '防火牆',
+      'fw.title': '防火牆',
+      'fw.state': '狀態',
+      'fw.support': '平台',
+      'fw.policy': '策略',
+      'fw.desired': '期望',
+      'fw.applied': '已套用',
+      'fw.peer': '對端',
+      'fw.tun': '隧道介面',
+      'fw.error': '上次錯誤',
+      'fw.helper': '守護行程',
+      'fw.install': '安裝守護',
+      'fw.uninstall': '卸載守護',
+      'fw.help': 'macOS PF fail-closed。',
+      'fw.unsupported': '此平台未啟用 OS 防火牆',
+      'fw.active': 'macOS PF 已接入',
+      'fw.helperOn': '執行中',
+      'fw.helperOff': '已安裝未執行',
+      'fw.helperMissing': '未安裝',
+      'fw.secStatus': '執行狀態',
+      'fw.secHelper': '守護行程',
+      'fw.actions': '操作',
+      'fw.installOk': '防火牆守護已安裝',
+      'fw.uninstallOk': '防火牆守護已卸載',
+
       'nav.vpn': '連線',
       'tb.backup': '備用',
       'tb.refresh': '更新',
@@ -10238,16 +10185,13 @@
     panelTitles.vpn = t('panel.vpn');
     panelTitles.sub = t('panel.sub');
     const head = document.getElementById('settingsHead');
-    const activePanel = document.querySelector('.set-panel.active');
+    const activePanel = document.querySelector('#view-settings .set-panel.active');
     if (head && activePanel) {
       const key = (activePanel.id || '').replace('panel-', '');
       head.textContent = panelTitles[key] || t('panel.basic');
     }
     // language option display stays native names; optional localized in log
     if (typeof refreshSelectLabels === 'function') refreshSelectLabels();
-    if (typeof renderBlocklist === 'function' && typeof blocklistItems !== 'undefined') {
-      renderBlocklist(blocklistItems);
-    }
     if (typeof syncSubSegFromGroups === 'function') syncSubSegFromGroups();
     if (typeof renderGroupList === 'function') renderGroupList();
     const sc = document.getElementById('sideCollapse');
@@ -10721,7 +10665,6 @@
   });
 
   // boot: store catalog first (LS migrate); hide unwired routing/DNS for release UI
-  // blocklist loads in nexusBoot after invoke is live (early call often offline → blank 拦截)
   if (typeof hideUnwiredSettings === 'function') hideUnwiredSettings();
   // Ordered boot: catalog hydrate before session restore.
   (async () => {
@@ -11061,8 +11004,6 @@
       }
     } catch (_) {}
     if (typeof refreshTrayMenu === 'function') refreshTrayMenu();
-    // after bridge proven live (app_identity/store_snapshot above)
-    if (typeof loadBlocklist === 'function') loadBlocklist();
   }
 
   // Policy A: quit = full teardown; warn when tunnel may still be live.
@@ -11133,7 +11074,7 @@
         }
         await runSessionOp('reconnect', async () => {
           log('CORE', 'info', on ? t('log.tunRestartOn') : t('log.tunRestartOff'));
-          const cr = await nexusInvoke('connect_selected', Object.assign({
+          const cr = await connectSelectedWithHelper(Object.assign({
             profile_id: 1,
             tun: !!on,
             system_proxy: !!document.getElementById('sysToggle')?.checked,
@@ -11145,6 +11086,8 @@
           }
           if (cr.data?.start_error) {
             log('CORE', 'warn', `Tun re-Start: ${cr.data.start_error}`);
+            try { await nexusInvoke('disconnect_selected'); } catch (_) {}
+            if (typeof refreshFirewall === 'function') refreshFirewall();
             return;
           }
           if (cr.data?.started) {

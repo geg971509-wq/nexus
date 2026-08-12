@@ -148,25 +148,29 @@ fn apply_one(service: &str, enabled: bool, host: &str, port_s: &str) -> Result<(
 }
 
 #[cfg(target_os = "macos")]
-pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
+fn hot_services(enabled: bool) -> Vec<String> {
     let services = ordered_services().clone();
-    let host = "127.0.0.1";
-    let port_s = port.to_string();
-
-    let hot: Vec<String> = if enabled {
+    if enabled {
         let real: Vec<String> = services
             .iter()
             .filter(|s| !is_secondary_service(s))
             .cloned()
             .collect();
         if real.is_empty() {
-            services.clone()
+            services
         } else {
             real
         }
     } else {
-        services.clone()
-    };
+        services
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
+    let host = "127.0.0.1";
+    let port_s = port.to_string();
+    let hot = hot_services(enabled);
 
     let primary = hot.first().cloned().unwrap_or_else(|| "Wi-Fi".into());
     apply_one(&primary, enabled, host, &port_s).map_err(|e| {
@@ -207,6 +211,61 @@ pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
             }
         ))
     }
+}
+
+/// Tun + fail-closed blocks bare DNS to LAN resolvers (router :53).
+/// Point primary services at bootstrap resolvers already allowed by PF (8.8.8.8/1.1.1.1).
+/// `enabled=false` restores DHCP (`Empty`).
+#[cfg(target_os = "macos")]
+pub fn set_system_dns_bootstrap(enabled: bool) -> Result<String, String> {
+    let hot = hot_services(true);
+    let primary = hot.first().cloned().unwrap_or_else(|| "Wi-Fi".into());
+    let apply_one_dns = |service: &str, on: bool| -> Result<(), String> {
+        if on {
+            run_ns(&["-setdnsservers", service, "8.8.8.8", "1.1.1.1"])
+        } else {
+            run_ns(&["-setdnsservers", service, "Empty"])
+        }
+    };
+    apply_one_dns(&primary, enabled)
+        .map_err(|e| format!("system dns on primary `{primary}` failed: {e}"))?;
+    let rest: Vec<String> = hot.into_iter().skip(1).collect();
+    let rest_n = rest.len();
+    if rest_n > 0 {
+        std::thread::Builder::new()
+            .name("nexus-sysdns".into())
+            .spawn(move || {
+                for s in rest {
+                    let _ = apply_one_dns(&s, enabled);
+                }
+            })
+            .ok();
+    }
+    if enabled {
+        Ok(format!(
+            "system dns 8.8.8.8,1.1.1.1 · primary {primary}{}",
+            if rest_n > 0 {
+                format!(" · +{rest_n} bg")
+            } else {
+                String::new()
+            }
+        ))
+    } else {
+        Ok(format!(
+            "system dns dhcp · primary {primary}{}",
+            if rest_n > 0 {
+                format!(" · +{rest_n} bg")
+            } else {
+                String::new()
+            }
+        ))
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn set_system_dns_bootstrap(enabled: bool) -> Result<String, String> {
+    let _ = enabled;
+    Ok("system dns: no-op".into())
 }
 
 /// Windows: HKCU Internet Settings (WinINet) + notify — no PowerShell (avoids console flash).

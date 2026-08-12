@@ -1,5 +1,4 @@
 //! Pure generate: outbound + flags → sing-box JSON.
-use crate::data::store::BlockEntry;
 use serde_json::{json, Map, Value};
 
 /// Generate-time node handle (not persisted; catalog is store truth).
@@ -17,145 +16,6 @@ pub struct GenerateInput<'a> {
     pub mux_default_on: bool,
     pub mux_protocol: &'a str,
     pub mux_concurrency: i64,
-    /// Reject entries (host ± process_path).
-    pub blocklist: &'a [BlockEntry],
-}
-
-/// Normalize a single user/conn host for the blocklist (strip port; domain lowercased).
-pub fn normalize_block_host(raw: &str) -> Result<String, String> {
-    let s = raw.trim().trim_end_matches('.');
-    if s.is_empty() {
-        return Err("empty host".into());
-    }
-    if s.contains("://") || s.contains('/') || s.contains(' ') {
-        return Err("invalid host".into());
-    }
-    // [v6]:port
-    if s.starts_with('[') {
-        let end = s.find(']').ok_or_else(|| "invalid ipv6 host".to_string())?;
-        let inner = &s[1..end];
-        let rest = &s[end + 1..];
-        if !rest.is_empty() && !rest.starts_with(':') {
-            return Err("invalid ipv6 host".into());
-        }
-        let ip: std::net::Ipv6Addr = inner
-            .parse()
-            .map_err(|_| "invalid ipv6 host".to_string())?;
-        return Ok(ip.to_string());
-    }
-    // host:port (not bare ipv6)
-    let host = if let Some((h, port)) = s.rsplit_once(':') {
-        if !h.is_empty()
-            && !port.is_empty()
-            && port.chars().all(|c| c.is_ascii_digit())
-            && h.parse::<std::net::Ipv6Addr>().is_err()
-        {
-            h
-        } else if s.parse::<std::net::Ipv6Addr>().is_ok() {
-            s
-        } else {
-            s
-        }
-    } else {
-        s
-    };
-    if host.is_empty() {
-        return Err("empty host".into());
-    }
-    if let Ok(ip) = host.parse::<std::net::Ipv4Addr>() {
-        return Ok(ip.to_string());
-    }
-    if let Ok(ip) = host.parse::<std::net::Ipv6Addr>() {
-        return Ok(ip.to_string());
-    }
-    let lower = host.to_ascii_lowercase();
-    if !lower
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
-        || lower.starts_with('.')
-        || lower.ends_with('.')
-        || lower.contains("..")
-    {
-        return Err("invalid domain".into());
-    }
-    Ok(lower)
-}
-
-/// Full process path for process-scoped reject (trim; reject empty / control chars).
-pub fn normalize_process_path(raw: &str) -> Result<String, String> {
-    let s = raw.trim();
-    if s.is_empty() {
-        return Err("empty process path".into());
-    }
-    if s.chars().any(|c| c.is_control() || c == '\n' || c == '\r') {
-        return Err("invalid process path".into());
-    }
-    Ok(s.to_string())
-}
-
-fn block_entry_key(host: &str, process_path: Option<&str>) -> String {
-    match (host.is_empty(), process_path) {
-        (true, Some(p)) if !p.is_empty() => format!("\0{p}"),
-        (false, Some(p)) if !p.is_empty() => format!("{host}\0{p}"),
-        (false, _) => host.to_string(),
-        (true, _) => String::new(),
-    }
-}
-
-/// Normalize blocklist entries: host-only, host+process, or process-only (all dests).
-pub fn normalize_blocklist(items: &[BlockEntry]) -> Result<Vec<BlockEntry>, String> {
-    let mut out = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    for raw in items {
-        let host_raw = raw.host.trim();
-        let process_path = match raw.process_path.as_deref() {
-            Some(p) if !p.trim().is_empty() => Some(normalize_process_path(p)?),
-            _ => None,
-        };
-        let host = if host_raw.is_empty() {
-            if process_path.is_none() {
-                return Err("empty block entry".into());
-            }
-            String::new()
-        } else {
-            normalize_block_host(host_raw)?
-        };
-        let key = block_entry_key(&host, process_path.as_deref());
-        if key.is_empty() {
-            return Err("empty block entry".into());
-        }
-        if seen.insert(key) {
-            out.push(BlockEntry {
-                host,
-                process_path,
-            });
-        }
-    }
-    Ok(out)
-}
-
-/// Build one reject route rule. Process-only (empty host) → all destinations for that path.
-fn reject_rule_for_entry(host: &str, process_path: Option<&str>) -> Option<Value> {
-    let pp = process_path.filter(|s| !s.is_empty());
-    if host.trim().is_empty() {
-        let p = pp?;
-        return Some(json!({"process_path": [p], "action": "reject"}));
-    }
-    let h = normalize_block_host(host).ok()?;
-    let mut rule = if h.parse::<std::net::Ipv4Addr>().is_ok() {
-        json!({"ip_cidr": [format!("{h}/32")], "action": "reject"})
-    } else if h.parse::<std::net::Ipv6Addr>().is_ok() {
-        json!({"ip_cidr": [format!("{h}/128")], "action": "reject"})
-    } else {
-        // domain_suffix: listed host + its subdomains (release 0.2.1)
-        json!({"domain_suffix": [h], "action": "reject"})
-    };
-    if let Some(p) = pp {
-        if let Some(obj) = rule.as_object_mut() {
-            obj.insert("process_path".into(), json!([p]));
-        }
-    }
-    Some(rule)
 }
 
 /// Decision table: unspecified outbound + mux_default_on → enable only if capability == "yes".
@@ -264,6 +124,11 @@ fn build_dns_section(outbound: &Value, tun: bool) -> Value {
 /// Pure function — no UI/socket.
 pub fn generate_config(input: &GenerateInput<'_>) -> Value {
     let mut outbound = input.node.outbound.clone();
+    // UI/catalog-only hints (PF peer allow). Never pass to Core/sing-box.
+    if let Some(obj) = outbound.as_object_mut() {
+        obj.remove("server_ip");
+        obj.remove("ip");
+    }
     if outbound.get("tag").is_none() {
         if let Some(obj) = outbound.as_object_mut() {
             obj.insert("tag".into(), json!("proxy"));
@@ -334,29 +199,16 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         inbounds.push(Value::Object(tun_obj));
     }
 
-    // RouteProfile defaults: sniff → hijack DNS → reject blocklist → private/LAN direct → final proxy.
+    // RouteProfile defaults: sniff → hijack DNS → private/LAN direct → final proxy.
     // auto_detect_interface: true (upstream when vpn; also correct for mixed+sysproxy).
     // default_domain_resolver: upstream always sets dns-direct so egress dial never
     // uses dns-remote (would detour proxy while resolving proxy itself).
-    let mut route_rules = vec![
+    let route_rules = vec![
         json!({"action": "sniff"}),
         json!({"protocol": "dns", "action": "hijack-dns"}),
+        json!({"ip_is_private": true, "outbound": "direct"}),
     ];
-    for ent in input.blocklist {
-        if let Some(rule) = reject_rule_for_entry(&ent.host, ent.process_path.as_deref()) {
-            route_rules.push(rule);
-        }
-    }
-    route_rules.push(json!({"ip_is_private": true, "outbound": "direct"}));
-    // process_path / process_name rules need find_process at *route* time.
-    // Connection-table processOwnerEnricher runs after routing and cannot retro-reject.
-    let needs_find_process = input.blocklist.iter().any(|e| {
-        e.process_path
-            .as_deref()
-            .map(|p| !p.trim().is_empty())
-            .unwrap_or(false)
-    });
-    let mut route = json!({
+    let route = json!({
         "rules": route_rules,
         "final": "proxy",
         "auto_detect_interface": true,
@@ -364,11 +216,6 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
             "server": "dns-direct"
         }
     });
-    if needs_find_process {
-        if let Some(obj) = route.as_object_mut() {
-            obj.insert("find_process".into(), json!(true));
-        }
-    }
 
     // experimental.clash_api required for TrafficManager / QueryConnections
     // (even without external_controller — empty object still creates clash server).
@@ -509,7 +356,6 @@ pub fn generate_with_outbound(
     outbound: Value,
     port: u16,
     tun: bool,
-    blocklist: &[BlockEntry],
 ) -> Value {
     // ensure tag
     let mut outbound = outbound;
@@ -518,7 +364,6 @@ pub fn generate_with_outbound(
             obj.insert("tag".into(), json!("proxy"));
         }
     }
-    // if type is direct-only, route.final stays proxy tag pointing at direct-like outbound
     generate_config(&GenerateInput {
         node: &GenNode {
             outbound,
@@ -529,7 +374,6 @@ pub fn generate_with_outbound(
         mux_default_on: false,
         mux_protocol: "h2mux",
         mux_concurrency: 8,
-        blocklist,
     })
 }
 
@@ -552,7 +396,6 @@ mod tests {
             mux_default_on: false,
             mux_protocol: "smux",
             mux_concurrency: 8,
-            blocklist: &[],
         })
     }
 
@@ -562,6 +405,24 @@ mod tests {
         let v = gen(&n, 2080, false);
         assert_eq!(v["inbounds"][0]["listen_port"], 2080);
         assert_eq!(v["outbounds"][0]["type"], "socks");
+    }
+
+    #[test]
+    fn strips_catalog_peer_hints_from_outbound() {
+        let n = sample_node(json!({
+            "type":"vmess",
+            "tag":"proxy",
+            "server":"us.example.com",
+            "server_port":443,
+            "server_ip":"1.2.3.4",
+            "ip":"5.6.7.8",
+            "uuid":"00000000-0000-0000-0000-000000000001"
+        }));
+        let v = gen(&n, 2080, false);
+        let o = &v["outbounds"][0];
+        assert!(o.get("server_ip").is_none(), "server_ip must not reach Core: {o}");
+        assert!(o.get("ip").is_none(), "ip must not reach Core: {o}");
+        assert_eq!(o["server"], "us.example.com");
     }
 
     #[test]
@@ -734,241 +595,4 @@ mod tests {
         assert!(domains.iter().any(|x| x == "sni.example.net"));
     }
 
-    #[test]
-    fn normalize_block_host_strips_port_and_lowercases_domain() {
-        assert_eq!(
-            normalize_block_host("Example.COM:443").unwrap(),
-            "example.com"
-        );
-        assert_eq!(normalize_block_host("1.2.3.4:80").unwrap(), "1.2.3.4");
-        assert_eq!(
-            normalize_block_host("  ads.tracker.io.  ").unwrap(),
-            "ads.tracker.io"
-        );
-    }
-
-    #[test]
-    fn normalize_block_host_rejects_url_and_path() {
-        assert!(normalize_block_host("https://x.com/y").is_err());
-        assert!(normalize_block_host("x.com/path").is_err());
-        assert!(normalize_block_host("").is_err());
-        assert!(normalize_block_host("   ").is_err());
-    }
-
-    #[test]
-    fn normalize_blocklist_dedupes_case_insensitive_domain() {
-        let out = normalize_blocklist(&[
-            BlockEntry {
-                host: "A.com".into(),
-                process_path: None,
-            },
-            BlockEntry {
-                host: "a.com".into(),
-                process_path: None,
-            },
-            BlockEntry {
-                host: "1.2.3.4".into(),
-                process_path: None,
-            },
-            BlockEntry {
-                host: "1.2.3.4:443".into(),
-                process_path: None,
-            },
-        ])
-        .unwrap();
-        assert_eq!(
-            out,
-            vec![
-                BlockEntry {
-                    host: "a.com".into(),
-                    process_path: None
-                },
-                BlockEntry {
-                    host: "1.2.3.4".into(),
-                    process_path: None
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn normalize_blocklist_keeps_host_with_and_without_process() {
-        let out = normalize_blocklist(&[
-            BlockEntry {
-                host: "ads.x".into(),
-                process_path: None,
-            },
-            BlockEntry {
-                host: "ads.x".into(),
-                process_path: Some("/Apps/Chrome.app/Contents/MacOS/Chrome".into()),
-            },
-            BlockEntry {
-                host: "ads.x".into(),
-                process_path: Some("/Apps/Chrome.app/Contents/MacOS/Chrome".into()),
-            },
-        ])
-        .unwrap();
-        assert_eq!(out.len(), 2);
-        assert!(out[0].process_path.is_none());
-        assert_eq!(
-            out[1].process_path.as_deref(),
-            Some("/Apps/Chrome.app/Contents/MacOS/Chrome")
-        );
-    }
-
-    #[test]
-    fn normalize_blocklist_process_only() {
-        let out = normalize_blocklist(&[
-            BlockEntry {
-                host: "".into(),
-                process_path: Some("/usr/bin/curl".into()),
-            },
-            BlockEntry {
-                host: "  ".into(),
-                process_path: Some("/usr/bin/curl".into()),
-            },
-        ])
-        .unwrap();
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].host, "");
-        assert_eq!(out[0].process_path.as_deref(), Some("/usr/bin/curl"));
-        assert!(normalize_blocklist(&[BlockEntry {
-            host: "".into(),
-            process_path: None,
-        }])
-        .is_err());
-    }
-
-    #[test]
-    fn generate_injects_reject_rules_before_private() {
-        let n = sample_node(json!({
-            "type": "socks",
-            "tag": "proxy",
-            "server": "127.0.0.1",
-            "server_port": 1080
-        }));
-        let blocks = vec![
-            BlockEntry {
-                host: "telemetry.evil".into(),
-                process_path: None,
-            },
-            BlockEntry {
-                host: "9.9.9.9".into(),
-                process_path: None,
-            },
-            BlockEntry {
-                host: "scoped.evil".into(),
-                process_path: Some("/usr/bin/curl".into()),
-            },
-        ];
-        let v = generate_config(&GenerateInput {
-            node: &n,
-            system_proxy_port: 2080,
-            tun: false,
-            mux_default_on: false,
-            mux_protocol: "smux",
-            mux_concurrency: 8,
-            blocklist: &blocks,
-        });
-        let rules = v["route"]["rules"].as_array().expect("rules");
-        assert_eq!(rules[0].get("action"), Some(&json!("sniff")));
-        assert_eq!(rules[1].get("protocol"), Some(&json!("dns")));
-        assert!(rules.iter().any(|r| {
-            r.get("action") == Some(&json!("reject"))
-                && r.get("domain_suffix")
-                    .and_then(|d| d.as_array())
-                    .map(|a| a.iter().any(|x| x == "telemetry.evil"))
-                    .unwrap_or(false)
-                && r.get("process_path").is_none()
-        }));
-        assert!(rules.iter().any(|r| {
-            r.get("action") == Some(&json!("reject"))
-                && r.get("ip_cidr")
-                    .and_then(|d| d.as_array())
-                    .map(|a| a.iter().any(|x| x == "9.9.9.9/32"))
-                    .unwrap_or(false)
-        }));
-        assert!(rules.iter().any(|r| {
-            r.get("action") == Some(&json!("reject"))
-                && r.get("domain_suffix")
-                    .and_then(|d| d.as_array())
-                    .map(|a| a.iter().any(|x| x == "scoped.evil"))
-                    .unwrap_or(false)
-                && r.get("process_path")
-                    .and_then(|d| d.as_array())
-                    .map(|a| a.iter().any(|x| x == "/usr/bin/curl"))
-                    .unwrap_or(false)
-        }));
-        let priv_idx = rules
-            .iter()
-            .position(|r| r.get("ip_is_private") == Some(&json!(true)))
-            .expect("private rule");
-        let first_reject = rules
-            .iter()
-            .position(|r| r.get("action") == Some(&json!("reject")))
-            .expect("reject");
-        assert!(first_reject < priv_idx, "reject must be before private direct");
-        assert_eq!(v["route"]["final"], "proxy");
-        assert_eq!(
-            v["route"]["find_process"],
-            true,
-            "any process_path block entry enables find_process"
-        );
-    }
-
-    #[test]
-    fn generate_process_only_reject_all_dests() {
-        let n = sample_node(json!({
-            "type": "socks",
-            "tag": "proxy",
-            "server": "127.0.0.1",
-            "server_port": 1080
-        }));
-        let blocks = vec![BlockEntry {
-            host: String::new(),
-            process_path: Some("/Applications/Telegram.app/Contents/MacOS/Telegram".into()),
-        }];
-        let v = generate_config(&GenerateInput {
-            node: &n,
-            system_proxy_port: 2080,
-            tun: false,
-            mux_default_on: false,
-            mux_protocol: "smux",
-            mux_concurrency: 8,
-            blocklist: &blocks,
-        });
-        let rules = v["route"]["rules"].as_array().expect("rules");
-        assert!(rules.iter().any(|r| {
-            r.get("action") == Some(&json!("reject"))
-                && r.get("domain_suffix").is_none()
-                && r.get("ip_cidr").is_none()
-                && r.get("process_path")
-                    .and_then(|d| d.as_array())
-                    .map(|a| {
-                        a.iter()
-                            .any(|x| x == "/Applications/Telegram.app/Contents/MacOS/Telegram")
-                    })
-                    .unwrap_or(false)
-        }));
-        assert_eq!(
-            v["route"]["find_process"],
-            true,
-            "process_path reject needs route.find_process at match time"
-        );
-    }
-
-    #[test]
-    fn generate_empty_blocklist_has_no_reject() {
-        let n = sample_node(json!({
-            "type": "socks",
-            "tag": "proxy",
-            "server": "127.0.0.1",
-            "server_port": 1080
-        }));
-        let v = gen(&n, 2080, false);
-        let rules = v["route"]["rules"].as_array().unwrap();
-        assert!(!rules
-            .iter()
-            .any(|r| r.get("action") == Some(&json!("reject"))));
-    }
 }

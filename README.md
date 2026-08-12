@@ -102,8 +102,8 @@ cd app && npm run tauri dev
 - Catalog (groups/nodes) in store via `catalog_get` / `catalog_put`
 - Node **Traffic** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only Reset traffic zeros)
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled Connectivity (not a proxy-path test)
-- **Blocklist:** sidebar list + connection right-click three scopes (target · all processes / target · this app only / app · all connections by full executable path); multi-select bulk block (one put / one reconnect); store → `domain_suffix` / IP / process-only reject on generate; apply reconnects when connected
-- Connection table: merge by Core id, multi-select like nodes (bulk block / copy), process + PID columns
+- **Firewall (OS fail-closed):** sidebar **防火墙** + macOS **NexusFwD** LaunchDaemon (PF anchor `nexus` in main ruleset); Windows elevated firewall rules (4 policies). Domain/process blocklist removed. Orthogonal to sing-box routing/Core/Tun/proxy. Install helper before connect on mac.
+- Connection table: merge by Core id, multi-select like nodes (copy), process + PID columns
 - **i18n:** UI chrome + runtime log panel in `zh-CN` / `en` / `ru` / `zh-TW` (live language switch)
 - Advanced routing/DNS settings hidden until generate is wired to them
 - Windows: elevated shell, no console flash on helper spawns
