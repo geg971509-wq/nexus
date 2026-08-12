@@ -46,6 +46,12 @@ fn tray_of(app: &AppHandle) -> Option<TrayIcon<tauri::Wry>> {
         .map(|s| s.inner().clone())
 }
 
+/// Show/hide OS tray icon immediately (settings live preview + boot).
+pub fn set_visible(app: &AppHandle, visible: bool) {
+    let Some(tray) = tray_of(app) else { return };
+    let _ = tray.set_visible(visible);
+}
+
 fn set_frame(app: &AppHandle, idx: usize) {
     let Ok(g) = FRAMES.lock() else { return };
     if g.is_empty() {

@@ -640,21 +640,34 @@ func (s *server) QueryStats(ctx context.Context, in *gen.EmptyReq) (out *gen.Que
 
 // connMetaToProto maps one tracker's metadata into the wire type. Shared by the
 // active and closed lists so both carry identical, enriched fields.
-// Process path is filled once at route time by processOwnerEnricher.
+// Process path/pid filled by route find_process + processOwnerEnricher.
 func connMetaToProto(c *trafficontrol.TrackerMetadata) *gen.ConnectionMetaData {
 	processName := ""
 	processPath := processPathOf(c)
+	var processID uint32
+	if c != nil && c.Metadata.ProcessInfo != nil {
+		processID = c.Metadata.ProcessInfo.ProcessID
+	}
+	// Query-time path fill under setuid Core: throng may leave path empty even with pid.
+	if processPath == "" && processID > 0 {
+		if filled := processPathFromPID(processID); filled != "" {
+			processPath = filled
+			// persist onto tracker so later polls skip re-resolve
+			if c != nil && c.Metadata.ProcessInfo != nil {
+				c.Metadata.ProcessInfo.ProcessPath = filled
+			}
+		}
+	}
 	if processPath != "" {
 		spl := strings.Split(processPath, string(os.PathSeparator))
 		processName = spl[len(spl)-1]
+	} else if processID > 0 {
+		// path blocked (SIP); still show a stable process label
+		processName = fmt.Sprintf("pid %d", processID)
 	}
 	var closedAt int64
 	if !c.ClosedAt.IsZero() {
 		closedAt = c.ClosedAt.UnixMilli()
-	}
-	var processID uint32
-	if c != nil && c.Metadata.ProcessInfo != nil {
-		processID = c.Metadata.ProcessInfo.ProcessID
 	}
 	return &gen.ConnectionMetaData{
 		Id:          To(c.ID.String()),

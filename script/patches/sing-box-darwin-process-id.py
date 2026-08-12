@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
-"""Ensure throng sing-box darwin ConnectionOwner sets ProcessID from entry.pid."""
+"""Throneproj sing-box darwin process ownership patches (re-applied after go mod verify).
+
+1) ProcessID: throng searcher had pid but left ConnectionOwner.ProcessID=0 when path fails.
+2) TCP local-port fallback: exact 4-tuple often misses (Tun / NAT / dest rewrite); local
+   IP+port is unique per host socket — same idea UDP already used.
+
+Never touch sagernet/sing-box@version published modules.
+"""
 import glob
 import os
 import pathlib
 import sys
 
-# Only Throneproj replace — never touch sagernet/sing-box@version (breaks go mod verify).
 patterns = [
     os.path.expanduser(
         "~/go/pkg/mod/github.com/!throneproj/sing-box@*/common/process/searcher_darwin_shared.go"
     ),
 ]
+
 files = []
 seen = set()
 for pat in patterns:
@@ -23,14 +30,15 @@ if not files:
     print("no throng searcher_darwin_shared.go found; skip")
     sys.exit(0)
 
-old = (
+# --- patch A: set ProcessID before path lookup ---
+old_pid = (
     "\t\tprocessPath, err := getExecPathFromPID(entry.pid)\n"
     "\t\tif err == nil {\n"
     "\t\t\towner.ProcessPath = processPath\n"
     "\t\t\treturn owner, nil\n"
     "\t\t}"
 )
-new = (
+new_pid = (
     "\t\towner.ProcessID = entry.pid\n"
     "\t\tprocessPath, err := getExecPathFromPID(entry.pid)\n"
     "\t\tif err == nil {\n"
@@ -39,17 +47,74 @@ new = (
     "\t\t}"
 )
 
-for p in files:
-    t = p.read_text()
-    if "owner.ProcessID = entry.pid" in t:
-        print("ok", p)
-        continue
-    if old not in t:
-        print("pattern miss", p)
-        continue
+# --- patch B: allow TCP local-port fallback (remove UDP-only gate) ---
+# Tabs match throng source (3 tabs inside for-loop body for if network).
+old_match = (
+    "\t\tif network != N.NetworkUDP {\n"
+    "\t\t\tcontinue\n"
+    "\t\t}\n"
+    "\t\tif !hasLocalFallback && entry.localAddr == sourceAddr {\n"
+    "\t\t\thasLocalFallback = true\n"
+    "\t\t\tlocalFallback = entry\n"
+    "\t\t}\n"
+    "\t\tif !hasWildcardFallback && entry.localAddr.IsUnspecified() {\n"
+    "\t\t\thasWildcardFallback = true\n"
+    "\t\t\twildcardFallback = entry\n"
+    "\t\t}"
+)
+new_match = (
+    "\t\t// TCP+UDP: local IP+port uniquely identifies the socket when remote\n"
+    "\t\t// dest in metadata does not match PCB (common under Tun / rewrite).\n"
+    "\t\tif !hasLocalFallback && entry.localAddr == sourceAddr {\n"
+    "\t\t\thasLocalFallback = true\n"
+    "\t\t\tlocalFallback = entry\n"
+    "\t\t}\n"
+    "\t\tif network == N.NetworkUDP && !hasWildcardFallback && entry.localAddr.IsUnspecified() {\n"
+    "\t\t\thasWildcardFallback = true\n"
+    "\t\t\twildcardFallback = entry\n"
+    "\t\t}"
+)
+
+
+def ensure_writable(p: pathlib.Path) -> None:
     try:
         p.chmod(p.stat().st_mode | 0o200)
     except OSError:
         pass
-    p.write_text(t.replace(old, new, 1))
-    print("patched", p)
+
+
+for p in files:
+    t = p.read_text()
+    changed = False
+
+    if "owner.ProcessID = entry.pid" not in t:
+        if old_pid not in t:
+            print("pattern miss (ProcessID)", p)
+        else:
+            ensure_writable(p)
+            t = t.replace(old_pid, new_pid, 1)
+            changed = True
+            print("patched ProcessID", p)
+    else:
+        print("ok ProcessID", p)
+
+    match_ok = (
+        "local IP+port uniquely identifies" in t
+        or "if network == N.NetworkUDP && !hasWildcardFallback" in t
+    )
+    if match_ok:
+        print("ok TCP-local-fallback", p)
+    elif old_match not in t:
+        print("pattern miss (TCP-local-fallback)", p)
+        # debug first miss only
+        if "if network != N.NetworkUDP" in t:
+            i = t.find("if network != N.NetworkUDP")
+            print(" nearby:", repr(t[i - 40 : i + 200]))
+    else:
+        ensure_writable(p)
+        t = t.replace(old_match, new_match, 1)
+        changed = True
+        print("patched TCP-local-fallback", p)
+
+    if changed:
+        p.write_text(t)

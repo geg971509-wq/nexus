@@ -13,6 +13,9 @@ pub struct Store {
     /// Tun intent — default off (needs privilege).
     #[serde(default)]
     pub tun: bool,
+    /// Hide menu-bar / tray icon (main window + dock remain).
+    #[serde(default)]
+    pub hide_tray: bool,
     /// UI node catalog blob (`nexus.catalog.v1` shape).
     #[serde(default)]
     pub catalog: Option<serde_json::Value>,
@@ -30,6 +33,7 @@ impl Default for Store {
         Self {
             system_proxy: true,
             tun: false,
+            hide_tray: false,
             catalog: None,
             blocklist: serde_json::Value::Null,
         }

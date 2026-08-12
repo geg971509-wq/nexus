@@ -328,6 +328,24 @@ async fn store_snapshot() -> Result<serde_json::Value, String> {
     .map_err(|e| format!("store_snapshot join: {e}"))?
 }
 
+/// Live tray hide: persist + menu-bar icon show/hide immediately.
+#[tauri::command]
+async fn set_hide_tray(app: tauri::AppHandle, hide: bool) -> Result<String, String> {
+    {
+        use data::store::Store;
+        Store::update(|st| {
+            st.hide_tray = hide;
+            Ok(())
+        })?;
+    }
+    tray_spin::set_visible(&app, !hide);
+    Ok(if hide {
+        "tray hidden".into()
+    } else {
+        "tray shown".into()
+    })
+}
+
 /// Export config for selected node — same input shape as connect_selected.
 #[tauri::command]
 async fn generate_preview(
@@ -1556,6 +1574,7 @@ pub fn run() {
             core_check_config,
             core_stop,
             store_snapshot,
+            set_hide_tray,
             generate_preview,
             catalog_get,
             catalog_put,
@@ -1623,6 +1642,12 @@ pub fn run() {
             // tray registered with app on build; retain handle for process life
             app.manage(_tray);
             tray_spin::init(app.handle());
+            // apply hide_tray before first paint of menu bar
+            {
+                use data::store::Store;
+                let hide = Store::load().hide_tray;
+                tray_spin::set_visible(app.handle(), !hide);
+            }
             // 5A: cold boot residual PF — no active tunnel → best-effort Reset.
             // Helper down → status only (reset_best_effort is soft).
             std::thread::spawn(|| {

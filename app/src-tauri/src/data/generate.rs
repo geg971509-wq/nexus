@@ -208,10 +208,13 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         json!({"protocol": "dns", "action": "hijack-dns"}),
         json!({"ip_is_private": true, "outbound": "direct"}),
     ];
+    // Always resolve process at route time so conn table + enricher see ProcessInfo
+    // (path/pid). Independent of blocklist; throng darwin ProcessID still via build patch.
     let route = json!({
         "rules": route_rules,
         "final": "proxy",
         "auto_detect_interface": true,
+        "find_process": true,
         "default_domain_resolver": {
             "server": "dns-direct"
         }
@@ -475,6 +478,11 @@ mod tests {
         let v = gen(&p, 2080, false);
         assert_eq!(v["route"]["final"], "proxy");
         assert_eq!(v["route"]["auto_detect_interface"], true);
+        assert_eq!(
+            v["route"]["find_process"],
+            true,
+            "conn table / process enricher need route.find_process"
+        );
         let rules = v["route"]["rules"].as_array().expect("rules");
         assert!(rules.iter().any(|r| r.get("action") == Some(&json!("sniff"))));
         assert!(rules.iter().any(|r| r.get("ip_is_private") == Some(&json!(true))

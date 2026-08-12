@@ -11,6 +11,7 @@ commands.allow = [
   "core_check_config",
   "core_stop",
   "store_snapshot",
+  "set_hide_tray",
   "generate_preview",
   "catalog_get",
   "catalog_put",

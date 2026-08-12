@@ -109,6 +109,19 @@
     --page-gutter-y: 20px;
     --page-content-max: 680px;
     --page-card-gap: 16px;
+    /* shared dialog chrome — all confirm-mask cards */
+    --dialog-pad: 18px;
+    --dialog-pad-b: 14px;
+    --dialog-radius: 14px;
+    --dialog-title: 15px;
+    --dialog-body: 13px;
+    --dialog-sub: 12.5px;
+    --dialog-gap: 8px;
+    --dialog-w: 360px;
+    --dialog-w-wide: 440px;
+    --dialog-w-list: 460px;
+    --dialog-w-qr: 480px;
+    --dialog-w-form: 560px;
   }
   /* macOS-utility dark: layered charcoal, not pure black; elevated surfaces lighter */
   html[data-theme="dark"] {
@@ -1213,15 +1226,15 @@
     overflow: hidden;
     text-overflow: clip;
   }
-  /* last col: keep 流量 + "0 B↑ 0 B↓" one line (never stack glyphs) */
+  /* last col: full "999.9 KB↑ 999.9 KB↓" one line (never stack / ellipsis mid-flow) */
   .conn-table th.flow,
   .conn-table td.flow {
-    width: 7.5em;
-    min-width: 7.5em;
-    max-width: 9em;
+    width: 11.5em;
+    min-width: 11.5em;
+    max-width: 13em;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-overflow: clip;
   }
   .conn-table tbody tr { cursor: default; }
   .conn-table tbody tr:hover td { background: var(--fill); }
@@ -1880,36 +1893,65 @@
     background: linear-gradient(180deg, #ff5a52 0%, #e0342b 100%);
   }
   .confirm-card {
-    width: min(360px, calc(100vw - 40px));
-    padding: 18px 18px 14px;
-    border-radius: 14px;
+    width: min(var(--dialog-w), calc(100vw - 40px));
+    padding: var(--dialog-pad) var(--dialog-pad) var(--dialog-pad-b);
+    border-radius: var(--dialog-radius);
     background: var(--menu-bg);
     border: 0.5px solid var(--menu-border);
     box-shadow: var(--menu-shadow);
+    box-sizing: border-box;
   }
   .confirm-card h3 {
     margin: 0 0 6px;
-    font-size: 15px;
-    font-weight: 600;
+    font: 600 var(--dialog-title)/1.3 var(--font);
+    letter-spacing: -0.01em;
     color: var(--label);
   }
-  .confirm-card p {
+  .confirm-card > p,
+  .confirm-card .dialog-body {
     margin: 0 0 14px;
-    font-size: 13px;
+    font: 400 var(--dialog-body)/1.45 var(--font);
     color: var(--secondary);
-    line-height: 1.45;
+    white-space: pre-line;
+  }
+  .confirm-card .dialog-sub,
+  .confirm-card .groups-sub {
+    margin: 0 0 12px;
+    font: 400 var(--dialog-sub)/1.4 var(--font);
+    color: var(--secondary);
+  }
+  .confirm-card .dialog-name {
+    margin: 0 0 8px;
+    font: 500 var(--dialog-body)/1.35 var(--font);
+    color: var(--secondary);
+    text-align: center;
   }
   .confirm-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    align-items: center;
+    gap: var(--dialog-gap);
   }
+  .confirm-actions.actions-split { justify-content: space-between; }
+  .confirm-actions .actions-right {
+    display: flex;
+    align-items: center;
+    gap: var(--dialog-gap);
+  }
+  .confirm-actions .btn-ghost,
+  .confirm-actions .btn-primary {
+    min-width: 72px;
+    height: 30px;
+    padding: 0 14px;
+    font: 500 13px/1 var(--font);
+  }
+  .confirm-actions .btn-primary { font-weight: 600; }
   .confirm-check {
     display: flex;
     align-items: center;
     gap: 8px;
     margin: -4px 0 14px;
-    font-size: 12.5px;
+    font-size: var(--dialog-sub);
     color: var(--secondary);
     cursor: pointer;
     user-select: none;
@@ -1921,8 +1963,27 @@
     cursor: pointer;
   }
   .confirm-card.warn h3 { color: var(--orange); }
-  .confirm-card.wide { width: min(440px, calc(100vw - 40px)); }
-  .confirm-card.edit-node-card { width: min(560px, calc(100vw - 40px)); max-height: min(86vh, 720px); overflow: auto; }
+  .confirm-card.wide { width: min(var(--dialog-w-wide), calc(100vw - 40px)); }
+  .confirm-card.edit-node-card {
+    width: min(var(--dialog-w-form), calc(100vw - 40px));
+    max-height: min(86vh, 720px);
+    overflow: auto;
+  }
+  .confirm-card .form-switch-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-direction: row;
+    margin-top: 2px;
+    font: 500 var(--dialog-body)/1.2 var(--font);
+    color: var(--label);
+  }
+  .confirm-card .edit-outbound-hint {
+    margin: 4px 0 0;
+    font: 400 12px/1.4 var(--font);
+    color: var(--secondary);
+    opacity: 0.85;
+  }
   .form-grid { display: grid; gap: 10px; margin: 0 0 14px; }
   .form-grid label {
     display: grid; gap: 4px;
@@ -1941,6 +2002,7 @@
     width: 100%; max-width: none; min-width: 0; box-sizing: border-box;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .form-grid .select { width: 100%; }
   .form-grid .field:focus { outline: none; border-color: var(--focus-border); box-shadow: var(--focus-ring); }
   .form-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-width: 0; }
   .form-row2 > label { min-width: 0; }
@@ -2014,30 +2076,12 @@
   .group-row .g-acts .btn-row:hover { background: rgba(120,120,128,.24); }
   .group-row .g-acts .btn-row.danger { color: var(--red, #ff3b30); }
   .group-row .g-acts .btn-row.danger:hover { background: rgba(255,59,48,.12); }
-  .groups-card { width: min(460px, calc(100vw - 40px)); padding: 20px 20px 16px; }
-  .groups-card h3 {
-    margin: 0;
-    font: 600 16px/1.25 var(--font);
-    letter-spacing: -0.02em;
-    color: var(--label);
+  .groups-card {
+    width: min(var(--dialog-w-list), calc(100vw - 40px));
   }
-  .groups-card .groups-sub {
-    margin: 6px 0 0;
-    font: 400 12.5px/1.4 var(--font);
-    color: var(--secondary);
-  }
-  .groups-card .confirm-actions {
-    margin-top: 2px;
-    align-items: center;
-  }
-  .groups-card .confirm-actions .btn-ghost,
-  .groups-card .confirm-actions .btn-primary {
-    min-width: 76px;
-    height: 32px;
-    padding: 0 14px;
-    font: 500 13px/1 var(--font);
-  }
-  .groups-card .confirm-actions .btn-primary { font-weight: 600; }
+  .groups-card h3 { margin: 0 0 6px; }
+  .groups-card .groups-sub { margin: 0 0 12px; }
+  .groups-card .confirm-actions { margin-top: 2px; }
   .rule-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
   .rule-table th {
     text-align: left; font-size: 11px; font-weight: 600; color: var(--tertiary);
@@ -2069,7 +2113,7 @@
   html[data-theme="dark"] .qr-box { background: #fff; }
   /* Full outbound JSON — no inner max-height clip; card scrolls if viewport short */
   .confirm-card.qr-card {
-    width: min(480px, calc(100vw - 40px));
+    width: min(var(--dialog-w-qr), calc(100vw - 40px));
     max-height: min(90vh, 900px);
     overflow: auto;
   }
@@ -2726,7 +2770,7 @@
                     <div class="set-label" data-i18n="label.hideTray">隐藏托盘图标</div>
                     <div class="set-right">
                       <span class="set-hint" data-i18n="hint.hideTray">仅保留主窗口入口，不在菜单栏显示</span>
-                      <div class="set-ctrl"><button type="button" class="switch-only" data-switch aria-pressed="false"></button></div>
+                      <div class="set-ctrl"><button type="button" class="switch-only" id="hideTraySwitch" data-switch aria-pressed="false"></button></div>
                     </div>
                   </div>
                   <div class="set-section" data-i18n="sec.launch">启动与窗口</div>
@@ -3279,9 +3323,9 @@
 
   <!-- in-app confirm: window.confirm is often silent/false in Tauri WKWebView -->
   <div class="confirm-mask ask-mask" id="askMask" role="dialog" aria-modal="true" aria-labelledby="askTitle" hidden>
-    <div class="confirm-card warn" id="askCard">
+    <div class="confirm-card" id="askCard">
       <h3 id="askTitle" data-i18n="confirm.askTitle">确认</h3>
-      <p id="askMsg"></p>
+      <p id="askMsg" class="dialog-body"></p>
       <div class="confirm-actions">
         <button type="button" class="btn-ghost" id="askCancel" data-i18n="btn.cancel">取消</button>
         <button type="button" class="btn-primary" id="askOk" data-i18n="btn.ok">确定</button>
@@ -3298,7 +3342,7 @@
         <label><span data-i18n="edit.name">名称</span><input class="field" id="editName" type="text" autocomplete="off" /></label>
         <div class="form-row2">
           <label><span data-i18n="edit.type">类型</span>
-            <button type="button" class="select" id="editType" data-options="VLESS|Trojan|SS|VMess|HTTP|HTTPS|SOCKS|AnyTLS|TUIC|Hysteria2" data-value="VLESS" style="width:100%"><span class="sel-val">VLESS</span><span class="sel-chev">▾</span></button>
+            <button type="button" class="select" id="editType" data-options="VLESS|Trojan|SS|VMess|HTTP|HTTPS|SOCKS|AnyTLS|TUIC|Hysteria2" data-value="VLESS"><span class="sel-val">VLESS</span><span class="sel-chev">▾</span></button>
           </label>
           <label><span data-i18n="edit.port">端口</span><input class="field" id="editPort" type="text" inputmode="numeric" autocomplete="off" /></label>
         </div>
@@ -3328,7 +3372,7 @@
         <label data-edit-for="vless vmess trojan https anytls tuic" class="edit-check">
           <input type="checkbox" id="editInsecure" /> <span data-i18n="edit.insecure">跳过证书校验 (insecure)</span>
         </label>
-        <p class="groups-sub" id="editOutboundHint" hidden style="margin:4px 0 0;font-size:12px;opacity:.75"></p>
+        <p class="edit-outbound-hint" id="editOutboundHint" hidden></p>
         <label><span data-i18n="edit.note">备注</span><input class="field" id="editNote" type="text" placeholder="可选" data-i18n-placeholder="ph.optional" autocomplete="off" /></label>
       </div>
       <div class="confirm-actions">
@@ -3344,9 +3388,9 @@
       <p class="groups-sub" data-i18n="groups.sub">新建、重命名或删除订阅分组；顶栏 Tab 会同步更新。</p>
       <div class="group-list" id="groupList" role="list"></div>
       <p class="groups-status" id="groupUpdateStatus" hidden></p>
-      <div class="confirm-actions" style="justify-content:space-between">
+      <div class="confirm-actions actions-split">
         <button type="button" class="btn-ghost" id="groupAdd" data-i18n="groups.new">新建分组</button>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div class="actions-right">
           <button type="button" class="btn-ghost" id="groupUpdateAll" data-i18n="groups.updateAll">更新全部</button>
           <button type="button" class="btn-primary" id="groupsClose" data-i18n="groups.done">完成</button>
         </div>
@@ -3357,7 +3401,7 @@
   <div class="confirm-mask" id="qrMask" role="dialog" aria-modal="true" aria-labelledby="qrTitle" hidden>
     <div class="confirm-card qr-card">
       <h3 id="qrTitle" data-i18n="qr.title">节点二维码</h3>
-      <p id="qrName" style="text-align:center;margin:0 0 4px;font-size:13px;color:var(--secondary)"></p>
+      <p id="qrName" class="dialog-name"></p>
       <div class="qr-box" id="qrBox" aria-hidden="true"><span class="qr-empty" data-i18n="js.generating">生成中…</span></div>
       <pre id="qrLink" class="qr-link"></pre>
       <div class="confirm-actions">
@@ -3390,7 +3434,7 @@
   <div class="confirm-mask" id="exportMask" role="dialog" aria-modal="true" aria-labelledby="exportTitle" hidden>
     <div class="confirm-card wide">
       <h3 id="exportTitle" data-i18n="export.title">导出 Sing-box 配置</h3>
-      <p style="margin:0 0 8px;font-size:12.5px;color:var(--secondary)" data-i18n="export.sub">当前运行配置预览（可复制）</p>
+      <p class="dialog-sub" data-i18n="export.sub">当前运行配置预览（可复制）</p>
       <pre class="export-pre" id="exportPre"></pre>
       <div class="confirm-actions">
         <button type="button" class="btn-ghost" id="exportClose" data-i18n="btn.close">关闭</button>
@@ -3403,12 +3447,12 @@
     <div class="confirm-card groups-card">
       <h3 id="groupEditTitle" data-i18n="groupEdit.title">编辑分组</h3>
       <p class="groups-sub" id="groupEditSub" data-i18n="groupEdit.sub">修改名称与订阅源；保存后顶栏 Tab 同步。</p>
-      <div class="form-grid" style="margin-top:14px">
+      <div class="form-grid">
         <label><span data-i18n="edit.name">名称</span><input class="field" id="geName" type="text" autocomplete="off" spellcheck="false" /></label>
         <label><span data-i18n="label.728c7d71">订阅 URL</span><input class="field" id="geUrl" type="url" autocomplete="off" spellcheck="false" placeholder="https://…" /></label>
-        <label style="display:flex;align-items:center;gap:10px;flex-direction:row;margin-top:2px">
+        <label class="form-switch-row">
           <button type="button" class="switch-only on" id="geAuto" data-switch aria-pressed="true"></button>
-          <span style="font:500 13px/1.2 var(--font);color:var(--label)" data-i18n="groupEdit.auto">自动更新订阅</span>
+          <span data-i18n="groupEdit.auto">自动更新订阅</span>
         </label>
       </div>
       <div class="confirm-actions">
@@ -5547,7 +5591,10 @@
         ok.textContent = opts.okText || (typeof t === 'function' ? t('btn.ok') : '确定');
         ok.classList.toggle('danger', !!opts.danger);
       }
-      if (card) card.classList.toggle('ask-danger', !!opts.danger);
+      if (card) {
+        card.classList.toggle('ask-danger', !!opts.danger);
+        card.classList.toggle('warn', !!opts.warn && !opts.danger);
+      }
       const cancel = document.getElementById('askCancel');
       if (cancel) cancel.textContent = opts.cancelText || (typeof t === 'function' ? t('btn.cancel') : '取消');
       openDialog('askMask');
@@ -7793,6 +7840,16 @@
       btn.classList.toggle('on', on);
       btn.setAttribute('aria-pressed', String(on));
       markSettingsDirty();
+      // Live preview: hide/show menu-bar icon immediately (same as theme/icon style).
+      if (btn.id === 'hideTraySwitch' && typeof nexusInvoke === 'function') {
+        nexusInvoke('set_hide_tray', { hide: on }).then((r) => {
+          if (r && r.ok === false) {
+            log('SYS', 'warn', (r.error || r.msg || 'tray') + '');
+          } else {
+            log('SYS', 'info', on ? t('log.trayHidden') : t('log.trayShown'));
+          }
+        }).catch(() => {});
+      }
     });
   });
 
@@ -8145,7 +8202,7 @@
       'log.testStart': '{label} · {n} 个节点 · TCP 直连 RTT（非代理路径）…',
       'log.testStartViaNode': '经节点 URL 测试 · {name}…',
       'log.testViaNode': '经节点测试',
-      'log.testViaNodeOnly': '已连接时只能测试当前节点（经代理路径）。请先断开，或只选定当前连接节点。',
+      'log.testViaNodeOnly': '已连接时只能测当前节点。请先断开，或只选当前连接节点。\n这是为了确保所有流量必须经过节点，最大保障安全！',
       'log.probeUnavailable': 'net_tcp_probe 不可用：{error}',
       'log.testDone': '{label}完成 · 通 {ok} · 失败 {fail}{extra}',
       'log.testStopped': '（已停止）',
@@ -8249,6 +8306,8 @@
       'log.hiddenMenu': '已隐藏到菜单栏',
       'log.hideFail': '隐藏失败: {error}',
       'log.hiddenTray': '窗口已隐藏到托盘',
+      'log.trayHidden': '已隐藏菜单栏图标',
+      'log.trayShown': '已显示菜单栏图标',
       'log.showMain': '显示主窗口',
       'log.dlChina': '下载配置档 · China（未接线）',
       'log.dlIran': '下载配置档 · Iran（未接线）',
@@ -8753,7 +8812,7 @@
       'log.testStart': '{label} · {n} nodes · TCP direct RTT (not proxy path)…',
       'log.testStartViaNode': 'Via-node URL test · {name}…',
       'log.testViaNode': 'Via-node test',
-      'log.testViaNodeOnly': 'While connected, only the current node can be tested (proxy path). Disconnect first, or select only the live node.',
+      'log.testViaNodeOnly': 'While connected, only the current node can be tested. Disconnect first, or select only the live node.\nThis keeps all traffic on the node path for maximum security!',
       'log.probeUnavailable': 'net_tcp_probe unavailable: {error}',
       'log.testDone': '{label} done · ok {ok} · fail {fail}{extra}',
       'log.testStopped': ' (stopped)',
@@ -8857,6 +8916,8 @@
       'log.hiddenMenu': 'Hidden to menu bar',
       'log.hideFail': 'Hide failed: {error}',
       'log.hiddenTray': 'Window hidden to tray',
+      'log.trayHidden': 'Menu bar icon hidden',
+      'log.trayShown': 'Menu bar icon shown',
       'log.showMain': 'Show main window',
       'log.dlChina': 'Download profile · China (not wired)',
       'log.dlIran': 'Download profile · Iran (not wired)',
@@ -9356,7 +9417,7 @@
       'log.testStart': '{label} · {n} узлов · TCP RTT напрямую (не через прокси)…',
       'log.testStartViaNode': 'URL-тест через узел · {name}…',
       'log.testViaNode': 'Тест через узел',
-      'log.testViaNodeOnly': 'При подключении можно тестировать только текущий узел (путь прокси). Отключитесь или выберите только активный узел.',
+      'log.testViaNodeOnly': 'При подключении можно тестировать только текущий узел. Отключитесь или выберите только активный узел.\nТак весь трафик идёт через узел — максимальная безопасность!',
       'log.probeUnavailable': 'net_tcp_probe недоступен: {error}',
       'log.testDone': '{label} готов · ok {ok} · fail {fail}{extra}',
       'log.testStopped': ' (остановлено)',
@@ -9458,6 +9519,8 @@
       'log.hiddenMenu': 'Скрыто в строку меню',
       'log.hideFail': 'Скрыть не удалось: {error}',
       'log.hiddenTray': 'Окно скрыто в трей',
+      'log.trayHidden': 'Значок в меню скрыт',
+      'log.trayShown': 'Значок в меню показан',
       'log.showMain': 'Показать главное окно',
       'log.dlChina': 'Скачать профиль · China (не подключено)',
       'log.dlIran': 'Скачать профиль · Iran (не подключено)',
@@ -9957,7 +10020,7 @@
       'log.testStart': '{label} · {n} 個節點 · TCP 直連 RTT（非代理路徑）…',
       'log.testStartViaNode': '經節點 URL 測試 · {name}…',
       'log.testViaNode': '經節點測試',
-      'log.testViaNodeOnly': '已連線時只能測試目前節點（經代理路徑）。請先中斷，或只選定目前連線節點。',
+      'log.testViaNodeOnly': '已連線時只能測目前節點。請先中斷，或只選目前連線節點。\n這是為了確保所有流量必須經過節點，最大保障安全！',
       'log.probeUnavailable': 'net_tcp_probe 不可用：{error}',
       'log.testDone': '{label}完成 · 通 {ok} · 失敗 {fail}{extra}',
       'log.testStopped': '（已停止）',
@@ -10059,6 +10122,8 @@
       'log.hiddenMenu': '已隱藏到選單列',
       'log.hideFail': '隱藏失敗：{error}',
       'log.hiddenTray': '視窗已隱藏到匣',
+      'log.trayHidden': '已隱藏選單列圖示',
+      'log.trayShown': '已顯示選單列圖示',
       'log.showMain': '顯示主視窗',
       'log.dlChina': '下載設定檔 · China（未接線）',
       'log.dlIran': '下載設定檔 · Iran（未接線）',
@@ -10496,6 +10561,9 @@
         const on = map[k] === 'true';
         b.classList.toggle('on', on);
         b.setAttribute('aria-pressed', String(on));
+        if (b.id === 'hideTraySwitch' && typeof nexusInvoke === 'function') {
+          nexusInvoke('set_hide_tray', { hide: on }).catch(() => {});
+        }
       }
     });
     document.querySelectorAll('#view-settings .field[contenteditable="true"]').forEach((f, i) => {
@@ -11096,6 +11164,12 @@
       if (typeof setChipOn === 'function') {
         setChipOn('tunToggle', 'tunChip', !!d.tun);
         setChipOn('sysToggle', 'sysChip', !!d.system_proxy);
+      }
+      const hideTrayBtn = document.getElementById('hideTraySwitch');
+      if (hideTrayBtn) {
+        const hide = !!d.hide_tray;
+        hideTrayBtn.classList.toggle('on', hide);
+        hideTrayBtn.setAttribute('aria-pressed', String(hide));
       }
       const cat = d.catalog;
       let n = 0;
