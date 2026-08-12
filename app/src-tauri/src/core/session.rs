@@ -3,7 +3,8 @@ use super::elevate::{ensure_setuid_core, path_has_setuid, privileged_core_path};
 use super::frame::LibcoreClient;
 use super::proto_min::{
     decode_core_state, decode_error_resp, decode_has_privilege, decode_query_connections,
-    decode_query_stats_proxy, encode_load_config_core_json, encode_load_config_req, ConnRow,
+    decode_query_stats_proxy, decode_test_resp, encode_load_config_core_json,
+    encode_load_config_req, encode_test_req_current, ConnRow, UrlTestRow, DEFAULT_URL_TEST,
 };
 use std::io;
 use std::path::{Path, PathBuf};
@@ -428,6 +429,30 @@ impl CoreSession {
         let c = self.client.as_mut().ok_or("no client")?;
         let data = c.call("QueryStats", &[]).map_err(|e| e.to_string())?;
         Ok(decode_query_stats_proxy(&data))
+    }
+
+    /// One-shot Core `Test(test_current=true)` via live box proxy/default outbound.
+    /// `call_timeout` ≥ TestTimeoutMs + 5s slack so slow peers do not trip IPC.
+    pub fn test_current_url(
+        &mut self,
+        url: &str,
+        timeout_ms: i32,
+    ) -> Result<Vec<UrlTestRow>, String> {
+        let c = self.client.as_mut().ok_or("no client")?;
+        let timeout_ms = if timeout_ms > 0 { timeout_ms } else { 3000 };
+        let url = if url.is_empty() { DEFAULT_URL_TEST } else { url };
+        let payload = encode_test_req_current(url, timeout_ms, 1);
+        let call_to = Duration::from_millis((timeout_ms as u64).saturating_add(5_000).max(10_000));
+        let data = c
+            .call_timeout("Test", &payload, call_to)
+            .map_err(|e| e.to_string())?;
+        Ok(decode_test_resp(&data))
+    }
+
+    pub fn stop_test(&mut self) -> Result<(), String> {
+        let c = self.client.as_mut().ok_or("no client")?;
+        let _ = c.call("StopTest", &[]).map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     pub fn stop_core_process(&mut self) -> io::Result<()> {

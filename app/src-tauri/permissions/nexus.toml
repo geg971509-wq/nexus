@@ -28,6 +28,8 @@ commands.allow = [
   "sub_parse_share",
   "net_tcp_probe",
   "net_tcp_probe_stop",
+  "core_url_test_current",
+  "core_url_test_stop",
   "net_resolve_host",
   "net_resolve_hosts"
 ]

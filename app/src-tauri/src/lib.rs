@@ -1337,6 +1337,66 @@ fn net_tcp_probe_stop() -> Result<(), String> {
     Ok(())
 }
 
+/// Core TestCurrent: URL test via live box proxy/default outbound only.
+/// take/reinstall session so poll/disconnect is not blocked for the whole Test.
+#[tauri::command]
+async fn core_url_test_current(
+    url: Option<String>,
+    timeout_ms: Option<i32>,
+) -> Result<serde_json::Value, String> {
+    let url = url.unwrap_or_default();
+    let timeout_ms = timeout_ms.unwrap_or(3000);
+    tauri::async_runtime::spawn_blocking(move || {
+        let (taken, gen) = match SESSION.lock() {
+            Ok(mut g) => {
+                let gen = current_connect_gen();
+                (g.take(), gen)
+            }
+            Err(_) => (None, 0),
+        };
+        let Some(mut s) = taken else {
+            return Err("no core session".into());
+        };
+        let result = s.test_current_url(&url, timeout_ms);
+        reinstall_poll_session(s, gen);
+        let rows = result?;
+        let results: Vec<serde_json::Value> = rows
+            .into_iter()
+            .map(|r| {
+                serde_json::json!({
+                    "tag": r.tag,
+                    "ms": r.ms,
+                    "error": r.error,
+                })
+            })
+            .collect();
+        Ok(serde_json::json!({ "results": results }))
+    })
+    .await
+    .map_err(|e| format!("url test join: {e}"))?
+}
+
+/// Cancel in-flight Core URL test (StopTest).
+#[tauri::command]
+async fn core_url_test_stop() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let (taken, gen) = match SESSION.lock() {
+            Ok(mut g) => {
+                let gen = current_connect_gen();
+                (g.take(), gen)
+            }
+            Err(_) => (None, 0),
+        };
+        if let Some(mut s) = taken {
+            let _ = s.stop_test();
+            reinstall_poll_session(s, gen);
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("url test stop join: {e}"))?
+}
+
 /// DNS resolve host → IPs (single; kept for misc use).
 #[tauri::command]
 async fn net_resolve_host(host: String) -> Result<serde_json::Value, String> {
@@ -1513,6 +1573,8 @@ pub fn run() {
             sub_parse_share,
             net_tcp_probe,
             net_tcp_probe_stop,
+            core_url_test_current,
+            core_url_test_stop,
             net_resolve_host,
             net_resolve_hosts
         ])

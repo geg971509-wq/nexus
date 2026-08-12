@@ -1,13 +1,14 @@
 //! Real network probes for node context menu (upstream URL-test / resolve-IP subset).
-//! Full proxy URL-test needs Core `Test` RPC + Start() config — not wired yet.
-//! This measures TCP connect RTT to server:port (honest reachability, not proxy path).
+//!
+//! When Core session is running, UI must NOT call this — use `core_url_test_current`
+//! (TestCurrent via live box proxy). This path is only for disconnected URL-menu
+//! TCP reachability (direct to server:port).
 //!
 //! Under Tun, a plain `TcpStream::connect` is accepted by the local gvisor/utun stack
 //! in ~0–2 ms (hairpin), so latency looks fake-green. Probe sockets bind the physical
 //! NIC via `IP_BOUND_IF` / `IPV6_BOUND_IF` so SYNs leave en0/… and skip utun.
 //!
-//! Progressive results: each finished probe is delivered via callback (UI emit),
-//! matching upstream QueryURLTest poller — do not wait for the whole batch to paint.
+//! Progressive results: each finished probe is delivered via callback (UI emit).
 
 use serde::Serialize;
 use serde_json::json;

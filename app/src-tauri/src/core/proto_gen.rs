@@ -127,6 +127,55 @@ pub fn decode_query_stats_proxy(data: &[u8]) -> (i64, i64) {
     (pick(&resp.ups), pick(&resp.downs))
 }
 
+/// Shell SOT for Core TestCurrent URL (not empty — Core defaults to "").
+pub const DEFAULT_URL_TEST: &str = "https://www.gstatic.com/generate_204";
+
+/// One URL-test result row from Core `Test` / `QueryURLTest`.
+#[derive(Debug, Clone, Default)]
+pub struct UrlTestRow {
+    pub tag: String,
+    pub ms: i32,
+    pub error: String,
+}
+
+/// Encode TestReq with test_current=true (live box proxy/default outbound only).
+pub fn encode_test_req_current(url: &str, timeout_ms: i32, max_concurrency: i32) -> Vec<u8> {
+    let url = if url.is_empty() {
+        DEFAULT_URL_TEST.to_string()
+    } else {
+        url.to_string()
+    };
+    let msg = TestReq {
+        test_current: Some(true),
+        url: Some(url),
+        test_timeout_ms: Some(if timeout_ms > 0 { timeout_ms } else { 3000 }),
+        max_concurrency: Some(if max_concurrency > 0 {
+            max_concurrency
+        } else {
+            1
+        }),
+        // materialize bools Core may deref
+        use_default_outbound: Some(false),
+        need_xray: Some(false),
+        ..Default::default()
+    };
+    msg.encode_to_vec()
+}
+
+pub fn decode_test_resp(data: &[u8]) -> Vec<UrlTestRow> {
+    let Ok(resp) = TestResp::decode(data) else {
+        return Vec::new();
+    };
+    resp.results
+        .into_iter()
+        .map(|r| UrlTestRow {
+            tag: r.outbound_tag.unwrap_or_default(),
+            ms: r.latency_ms.unwrap_or(0),
+            error: r.error.unwrap_or_default(),
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,5 +261,32 @@ mod tests {
         let resp = QueryStatsResp { ups, downs };
         let (u, d) = decode_query_stats_proxy(&resp.encode_to_vec());
         assert_eq!((u, d), (10, 20));
+    }
+
+    #[test]
+    fn encode_test_current_has_flags() {
+        let enc = encode_test_req_current("", 3000, 1);
+        let msg = TestReq::decode(enc.as_slice()).unwrap();
+        assert_eq!(msg.test_current, Some(true));
+        assert_eq!(msg.url.as_deref(), Some(DEFAULT_URL_TEST));
+        assert_eq!(msg.test_timeout_ms, Some(3000));
+        assert_eq!(msg.max_concurrency, Some(1));
+        assert_eq!(msg.need_xray, Some(false));
+    }
+
+    #[test]
+    fn decode_test_resp_error_and_ms() {
+        let resp = TestResp {
+            results: vec![UrlTestResp {
+                outbound_tag: Some("proxy".into()),
+                latency_ms: Some(42),
+                error: Some("".into()),
+            }],
+        };
+        let rows = decode_test_resp(&resp.encode_to_vec());
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].tag, "proxy");
+        assert_eq!(rows[0].ms, 42);
+        assert!(rows[0].error.is_empty());
     }
 }

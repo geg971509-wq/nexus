@@ -4410,6 +4410,85 @@
       if (t) targets.push(t);
     }
     if (!targets.length) { log('TEST', 'warn', t('log.noTestTargets')); return; }
+
+    // via_node_mode := session_status.running only (eng lock A / AGENTS consensus)
+    let coreRunning = false;
+    try {
+      const st = await tauriInvoke('session_status');
+      coreRunning = !!(st && st.running);
+    } catch (_) { coreRunning = false; }
+
+    if (coreRunning) {
+      // running: hard ban net_tcp_probe; only current connected row via Core TestCurrent
+      const onlyCurrent = targets.length === 1
+        && connected
+        && connectedName
+        && targets[0].id === connectedName;
+      if (!onlyCurrent) {
+        log('TEST', 'warn', t('log.testViaNodeOnly'));
+        try {
+          await askConfirm(t('log.testViaNodeOnly'), {
+            title: t('log.testViaNode'),
+            okText: t('btn.ok') || 'OK',
+          });
+        } catch (_) {}
+        return;
+      }
+      const t0 = targets[0];
+      urlTesting = true;
+      urlTestAbort = false;
+      const label = t('log.testViaNode');
+      log('TEST', 'info', t('log.testStartViaNode', { name: connectedName }));
+      const lat = t0.row.querySelector('.lat');
+      if (lat) { lat.textContent = '…'; lat.className = 'lat muted'; }
+      t0.row.dataset.lat = '…';
+      let ok = 0, fail = 0;
+      try {
+        let res;
+        try {
+          res = await tauriInvoke('core_url_test_current', {
+            url: 'https://www.gstatic.com/generate_204',
+            timeoutMs: 3000,
+          });
+        } catch (e) {
+          log('TEST', 'warn', t('log.probeUnavailable', { error: e && e.message || e }));
+          applyLatencyToRow(t0.row, -1, true);
+          fail = 1;
+          log('OK', 'ok', t('log.testDone', { label, ok, fail, extra: urlTestAbort ? t('log.testStopped') : '' }));
+          return;
+        }
+        // paint only connectedName row; ignore Core OutboundTag
+        const rows = res?.results || [];
+        const r = rows[0] || {};
+        const err = (r.error || '').trim();
+        const ms = typeof r.ms === 'number' ? r.ms : 0;
+        // never paint 0/error as green
+        if (urlTestAbort || err || ms <= 0) {
+          applyLatencyToRow(t0.row, -1, true);
+          fail = 1;
+          if (err && err !== 'test aborted' && !urlTestAbort) {
+            log('TEST', 'warn', `[${connectedName}] ${err}`);
+          }
+        } else {
+          applyLatencyToRow(t0.row, ms, false);
+          ok = 1;
+        }
+        flushLatencyResort();
+        log('OK', 'ok', t('log.testDone', {
+          label,
+          ok,
+          fail,
+          extra: urlTestAbort ? t('log.testStopped') : '',
+        }));
+        log('SYS', 'info', t('log.testNoteViaNode'));
+        if (typeof saveCatalog === 'function') saveCatalog(true);
+      } finally {
+        urlTesting = false;
+      }
+      return;
+    }
+
+    // !running: TCP direct progressive (reachability only)
     urlTesting = true;
     urlTestAbort = false;
     const label = scope === 'group' ? 'URL 测试当前组' : 'URL 测试选定项';
@@ -4454,7 +4533,7 @@
       }
     };
     try {
-      // listen before invoke so early results paint immediately (Throne QueryURLTest poller)
+      // listen before invoke so early results paint immediately
       if (urlTestUnlisten) { try { urlTestUnlisten(); } catch (_) {} urlTestUnlisten = null; }
       const un = await tauriListen('net-probe-result', onResult);
       if (typeof un === 'function') {
@@ -4609,7 +4688,9 @@
   function stopUrlTest() {
     if (!urlTesting) { log('TEST', 'info', t('log.noTestJob')); return; }
     urlTestAbort = true;
+    // stop both paths; whichever is live will honor
     tauriInvoke('net_tcp_probe_stop').catch(() => {});
+    tauriInvoke('core_url_test_stop').catch(() => {});
     log('TEST', 'warn', t('log.stoppingTest'));
   }
   document.querySelectorAll('#testMenu [data-test]').forEach(btn => {
@@ -7192,10 +7273,34 @@
       });
     });
   }
+  function groupLiveNodeName(gid) {
+    // Tunnel/connect target still in this group → cannot delete yet.
+    const prof = (typeof SUB_PROFILES !== 'undefined') ? SUB_PROFILES[gid] : null;
+    const nodes = prof && Array.isArray(prof.nodes) ? prof.nodes : [];
+    if (!nodes.length) return '';
+    const names = new Set(nodes.map(n => n && n.name).filter(Boolean));
+    if (connected && connectedName && names.has(connectedName)) return connectedName;
+    // Connecting (or busy with this selection) to a node that lives here.
+    if (powerBusy && selectedName && names.has(selectedName)) return selectedName;
+    return '';
+  }
   async function deleteGroup(id) {
     const g = GROUPS.find(x => x.id === id);
     if (!g) return;
     if (GROUPS.length <= 1) { log('SYS', 'warn', t('log.keepOneGroup')); return; }
+    const liveNode = groupLiveNodeName(id);
+    if (liveNode) {
+      const blockMsg = (typeof t === 'function')
+        ? t('confirm.deleteGroupLive', { name: groupDisplayName(g) || g.name, node: liveNode })
+        : `当前正在使用分组「${g.name}」中的节点「${liveNode}」。请先断开连接，或切换到其他分组的节点后再删除。`;
+      await askConfirm(blockMsg, {
+        title: (typeof t === 'function') ? t('confirm.deleteGroupTitle') : '删除分组',
+        okText: (typeof t === 'function') ? t('btn.ok') : '确定',
+        danger: false,
+      });
+      try { log('SYS', 'warn', t('log.groupLiveInUse', { name: groupDisplayName(g) || g.name, node: liveNode })); } catch (_) {}
+      return;
+    }
     const msg = (typeof t === 'function')
       ? t('confirm.deleteGroup', { name: g.name })
       : `删除分组「${g.name}」？其中的节点列表将一并移除。`;
@@ -7888,6 +7993,7 @@
       'confirm.deleteNodesTitle': '删除节点',
       'confirm.deleteGroup': '删除分组「{name}」？其中的节点列表将一并移除。',
       'confirm.deleteGroupTitle': '删除分组',
+      'confirm.deleteGroupLive': '当前正在使用分组「{name}」中的节点「{node}」。请先断开连接，或切换到其他分组的节点后再删除。',
       'confirm.askTitle': '确认',
       'btn.ok': '确定',
       'log.coreLost': '核心已失联 — 正在断开',
@@ -8037,10 +8143,14 @@
       'log.testBusy': '测速进行中…（可点停止）',
       'log.noTestTargets': '无可测试节点（缺 host:port）',
       'log.testStart': '{label} · {n} 个节点 · TCP 直连 RTT（非代理路径）…',
+      'log.testStartViaNode': '经节点 URL 测试 · {name}…',
+      'log.testViaNode': '经节点测试',
+      'log.testViaNodeOnly': '已连接时只能测试当前节点（经代理路径）。请先断开，或只选定当前连接节点。',
       'log.probeUnavailable': 'net_tcp_probe 不可用：{error}',
       'log.testDone': '{label}完成 · 通 {ok} · 失败 {fail}{extra}',
       'log.testStopped': '（已停止）',
-      'log.testNote': '说明：当前为 TCP 连通 RTT（直连服务器），非代理路径 URL 测试；Core Test RPC 待 Start() 后接入',
+      'log.testNote': '说明：未连接时为 TCP 直连 RTT；已连接时走 Core 经节点 URL 测试',
+      'log.testNoteViaNode': '说明：本次为经当前节点代理路径的 URL 测试（非 TCP 直连）',
       'log.exitIpBusy': '出口 IP 解析进行中…',
       'log.noValidAddr': '选定行无有效地址',
       'log.exitIpStart': '解析出口 IP · {n} 个…',
@@ -8093,6 +8203,7 @@
       'log.subSwitched': '已切换订阅：{name}',
       'log.keepOneGroup': '至少保留一个分组',
       'log.groupDeleted': '已删除分组：{name}',
+      'log.groupLiveInUse': '分组「{name}」仍有活动节点「{node}」，已取消删除',
       'log.groupReordered': '已调整分组顺序',
       'title.subDrag': '拖动可调整顺序；点击切换',
       'log.nothingCopy': '无可复制内容',
@@ -8490,6 +8601,7 @@
       'confirm.deleteNodesTitle': 'Delete nodes',
       'confirm.deleteGroup': 'Delete group “{name}”? Its node list will be removed.',
       'confirm.deleteGroupTitle': 'Delete group',
+      'confirm.deleteGroupLive': 'You are using node “{node}” from group “{name}”. Disconnect or switch to a node in another group before deleting.',
       'confirm.askTitle': 'Confirm',
       'btn.ok': 'OK',
       'log.coreLost': 'Core lost — disconnecting',
@@ -8639,10 +8751,14 @@
       'log.testBusy': 'Latency test running… (Stop available)',
       'log.noTestTargets': 'No testable nodes (missing host:port)',
       'log.testStart': '{label} · {n} nodes · TCP direct RTT (not proxy path)…',
+      'log.testStartViaNode': 'Via-node URL test · {name}…',
+      'log.testViaNode': 'Via-node test',
+      'log.testViaNodeOnly': 'While connected, only the current node can be tested (proxy path). Disconnect first, or select only the live node.',
       'log.probeUnavailable': 'net_tcp_probe unavailable: {error}',
       'log.testDone': '{label} done · ok {ok} · fail {fail}{extra}',
       'log.testStopped': ' (stopped)',
-      'log.testNote': 'Note: TCP reachability RTT (direct to server), not proxy-path URL test; Core Test RPC after Start()',
+      'log.testNote': 'Note: when disconnected, TCP direct RTT; when connected, Core via-node URL test',
+      'log.testNoteViaNode': 'Note: this run used proxy-path URL test via the current node (not TCP direct)',
       'log.exitIpBusy': 'Resolving exit IP…',
       'log.noValidAddr': 'Selected row has no valid address',
       'log.exitIpStart': 'Resolving exit IP · {n}…',
@@ -8695,6 +8811,7 @@
       'log.subSwitched': 'Switched subscription: {name}',
       'log.keepOneGroup': 'Keep at least one group',
       'log.groupDeleted': 'Deleted group: {name}',
+      'log.groupLiveInUse': 'Group “{name}” still has live node “{node}”; delete cancelled',
       'log.groupReordered': 'Group order updated',
       'title.subDrag': 'Drag to reorder; click to switch',
       'log.nothingCopy': 'Nothing to copy',
@@ -9087,6 +9204,9 @@
       'hint.autoConnect': 'Не реализовано: не подключает последний узел при запуске',
       'hint.allowLanNyi': 'Не реализовано: inbound только localhost',
       'confirm.deleteNodes': 'Удалить выбранные узлы ({n})?',
+      'confirm.deleteGroup': 'Удалить группу «{name}»? Список узлов в ней будет удалён.',
+      'confirm.deleteGroupTitle': 'Удалить группу',
+      'confirm.deleteGroupLive': 'Сейчас используется узел «{node}» из группы «{name}». Сначала отключитесь или переключитесь на узел другой группы.',
       'log.coreLost': 'Ядро потеряно — отключение',
       'hint.b0a3a450': 'gvisor стабильнее; system быстрее',
       'hint.b565e862': 'Правила: по списку; Глобальный: весь прокси; Прямой: без прокси',
@@ -9234,10 +9354,14 @@
       'log.testBusy': 'Идёт тест задержки… (можно остановить)',
       'log.noTestTargets': 'Нет узлов для теста (нет host:port)',
       'log.testStart': '{label} · {n} узлов · TCP RTT напрямую (не через прокси)…',
+      'log.testStartViaNode': 'URL-тест через узел · {name}…',
+      'log.testViaNode': 'Тест через узел',
+      'log.testViaNodeOnly': 'При подключении можно тестировать только текущий узел (путь прокси). Отключитесь или выберите только активный узел.',
       'log.probeUnavailable': 'net_tcp_probe недоступен: {error}',
       'log.testDone': '{label} готов · ok {ok} · fail {fail}{extra}',
       'log.testStopped': ' (остановлено)',
-      'log.testNote': 'Примечание: TCP RTT напрямую до сервера, не URL-тест через прокси; Core Test RPC после Start()',
+      'log.testNote': 'Примечание: без подключения — TCP RTT; при подключении — URL-тест Core через узел',
+      'log.testNoteViaNode': 'Примечание: тест шёл через текущий узел (прокси), не TCP напрямую',
       'log.exitIpBusy': 'Определение exit IP…',
       'log.noValidAddr': 'В выбранной строке нет адреса',
       'log.exitIpStart': 'Определение exit IP · {n}…',
@@ -9290,6 +9414,7 @@
       'log.subSwitched': 'Подписка переключена: {name}',
       'log.keepOneGroup': 'Оставьте хотя бы одну группу',
       'log.groupDeleted': 'Группа удалена: {name}',
+      'log.groupLiveInUse': 'В группе «{name}» ещё активен узел «{node}»; удаление отменено',
       'log.nothingCopy': 'Нечего копировать',
       'log.logCopied': 'Журнал скопирован',
       'log.copyFail': 'Ошибка копирования',
@@ -9680,6 +9805,9 @@
       'hint.autoConnect': '未實作：不會在啟動時自動連線上次節點',
       'hint.allowLanNyi': '未實作：入站仍僅監聽本機',
       'confirm.deleteNodes': '刪除選定的 {n} 個節點？',
+      'confirm.deleteGroup': '刪除分組「{name}」？其中的節點列表將一併移除。',
+      'confirm.deleteGroupTitle': '刪除分組',
+      'confirm.deleteGroupLive': '目前正在使用分組「{name}」中的節點「{node}」。請先中斷連線，或切換到其他分組的節點後再刪除。',
       'log.coreLost': '核心已失聯 — 正在中斷',
       'hint.b0a3a450': 'gvisor 使用者態堆疊更穩；system 效能更好',
       'hint.b565e862': '規則按列表分流；全域全走代理；直連不代理',
@@ -9827,10 +9955,14 @@
       'log.testBusy': '測速進行中…（可點停止）',
       'log.noTestTargets': '無可測試節點（缺 host:port）',
       'log.testStart': '{label} · {n} 個節點 · TCP 直連 RTT（非代理路徑）…',
+      'log.testStartViaNode': '經節點 URL 測試 · {name}…',
+      'log.testViaNode': '經節點測試',
+      'log.testViaNodeOnly': '已連線時只能測試目前節點（經代理路徑）。請先中斷，或只選定目前連線節點。',
       'log.probeUnavailable': 'net_tcp_probe 不可用：{error}',
       'log.testDone': '{label}完成 · 通 {ok} · 失敗 {fail}{extra}',
       'log.testStopped': '（已停止）',
-      'log.testNote': '說明：目前為 TCP 連通 RTT（直連伺服器），非代理路徑 URL 測試；Core Test RPC 待 Start() 後接入',
+      'log.testNote': '說明：未連線時為 TCP 直連 RTT；已連線時走 Core 經節點 URL 測試',
+      'log.testNoteViaNode': '說明：本次為經目前節點代理路徑的 URL 測試（非 TCP 直連）',
       'log.exitIpBusy': '出口 IP 解析進行中…',
       'log.noValidAddr': '選定列無有效位址',
       'log.exitIpStart': '解析出口 IP · {n} 個…',
@@ -9883,6 +10015,7 @@
       'log.subSwitched': '已切換訂閱：{name}',
       'log.keepOneGroup': '至少保留一個分組',
       'log.groupDeleted': '已刪除分組：{name}',
+      'log.groupLiveInUse': '分組「{name}」仍有活動節點「{node}」，已取消刪除',
       'log.nothingCopy': '無可複製內容',
       'log.logCopied': '已複製日誌',
       'log.copyFail': '複製失敗',
