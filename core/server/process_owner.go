@@ -31,6 +31,20 @@ type processOwnerEnricher struct{}
 var (
 	processSearcherOnce sync.Once
 	processSearcher     sboxprocess.Searcher
+
+	// ownerMu guards every access to TrackerMetadata.ProcessInfo.
+	//
+	// Connections() hands out *TrackerMetadata, so those writes land in shared
+	// state. They come from AfterFunc timers and the routing hook, while
+	// QueryConnections reads them from a goroutine per IPC request — and
+	// connMetaToProto writes ProcessPath on that read path too, so two polls
+	// alone already race. lifeMu does not cover this: the writers take it only
+	// long enough to snapshot the box pointer.
+	//
+	// This closes the races among our own code. sing-box's clash API reads the
+	// same field from its HTTP handler and cannot be locked from here without
+	// patching it; that is not a path the product uses.
+	ownerMu sync.RWMutex
 )
 
 func getProcessSearcher() sboxprocess.Searcher {
@@ -209,6 +223,8 @@ func attachProcessToTrackers(box *boxbox.Box, source netip.AddrPort, info *adapt
 	if !ok {
 		return
 	}
+	ownerMu.Lock()
+	defer ownerMu.Unlock()
 	for _, c := range clash.TrafficManager().Connections() {
 		if !c.Metadata.Source.IsValid() {
 			continue
@@ -286,25 +302,33 @@ func scheduleOwnerRetries(conn net.Conn, metadata adapter.InboundContext) {
 			// Re-check trackers for this source; skip if already path+pid.
 			if clashServer := service.FromContext[adapter.ClashServer](box.Context()); clashServer != nil {
 				if clash, ok := clashServer.(*clashapi.Server); ok {
-					full := true
-					any := false
-					for _, c := range clash.TrafficManager().Connections() {
-						if !c.Metadata.Source.IsValid() || c.Metadata.Source.AddrPort() != source {
-							continue
-						}
-						any = true
-						info := c.Metadata.ProcessInfo
-						if info == nil || info.ProcessPath == "" || info.ProcessID == 0 {
-							full = false
-							// try path fill on pid-only without re-search
-							if info != nil && info.ProcessID > 0 && info.ProcessPath == "" {
-								if filled := enrichOwnerPath(info); filled != nil && filled.ProcessPath != "" {
-									c.Metadata.ProcessInfo = filled
+					// Scoped so ownerMu is released before the lookup below:
+					// attachProcessToTrackers takes it too and RWMutex is not
+					// reentrant.
+					settled := func() bool {
+						ownerMu.Lock()
+						defer ownerMu.Unlock()
+						full := true
+						any := false
+						for _, c := range clash.TrafficManager().Connections() {
+							if !c.Metadata.Source.IsValid() || c.Metadata.Source.AddrPort() != source {
+								continue
+							}
+							any = true
+							info := c.Metadata.ProcessInfo
+							if info == nil || info.ProcessPath == "" || info.ProcessID == 0 {
+								full = false
+								// try path fill on pid-only without re-search
+								if info != nil && info.ProcessID > 0 && info.ProcessPath == "" {
+									if filled := enrichOwnerPath(info); filled != nil && filled.ProcessPath != "" {
+										c.Metadata.ProcessInfo = filled
+									}
 								}
 							}
 						}
-					}
-					if any && full {
+						return any && full
+					}()
+					if settled {
 						return
 					}
 				}

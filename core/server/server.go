@@ -643,6 +643,10 @@ func (s *server) QueryStats(ctx context.Context, in *gen.EmptyReq) (out *gen.Que
 // Process path/pid filled by route find_process + processOwnerEnricher.
 func connMetaToProto(c *trafficontrol.TrackerMetadata) *gen.ConnectionMetaData {
 	processName := ""
+	// ProcessInfo is shared state the enricher's timers also write, and the
+	// persist below makes this a writer too — two concurrent polls race without
+	// the lock, never mind the timers. See ownerMu in process_owner.go.
+	ownerMu.Lock()
 	processPath := processPathOf(c)
 	var processID uint32
 	if c != nil && c.Metadata.ProcessInfo != nil {
@@ -658,6 +662,7 @@ func connMetaToProto(c *trafficontrol.TrackerMetadata) *gen.ConnectionMetaData {
 			}
 		}
 	}
+	ownerMu.Unlock()
 	if processPath != "" {
 		spl := strings.Split(processPath, string(os.PathSeparator))
 		processName = spl[len(spl)-1]

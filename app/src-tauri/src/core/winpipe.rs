@@ -179,10 +179,19 @@ impl PipeStream {
 
             let wait = WaitForSingleObject(event, self.io_timeout_ms(write));
             if wait == WAIT_TIMEOUT {
+                // CancelIoEx races the operation it cancels, so bytes may already
+                // have moved. Reporting only TimedOut threw them away: on a read
+                // they were gone from the pipe, on a write they were already on
+                // the wire — either way the stream lost its position. A short
+                // count is a legal Read/Write result, and read_exact/write_all
+                // loop on it, so hand it back instead.
                 let _ = CancelIoEx(self.as_raw(), &mut ov);
-                let mut ignored: u32 = 0;
-                let _ = GetOverlappedResult(self.as_raw(), &mut ov, &mut ignored, 1);
+                let mut partial: u32 = 0;
+                let _ = GetOverlappedResult(self.as_raw(), &mut ov, &mut partial, 1);
                 let _ = CloseHandle(event);
+                if partial > 0 {
+                    return Ok(partial as usize);
+                }
                 return Err(io::Error::new(
                     io::ErrorKind::TimedOut,
                     if write {
