@@ -89,12 +89,28 @@ fn load_unlocked(p: &std::path::Path) -> Store {
     if let Ok(mut f) = fs::File::open(p) {
         let mut s = String::new();
         if f.read_to_string(&mut s).is_ok() {
-            if let Ok(st) = serde_json::from_str(&s) {
-                return st;
+            match serde_json::from_str(&s) {
+                Ok(st) => return st,
+                // Falling back to Store::default() here is not enough: the very next
+                // Store::update touches one field and saves the whole struct, which
+                // writes catalog=None over every node the user had. Move the bad file
+                // aside first so the data is recoverable by hand.
+                Err(_) => quarantine_unreadable(p),
             }
         }
     }
     Store::default()
+}
+
+/// Rename an unparseable store aside. Best effort: a failure here only means we
+/// fall through to defaults exactly as before.
+fn quarantine_unreadable(p: &std::path::Path) {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let bad = p.with_extension(format!("json.corrupt-{stamp}"));
+    let _ = fs::rename(p, &bad);
 }
 
 fn save_unlocked(p: &std::path::Path, st: &Store) -> Result<(), String> {
@@ -174,6 +190,42 @@ fn apply_exclusive_lock(file: &fs::File) -> Result<(), std::io::Error> {
 #[cfg(not(any(unix, windows)))]
 fn apply_exclusive_lock(_file: &fs::File) -> Result<(), std::io::Error> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A corrupt store must be moved aside, not silently replaced in place: the
+    /// next Store::update writes the whole struct back, so defaults-in-place
+    /// destroys the user's entire catalog. A valid store must be left alone.
+    #[test]
+    fn corrupt_store_is_quarantined_valid_one_is_not() {
+        let dir = std::env::temp_dir().join(format!("nexus-store-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("store.json");
+
+        fs::write(&p, b"{ not json").unwrap();
+        let st = load_unlocked(&p);
+        assert!(st.catalog.is_none(), "corrupt store falls back to defaults");
+        assert!(!p.exists(), "corrupt store must be renamed away");
+        let saved: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().contains("corrupt-"))
+            .collect();
+        assert_eq!(saved.len(), 1, "exactly one quarantined copy");
+        assert_eq!(fs::read(saved[0].path()).unwrap(), b"{ not json");
+
+        let mut good = Store::default();
+        good.catalog = Some(serde_json::json!({"groups": []}));
+        save_unlocked(&p, &good).unwrap();
+        assert!(load_unlocked(&p).catalog.is_some(), "valid store round-trips");
+        assert!(p.exists(), "valid store must not be quarantined");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
 
 // Unlock on drop: flock unlock / handle close releases LockFileEx.

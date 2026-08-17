@@ -18,7 +18,7 @@ jobs:
       # blank window at launch. package.json is type:module, so node parses these
       # stricter than the browser's classic-script load — that also catches a
       # duplicate top-level declaration silently shadowing the earlier one.
-      - run: node --check app/ui/app.js && node --check app/ui/i18n.js
+      - run: for f in app/ui/*.js; do node --check "$f"; done
 
   core:
     name: Core (Go)

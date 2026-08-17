@@ -5,22 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Nexus</title>
   <link rel="icon" href="assets/nexus-icon.png" type="image/png" />
-  <script>
-    /* mark desktop shell ASAP — avoid mock padding flash under native chrome */
-    (function () {
-      try {
-        var ua = navigator.userAgent || '';
-        var host = location.hostname || '';
-        var tauri =
-          !!(window.__TAURI_INTERNALS__ || window.__TAURI__) ||
-          ua.indexOf('Tauri') !== -1 ||
-          location.protocol === 'tauri:' ||
-          host === 'tauri.localhost' ||
-          host.endsWith('.localhost') && host.indexOf('tauri') !== -1;
-        if (tauri) document.documentElement.classList.add('desktop');
-      } catch (_) {}
-    })();
-  </script>
+  <script src="boot.js"></script>
 <link rel="stylesheet" href="app.css" />
 </head>
 <body>

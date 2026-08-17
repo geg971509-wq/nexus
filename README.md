@@ -35,7 +35,7 @@ Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box 
 
 ## Layout
 
-- `app/` — Tauri 2 (`ui/index.html` + `ui/app.css` + `ui/i18n.js`)
+- `app/` — Tauri 2 (`ui/index.html` markup + `ui/boot.js` + `ui/app.css` + `ui/i18n.js` + `ui/app.js` logic)
 - `app/src-tauri/src/core/` — framed IPC + session spawn (unix socket / Windows named pipe)
 - `app/src-tauri/src/data/` — JSON store + pure generate
 - `app/src-tauri/src/sys.rs` — system proxy (macOS networksetup / Windows WinINet registry)

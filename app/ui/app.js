@@ -142,12 +142,26 @@
     return new Date().toTimeString().slice(0, 8);
   }
 
+  function logSpan(klass, text) {
+    const s = document.createElement('span');
+    s.className = klass;
+    s.textContent = String(text ?? '');
+    return s;
+  }
+
+  /** msg is TEXT, never HTML: callers pass node names, share links and backend
+   *  error strings, all of which a hostile subscription controls — and this
+   *  webview can invoke every Tauri command. Keep this a textContent sink. */
   function log(tag, cls, msg) {
     const line = document.createElement('div');
     line.className = 'log-line';
     const lvl = (cls === 'ok' || cls === 'warn' || cls === 'info') ? cls : 'info';
     line.dataset.lvl = lvl;
-    line.innerHTML = `<span class="log-time">${now()}</span><span class="log-tag ${cls}">${tag}</span><span class="log-msg">${msg}</span>`;
+    line.append(
+      logSpan('log-time', now()),
+      logSpan('log-tag ' + cls, tag),
+      logSpan('log-msg', msg),
+    );
     logPanel.appendChild(line);
     if (typeof applyLogFilter === 'function') applyLogFilter();
     logPanel.scrollTop = logPanel.scrollHeight;
@@ -221,17 +235,17 @@
     if (busy) {
       statusText.textContent = wantOn ? t('status.connecting') : t('status.disconnecting');
       statusSub.innerHTML = wantOn
-        ? t('status.subConnecting', { name: selectedName || via || '—' })
-        : t('status.subDisconnecting', { name: connectedName || via || '—' });
+        ? tHtml('status.subConnecting', { name: selectedName || via || '—' })
+        : tHtml('status.subDisconnecting', { name: connectedName || via || '—' });
       sbStatus.textContent = t('sb.busy');
     } else {
       statusText.textContent = connected ? t('status.connected') : t('status.disconnected');
       if (connected && mismatch) {
-        statusSub.innerHTML = t('status.subMismatch', { tunnel: connectedName, selected: selectedName, lat: latShow });
+        statusSub.innerHTML = tHtml('status.subMismatch', { tunnel: connectedName, selected: selectedName, lat: latShow });
       } else {
         statusSub.innerHTML = connected
-          ? t('status.subOn', { name: via, lat: latShow })
-          : t('status.subOff', { name: selectedName });
+          ? tHtml('status.subOn', { name: via, lat: latShow })
+          : tHtml('status.subOff', { name: selectedName });
       }
       sbStatus.textContent = connected ? t('sb.running') : t('sb.stopped');
     }
@@ -451,7 +465,7 @@
       // Connected hero stays on tunnel node until Start/Stop; only selection changes here.
       if (typeof refreshHeroStatus === 'function') refreshHeroStatus();
       else if (!connected) {
-        statusSub.innerHTML = t('status.subOff', { name: selectedName });
+        statusSub.innerHTML = tHtml('status.subOff', { name: selectedName });
       }
     }
   }
@@ -3671,14 +3685,15 @@
     const list = document.getElementById('groupList');
     if (!list) return;
     const activeKey = activeGroupId();
+    // Group name and id come from imported subscriptions — escape before interpolating.
     list.innerHTML = GROUPS.map(g => `
-      <div class="group-row${g.id === activeKey ? ' active' : ''}" data-gid="${g.id}" role="listitem" tabindex="0">
-        <span class="g-name" title="${groupDisplayName(g)}">${groupDisplayName(g)}</span>
-        <span class="g-meta">${g.count} ${t('js.nodes')}</span>
+      <div class="group-row${g.id === activeKey ? ' active' : ''}" data-gid="${escHtml(g.id)}" role="listitem" tabindex="0">
+        <span class="g-name" title="${escHtml(groupDisplayName(g))}">${escHtml(groupDisplayName(g))}</span>
+        <span class="g-meta">${escHtml(g.count)} ${t('js.nodes')}</span>
         <span class="g-acts">
-          <button type="button" class="btn-row" data-gact="edit" data-gid="${g.id}">${t('ctx.edit')}</button>
-          <button type="button" class="btn-row" data-gact="rename" data-gid="${g.id}">${t('btn.rename')}</button>
-          <button type="button" class="btn-row danger" data-gact="del" data-gid="${g.id}">${t('ctx.delete')}</button>
+          <button type="button" class="btn-row" data-gact="edit" data-gid="${escHtml(g.id)}">${t('ctx.edit')}</button>
+          <button type="button" class="btn-row" data-gact="rename" data-gid="${escHtml(g.id)}">${t('btn.rename')}</button>
+          <button type="button" class="btn-row danger" data-gact="del" data-gid="${escHtml(g.id)}">${t('ctx.delete')}</button>
         </span>
       </div>`).join('');
 
@@ -3717,7 +3732,7 @@
       const tip = (g.id === 'backup' && STOCK_BACKUP_NAMES.has(g.name))
         ? t('title.subBackup')
         : t('title.subDrag');
-      return `<button type="button" data-sub="${g.id}" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'active' : ''}" title="${tip}">${groupDisplayName(g)}</button>`;
+      return `<button type="button" data-sub="${escHtml(g.id)}" role="tab" aria-selected="${on ? 'true' : 'false'}" class="${on ? 'active' : ''}" title="${tip}">${escHtml(groupDisplayName(g))}</button>`;
     }).join('');
     bindSubSegInteractions(seg);
     if (keep && typeof renderNodes === 'function') renderNodes(keep);
@@ -4426,6 +4441,16 @@
     if (vars) Object.keys(vars).forEach(k => { s = s.replaceAll('{' + k + '}', vars[k]); });
     return s;
   }
+
+  /** t() for innerHTML sinks. The pack template is ours and keeps its <strong>;
+   *  the vars are node/group names from subscriptions, so they get escaped.
+   *  Use plain t() for textContent — escaping there would show literal &amp;. */
+  function tHtml(key, vars) {
+    if (!vars) return t(key);
+    const safe = {};
+    Object.keys(vars).forEach(k => { safe[k] = escHtml(vars[k]); });
+    return t(key, safe);
+  }
   function applyLocale(langLabel, { logIt } = {}) {
     const code = LANG_MAP[langLabel] || 'zh-CN';
     locale = code;
@@ -4458,8 +4483,8 @@
     else {
       statusText.textContent = connected ? t('status.connected') : t('status.disconnected');
       statusSub.innerHTML = connected
-        ? t('status.subOn', { name: connectedName || selectedName, lat: connectedLat || selectedLat })
-        : t('status.subOff', { name: selectedName });
+        ? tHtml('status.subOn', { name: connectedName || selectedName, lat: connectedLat || selectedLat })
+        : tHtml('status.subOff', { name: selectedName });
       sbStatus.textContent = connected ? t('sb.running') : t('sb.stopped');
     }
     const head = document.getElementById('settingsHead');
