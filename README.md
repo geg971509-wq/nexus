@@ -111,7 +111,3 @@ cd app && npm run tauri dev
 ## Status
 
 Operational for **macOS arm64** and **Windows x86_64** internal use. Not a notarized App Store / public-download build.
-
-## License
-
-**Multi-license.** NexusCore is **GPLv3+**; shell original code has separate terms; third-party list in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). See root [`LICENSE`](LICENSE). Distributing Core requires Corresponding Source.

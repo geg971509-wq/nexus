@@ -59,6 +59,7 @@ log "root=$ROOT triple=$TRIPLE (full dual release rebuild)"
 
 # Feature tags required in NexusCore (stubs if missing)
 # Windows Core: with_purego + with_naive_outbound (CGO off cross-build)
+# CORE_TAGS_WIN is mirrored in .github/workflows/ci.yml (cross-build Windows Core).
 CORE_TAGS_MAC="${NEXUS_CORE_TAGS:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,badlinkname,tfogo_checklinkname0}"
 CORE_TAGS_WIN="${NEXUS_CORE_TAGS_WIN:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0}"
 CORE_REQUIRED_TAGS=(with_clash_api with_gvisor with_quic with_wireguard with_utls with_dhcp with_tailscale with_naive_outbound badlinkname tfogo_checklinkname0)
@@ -220,20 +221,17 @@ if ! (cd "$APP_DIR" && npx --no-install tauri --version >/dev/null 2>&1); then
   fi
 fi
 
-# --- 2.5) UI staging: page + extracted css/i18n + assets ---
+# --- 2.5) UI staging: whole ui/ tree ---
 UI_SRC="$APP_DIR/ui/index.html"
 [[ -f "$UI_SRC" ]] || die "missing UI source: $UI_SRC"
-[[ -f "$APP_DIR/ui/app.css" ]] || die "missing UI css: $APP_DIR/ui/app.css"
-[[ -f "$APP_DIR/ui/i18n.js" ]] || die "missing UI i18n: $APP_DIR/ui/i18n.js"
 UI_STAGE="$TAURI_DIR/ui-release-dist"
 rm -rf "$UI_STAGE"
 mkdir -p "$UI_STAGE"
-cp "$UI_SRC" "$UI_STAGE/index.html"
-cp "$APP_DIR/ui/app.css" "$UI_STAGE/app.css"
-cp "$APP_DIR/ui/i18n.js" "$UI_STAGE/i18n.js"
-if [[ -d "$APP_DIR/ui/assets" ]]; then
-  cp -R "$APP_DIR/ui/assets" "$UI_STAGE/assets"
-fi
+# Copy the tree, not a per-file whitelist: every new <script src>/<link> (app.css,
+# i18n.js, app.js so far) silently shipped a stale bundle until this list was edited.
+cp -R "$APP_DIR/ui/." "$UI_STAGE/"
+# AppleDouble / .DS_Store break tauri-build's UTF-8 permission scan on the Windows tree.
+find "$UI_STAGE" \( -name '._*' -o -name '.DS_Store' \) -delete
 UI_CONF_OVERRIDE="$TAURI_DIR/tauri.release-ui.json"
 cat > "$UI_CONF_OVERRIDE" <<EOF
 {

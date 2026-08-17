@@ -1,6 +1,8 @@
 *.log
 *.pem
-*.json
+# sing-box CLI default config path when Core is run standalone (boxmain/main.go).
+# Narrow on purpose: a bare `*.json` silently swallows any testdata fixture.
+config.json
 *.exe
 *.dat
 *.db

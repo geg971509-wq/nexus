@@ -35,6 +35,20 @@ jobs:
       # The IPC dispatcher hands every request to its own goroutine.
       - run: go test -race ./...
         working-directory: core/server
+      # The shipped Windows Core is a CGO-off purego cross-build (build.sh 1b), and
+      # nothing else here compiles that tag set or GOOS — breakage under with_purego
+      # only surfaced at release time. Keep tags in sync with CORE_TAGS_WIN in build.sh.
+      - name: cross-build Windows Core
+        working-directory: core/server
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: >
+          go build -trimpath
+          -tags with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0
+          -ldflags "-s -w -H=windowsgui -checklinkname=0"
+          -o /dev/null .
 
   shell:
     name: Shell (Rust, macOS)

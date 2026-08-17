@@ -17,6 +17,7 @@ mod windows;
 pub use rules::{is_safe_ifname, ANCHOR};
 pub use wire::{PolicyDto, Request, Response};
 
+use crate::defaults::MIXED_PORT;
 use crate::tunnel_sm::{ConnectParams, PeerEndpoint, State as SmState};
 use std::net::IpAddr;
 use std::sync::Mutex;
@@ -120,7 +121,7 @@ pub fn policy_from_sm(state: SmState, params: Option<&ConnectParams>) -> Policy 
             } else {
                 Policy::Blocked {
                     peer: None,
-                    mixed_port: 2080,
+                    mixed_port: MIXED_PORT,
                     dns: Vec::new(),
                 }
             }
@@ -147,14 +148,14 @@ pub fn policy_from_sm(state: SmState, params: Option<&ConnectParams>) -> Policy 
             } else {
                 Policy::Blocked {
                     peer: None,
-                    mixed_port: 2080,
+                    mixed_port: MIXED_PORT,
                     dns: Vec::new(),
                 }
             }
         }
         SmState::Disconnecting | SmState::Error => Policy::Blocked {
             peer: params.map(|p| p.peer.clone()),
-            mixed_port: params.map(|p| p.mixed_port).unwrap_or(2080),
+            mixed_port: params.map(|p| p.mixed_port).unwrap_or(MIXED_PORT),
             dns: params.map(|p| p.dns.clone()).unwrap_or_default(),
         },
     }
