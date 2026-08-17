@@ -1,6 +1,7 @@
 pub mod core;
 mod data;
 mod defaults;
+mod exit_ip;
 mod paths;
 mod sys;
 mod sub;
@@ -1141,6 +1142,16 @@ fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
     }))
 }
 
+/// Exit IP + country as seen from the far end, fetched through the mixed inbound.
+/// Errors when the tunnel cannot carry it — the UI then shows nothing rather than
+/// this machine's own address.
+#[tauri::command]
+async fn exit_ip_probe() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| exit_ip::probe(MIXED_PORT))
+        .await
+        .map_err(|e| format!("exit_ip join: {e}"))?
+}
+
 /// GroupUpdater::HttpGet — download subscription body (no parse).
 #[tauri::command]
 async fn sub_fetch(url: String) -> Result<serde_json::Value, String> {
@@ -1477,6 +1488,7 @@ pub fn run() {
             query_connections,
             query_stats,
             sub_fetch,
+            exit_ip_probe,
             sub_parse_clash,
             sub_parse_share,
             net_tcp_probe,

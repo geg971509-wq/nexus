@@ -3518,10 +3518,28 @@
   });
 
   // ——— runtime stats ———
-  // ponytail: uptime only while "connected"; no fake exit IP / country / traffic
+  // ponytail: uptime only while "connected"; traffic still comes from Core only
   let statsStarted = null;
   let lastExitIp = null;
   let lastCountry = null;
+
+  /** "JP" → "🇯🇵 JP". Regional indicators are A-Z at a fixed offset, so no table. */
+  function countryLabel(cc) {
+    const c = String(cc || '').trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(c)) return null;
+    const flag = String.fromCodePoint(...[...c].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65));
+    return `${flag} ${c}`;
+  }
+
+  /** Exit IP through the tunnel. Any failure clears both cells — a stale or
+   *  direct-path address here would be worse than an empty one. */
+  async function refreshExitIp(live) {
+    if (!live) { lastExitIp = null; lastCountry = null; return; }
+    const r = await nexusInvoke('exit_ip_probe');
+    if (!r || !r.ok) { lastExitIp = null; lastCountry = null; return; }
+    lastExitIp = r.data?.ip || null;
+    lastCountry = countryLabel(r.data?.country);
+  }
   let lastFwErrLogged = '';
   async function fillRuntimeStats() {
     // eng 5A: status/uptime/proxy trust session_status.running only;
@@ -3579,11 +3597,15 @@
     } else {
       document.getElementById('stUptime').textContent = '—';
     }
-    // IPTest via Core — until wired, never invent 104.16.*
+    // Last known first so reopening paints instantly; the probe below corrects it.
     document.getElementById('stOutIp').textContent = lastExitIp || '—';
     document.getElementById('stCountry').textContent = lastCountry || '—';
     const g = (typeof GROUPS !== 'undefined') ? GROUPS.find(x => x.id === (typeof activeGroupId === 'function' ? activeGroupId() : 'default')) : null;
     document.getElementById('stNextSub').textContent = (g && g.url && g.autoUpdate) ? t('stats.nextSubPending') : '—';
+    // Last: a round trip through the tunnel must not hold up every cell above it.
+    await refreshExitIp(live);
+    document.getElementById('stOutIp').textContent = lastExitIp || '—';
+    document.getElementById('stCountry').textContent = lastCountry || '—';
   }
   function openStatsDialog() {
     fillRuntimeStats();
