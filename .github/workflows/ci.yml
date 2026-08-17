@@ -40,6 +40,14 @@ jobs:
       # The IPC dispatcher hands every request to its own goroutine.
       - run: go test -race ./...
         working-directory: core/server
+      # Core is the half that touches network traffic, on a sing-box/xray dep tree
+      # nobody here reads. govulncheck is call-graph based: it fails only when this
+      # code can actually reach a known-vulnerable symbol, not on every advisory.
+      - name: govulncheck
+        working-directory: core/server
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
       # The shipped Windows Core is a CGO-off purego cross-build (build.sh 1b), and
       # nothing else here compiles that tag set or GOOS — breakage under with_purego
       # only surfaced at release time. Keep tags in sync with CORE_TAGS_WIN in build.sh.
@@ -77,6 +85,14 @@ jobs:
           touch app/src-tauri/binaries/NexusCore-$(rustc -vV | sed -n 's/^host: //p')
       - run: cargo test --lib
         working-directory: app/src-tauri
+      # Fails on RUSTSEC vulnerabilities only. The unmaintained/unsound warnings it
+      # prints today are all in Tauri's Linux GTK stack, which this macOS+Windows
+      # product never compiles — so they stay visible without gating the build.
+      - name: cargo audit
+        working-directory: app/src-tauri
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit
 
   windows:
     name: Shell (Rust, Windows)

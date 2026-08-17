@@ -1392,7 +1392,7 @@ fn confirm_disconnect_quit() -> bool {
     #[cfg(target_os = "macos")]
     {
         let script = r#"display dialog "Tunnel still running (Tun / system proxy). Exit will stop Core, clear system proxy, and tear down the tunnel." with title "Nexus" buttons {"Cancel", "Disconnect and Quit"} default button "Disconnect and Quit" cancel button "Cancel" with icon caution"#;
-        return std::process::Command::new("osascript")
+        return std::process::Command::new("/usr/bin/osascript")
             .args(["-e", script])
             .status()
             .map(|s| s.success())
@@ -1409,7 +1409,7 @@ WScript.Quit CreateObject("WScript.Shell").Popup("Tunnel still running (Tun / sy
         if std::fs::write(&path, script).is_err() {
             return true;
         }
-        let mut cmd = std::process::Command::new("cscript");
+        let mut cmd = std::process::Command::new(winhide::system32("cscript.exe"));
         crate::winhide::apply(&mut cmd);
         let ok = cmd
             .args(["//Nologo", &path.to_string_lossy()])

@@ -184,7 +184,7 @@ fn run_netsh(args: &[&str]) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     use std::process::Command;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let out = Command::new("netsh")
+    let out = Command::new(crate::winhide::system32("netsh.exe"))
         .args(args)
         .creation_flags(CREATE_NO_WINDOW)
         .output()

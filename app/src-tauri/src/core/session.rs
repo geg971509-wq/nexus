@@ -149,7 +149,7 @@ impl CoreSession {
     pub fn kill_stray_cores(except: Option<u32>) {
         #[cfg(unix)]
         {
-            let Ok(out) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
+            let Ok(out) = Command::new("/usr/bin/pgrep").args(["-f", "NexusCore"]).output() else {
                 return;
             };
             if !out.status.success() && out.stdout.is_empty() {
@@ -163,14 +163,14 @@ impl CoreSession {
                 if pid == me || except == Some(pid) {
                     continue;
                 }
-                let _ = Command::new("kill")
+                let _ = Command::new("/bin/kill")
                     .args(["-TERM", &pid.to_string()])
                     .status();
             }
             // Poll exit instead of fixed 250ms; only KILL survivors.
             let deadline = Instant::now() + Duration::from_millis(400);
             loop {
-                let Ok(out2) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
+                let Ok(out2) = Command::new("/usr/bin/pgrep").args(["-f", "NexusCore"]).output() else {
                     return;
                 };
                 let mut survivors = false;
@@ -183,7 +183,7 @@ impl CoreSession {
                     }
                     survivors = true;
                     if Instant::now() >= deadline {
-                        let _ = Command::new("kill")
+                        let _ = Command::new("/bin/kill")
                             .args(["-KILL", &pid.to_string()])
                             .status();
                     }
@@ -202,7 +202,7 @@ impl CoreSession {
         {
             // Honor `except`: never blanket /IM (would kill the live child).
             let me = std::process::id();
-            let mut list = Command::new("tasklist");
+            let mut list = Command::new(crate::winhide::system32("tasklist.exe"));
             crate::winhide::apply(&mut list);
             let Ok(out) = list
                 .args(["/FI", "IMAGENAME eq NexusCore.exe", "/FO", "CSV", "/NH"])
@@ -224,7 +224,7 @@ impl CoreSession {
                 if pid == me || except == Some(pid) {
                     continue;
                 }
-                let mut kill = Command::new("taskkill");
+                let mut kill = Command::new(crate::winhide::system32("taskkill.exe"));
                 crate::winhide::apply(&mut kill);
                 let _ = kill
                     .args(["/F", "/PID", &pid.to_string(), "/T"])
@@ -483,7 +483,7 @@ impl CoreSession {
     pub fn core_process_alive() -> bool {
         #[cfg(unix)]
         {
-            let Ok(out) = Command::new("pgrep").args(["-f", "NexusCore"]).output() else {
+            let Ok(out) = Command::new("/usr/bin/pgrep").args(["-f", "NexusCore"]).output() else {
                 return false;
             };
             if out.stdout.is_empty() {
@@ -497,7 +497,7 @@ impl CoreSession {
         }
         #[cfg(windows)]
         {
-            let mut cmd = Command::new("tasklist");
+            let mut cmd = Command::new(crate::winhide::system32("tasklist.exe"));
             crate::winhide::apply(&mut cmd);
             let Ok(out) = cmd
                 .args(["/FI", "IMAGENAME eq NexusCore.exe", "/NH"])

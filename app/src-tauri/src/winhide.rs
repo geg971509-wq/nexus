@@ -5,6 +5,15 @@
 
 use std::process::Command;
 
+/// Absolute path to a stock System32 tool. Spawning by bare name resolves through
+/// `PATH`, so anything earlier on it runs instead — the rest of the codebase already
+/// spawns `/sbin/pfctl`, `/bin/launchctl` and friends by absolute path.
+#[cfg(windows)]
+pub fn system32(exe: &str) -> std::path::PathBuf {
+    let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    std::path::PathBuf::from(root).join("System32").join(exe)
+}
+
 /// `CREATE_NO_WINDOW` — child gets no new console (no black flash).
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;

@@ -4,6 +4,10 @@
 use serde_json::json;
 use std::process::Command;
 
+/// Ceiling for a fetched subscription body. Real ones are KBs; this is only here
+/// to keep a hostile URL from streaming until --max-time.
+const MAX_BODY_BYTES: u64 = 8 * 1024 * 1024;
+
 fn is_http_url(url: &str) -> bool {
     let u = url.trim();
     u.starts_with("http://") || u.starts_with("https://")
@@ -24,7 +28,11 @@ pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
 
     // Prefer curl: reliable TLS roots on macOS, follows redirects.
     // Windows: curl.exe is a console app — CREATE_NO_WINDOW avoids black flash.
-    let mut cmd = Command::new("curl");
+    #[cfg(windows)]
+    let curl = crate::winhide::system32("curl.exe");
+    #[cfg(not(windows))]
+    let curl = std::path::PathBuf::from("/usr/bin/curl");
+    let mut cmd = Command::new(curl);
     crate::winhide::apply(&mut cmd);
     let out = cmd
         .args([
@@ -33,6 +41,17 @@ pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
             "30",
             "--connect-timeout",
             "12",
+            // Without a ceiling a hostile URL just streams for --max-time: curl's
+            // stdout, the lossy-UTF8 copy, the IPC JSON and the webview's parse all
+            // grow unbounded. Aborts mid-transfer, so Content-Length lies don't help.
+            // Real subscriptions are KBs; the Go core bounds its own input at 16 MiB.
+            "--max-filesize",
+            &MAX_BODY_BYTES.to_string(),
+            // Explicit, not curl's default: a redirect must not leave http/https.
+            "--proto",
+            "=https,http",
+            "--proto-redir",
+            "=https,http",
             "-A",
             "Nexus/0.2 (subscription)",
             "-H",
@@ -56,7 +75,6 @@ pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
         return Ok(json!({
             "ok": false,
             "body": "",
-            "status": 0,
             "error": msg,
             "bytes": 0,
             "url": url,
@@ -69,7 +87,6 @@ pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
     Ok(json!({
         "ok": true,
         "body": body,
-        "status": 200,
         "error": null,
         "bytes": bytes,
         "url": url,
