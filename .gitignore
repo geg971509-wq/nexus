@@ -10,7 +10,7 @@ app/node_modules/
 app/src-tauri/target/
 *.log
 build/
-bin/
+/bin/
 *.app
 
 # staged Tauri externalBin (built by build.sh)

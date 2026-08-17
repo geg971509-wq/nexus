@@ -47,8 +47,12 @@ fn load_as_root(body: &str) -> Result<(), String> {
             .map_err(|e| format!("write pf conf: {e}"))?;
     }
     let path_s = path.to_string_lossy();
-    // Require load success; state kill is best-effort after.
-    let load = format!("/sbin/pfctl -a {ANCHOR} -F all >/dev/null 2>&1; /sbin/pfctl -a {ANCHOR} -f '{path_s}'");
+    // No `-F all` first: pfctl loads an anchor's ruleset in a transaction, so `-f`
+    // already replaces it atomically. Flushing beforehand empties the anchor, and
+    // an empty anchor passes traffic until the load lands — a leak window on every
+    // Connecting → Connected → Blocked transition of a fail-closed firewall.
+    // State teardown is the `pfctl -k` below, not the flush.
+    let load = format!("/sbin/pfctl -a {ANCHOR} -f '{path_s}'");
     sh_ok(&load)?;
     let _ = Command::new("/sbin/pfctl")
         .args(["-k", "0.0.0.0/0"])
