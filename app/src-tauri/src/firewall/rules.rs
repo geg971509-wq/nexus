@@ -83,10 +83,21 @@ fn mixed_pass(port: u16) -> String {
     )
 }
 
-/// generate.rs dns-direct / dns-remote use DoH to 8.8.8.8:443 (not port 53).
+/// PF list literal `{ a, b }` from validated resolver IPs.
+/// Non-IP entries are dropped here too: this string is PF syntax, and rules.rs
+/// is also reachable from the root daemon over the JSON wire.
+fn dns_set(dns: &[String]) -> String {
+    let ips = crate::defaults::sanitize_dns_bootstrap(dns);
+    format!("{{ {} }}", ips.join(", "))
+}
+
+/// generate.rs dns-direct / dns-remote use DoH to the bootstrap IPs on :443.
 /// Without this, fail-closed blocks Core bootstrap while still allowing peer.
-fn doh_bootstrap_pass() -> &'static str {
-    "pass out quick proto { tcp, udp } from any to { 8.8.8.8, 8.8.4.4, 1.1.1.1, 1.0.0.1 } port 443\n"
+fn doh_bootstrap_pass(dns: &[String]) -> String {
+    format!(
+        "pass out quick proto {{ tcp, udp }} from any to {} port 443\n",
+        dns_set(dns)
+    )
 }
 
 fn tail_block() -> &'static str {
@@ -95,22 +106,28 @@ fn tail_block() -> &'static str {
 
 /// Connecting / Connected(proxy) / early Connected without tun_if.
 /// Proxy mode: allow DNS out so Core/system can resolve (not a WireGuard-only stack).
-pub fn rules_fail_closed(peer: &PeerEndpoint, mixed_port: u16, tun_if: Option<&str>) -> String {
+pub fn rules_fail_closed(
+    peer: &PeerEndpoint,
+    mixed_port: u16,
+    tun_if: Option<&str>,
+    dns: &[String],
+) -> String {
     let mut s = String::from("# nexus fail-closed\n");
     s.push_str(&common_l2());
     s.push_str(&peer_pass(peer));
     s.push_str(&mixed_pass(mixed_port));
-    s.push_str(doh_bootstrap_pass());
+    s.push_str(&doh_bootstrap_pass(dns));
     if let Some(iface) = tun_if {
         if is_safe_ifname(iface) {
             // Mullvad Connected: pass tunnel first, block bare DNS, **then** LAN
             // (LAN before DNS-block lets 192.168.x.1:53 leak).
             s.push_str(&format!("pass quick on {iface} all\n"));
-            // generate.rs tun dns-local is UDP 8.8.8.8:53 (physical path via auto_detect).
+            // generate.rs tun dns-local is UDP <bootstrap>:53 (physical path via auto_detect).
             // Allow only bootstrap resolvers; blanket :53 stays blocked.
-            s.push_str(
-                "pass out quick proto { tcp, udp } from any to { 8.8.8.8, 8.8.4.4, 1.1.1.1, 1.0.0.1 } port 53\n",
-            );
+            s.push_str(&format!(
+                "pass out quick proto {{ tcp, udp }} from any to {} port 53\n",
+                dns_set(dns)
+            ));
             s.push_str("block return out quick proto { tcp, udp } to any port 53\n");
             s.push_str(&lan_pass());
         } else {
@@ -126,7 +143,7 @@ pub fn rules_fail_closed(peer: &PeerEndpoint, mixed_port: u16, tun_if: Option<&s
     s
 }
 
-pub fn rules_blocked(peer: Option<&PeerEndpoint>, mixed_port: u16) -> String {
+pub fn rules_blocked(peer: Option<&PeerEndpoint>, mixed_port: u16, dns: &[String]) -> String {
     let mut s = String::from("# nexus blocked\n");
     s.push_str(&common_l2());
     s.push_str(&lan_pass());
@@ -136,7 +153,7 @@ pub fn rules_blocked(peer: Option<&PeerEndpoint>, mixed_port: u16) -> String {
     s.push_str(&mixed_pass(mixed_port));
     // DoH + DNS53: reconnect must resolve proxy hostnames (getaddrinfo / dns-local).
     // Without :53, residual Blocked makes peer_from_outbound fail forever for non-IP servers.
-    s.push_str(doh_bootstrap_pass());
+    s.push_str(&doh_bootstrap_pass(dns));
     s.push_str("pass out quick proto { tcp, udp } from any to any port 53\n");
     s.push_str(tail_block());
     s
@@ -155,9 +172,17 @@ mod tests {
         }
     }
 
+    /// Product default resolvers (what the store yields when unset).
+    fn dns() -> Vec<String> {
+        crate::defaults::DEFAULT_DNS_BOOTSTRAP
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
+
     #[test]
     fn connecting_has_peer_dns_and_block() {
-        let r = rules_fail_closed(&peer(), 2080, None);
+        let r = rules_fail_closed(&peer(), 2080, None, &dns());
         assert!(r.contains("1.2.3.4"));
         assert!(r.contains("port 443"));
         assert!(r.contains("block return out"));
@@ -170,7 +195,7 @@ mod tests {
 
     #[test]
     fn blocked_keeps_doh_bootstrap() {
-        let r = rules_blocked(Some(&peer()), 2080);
+        let r = rules_blocked(Some(&peer()), 2080, &dns());
         assert!(r.contains("8.8.8.8"), "blocked still allows DoH bootstrap: {r}");
         // reconnect resolve needs DNS53 (hostname peers)
         assert!(r.contains("to any port 53"), "blocked must allow DNS53 for reconnect: {r}");
@@ -186,14 +211,14 @@ mod tests {
                 IpAddr::V4(Ipv4Addr::new(1, 0, 0, 1)),
             ],
         };
-        let r = rules_fail_closed(&p, 2080, None);
+        let r = rules_fail_closed(&p, 2080, None, &dns());
         assert!(r.contains("1.1.1.1"));
         assert!(r.contains("1.0.0.1"));
     }
 
     #[test]
     fn tun_connected_blocks_dns_outside_tunnel() {
-        let r = rules_fail_closed(&peer(), 2080, Some("utun9"));
+        let r = rules_fail_closed(&peer(), 2080, Some("utun9"), &dns());
         assert!(r.contains("pass quick on utun9 all"));
         assert!(
             r.contains("block return out quick proto { tcp, udp } to any port 53"),
@@ -218,15 +243,42 @@ mod tests {
 
     #[test]
     fn tun_if_injected_when_safe() {
-        let r = rules_fail_closed(&peer(), 2080, Some("utun9"));
+        let r = rules_fail_closed(&peer(), 2080, Some("utun9"), &dns());
         assert!(r.contains("pass quick on utun9 all"));
-        let bad = rules_fail_closed(&peer(), 2080, Some("utun0;rm"));
+        let bad = rules_fail_closed(&peer(), 2080, Some("utun0;rm"), &dns());
         assert!(!bad.contains("rm"));
+    }
+
+    /// Custom resolvers must reach PF, and the Google default must be gone —
+    /// otherwise the config resolves via one server while PF passes another.
+    #[test]
+    fn custom_dns_replaces_default() {
+        let custom = vec!["9.9.9.9".to_string(), "149.112.112.112".to_string()];
+        let r = rules_fail_closed(&peer(), 2080, Some("utun9"), &custom);
+        assert!(r.contains("{ 9.9.9.9, 149.112.112.112 } port 443"), "{r}");
+        assert!(r.contains("{ 9.9.9.9, 149.112.112.112 } port 53"), "{r}");
+        assert!(!r.contains("8.8.8.8"), "default must not leak in: {r}");
+    }
+
+    /// A hostname or shell fragment in the list is both invalid PF syntax and an
+    /// injection vector; drop it and fall back rather than emitting it.
+    #[test]
+    fn non_ip_dns_entries_are_dropped() {
+        let bad = vec!["dns.google".to_string(), "} \n pass out all \n #".to_string()];
+        let r = rules_fail_closed(&peer(), 2080, Some("utun9"), &bad);
+        assert!(!r.contains("dns.google"), "{r}");
+        assert!(!r.contains("pass out all"), "{r}");
+        assert!(r.contains("8.8.8.8"), "fell back to default: {r}");
+
+        let mixed = vec!["9.9.9.9".to_string(), "dns.google".to_string()];
+        let r = rules_fail_closed(&peer(), 2080, Some("utun9"), &mixed);
+        assert!(r.contains("{ 9.9.9.9 } port 53"), "{r}");
+        assert!(!r.contains("dns.google"), "{r}");
     }
 
     #[test]
     fn blocked_without_peer() {
-        let r = rules_blocked(None, 2080);
+        let r = rules_blocked(None, 2080, &dns());
         assert!(r.contains("block return out"));
         // DoH bootstrap uses 8.8.8.8 port 443; no peer pass
         assert!(!r.contains("1.2.3.4"));

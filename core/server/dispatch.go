@@ -15,6 +15,12 @@ import (
 
 var globalServer = &server{}
 
+// maxPayloadLen bounds a single request payload. The largest real payload is a
+// Start config (tens of KB); 16 MiB is far above that. Without a bound, a peer
+// sending payloadLen=0xFFFFFFFF makes the core allocate 4 GiB and trip the
+// heap watchdog, which kills the privileged process and drops the tunnel.
+const maxPayloadLen = 16 << 20
+
 // runDispatch reads request frames and dispatches each one to its own goroutine.
 // Responses are written back with the matching reqId so the GUI can demultiplex.
 //
@@ -71,6 +77,10 @@ func runDispatch(conn net.Conn) error {
 			return fmt.Errorf("read payload length: %w", err)
 		}
 
+		if payloadLen > maxPayloadLen {
+			return fmt.Errorf("payload too large: %d > %d", payloadLen, maxPayloadLen)
+		}
+
 		// Read payload
 		payload := make([]byte, payloadLen)
 		if _, err := io.ReadFull(conn, payload); err != nil {
@@ -79,6 +89,13 @@ func runDispatch(conn net.Conn) error {
 
 		// Dispatch concurrently so long-running calls don't block the reader.
 		go func(id uint32, method string, pl []byte) {
+			// A handler panic would otherwise unwind past main's recover and
+			// kill the privileged core; fail the one request instead.
+			defer func() {
+				if r := recover(); r != nil {
+					writeResponse(id, 1, []byte(fmt.Sprintf("panic in %s: %v", method, r)))
+				}
+			}()
 			respData, dispatchErr := dispatch(method, pl)
 			if dispatchErr != nil {
 				writeResponse(id, 1, []byte(dispatchErr.Error()))

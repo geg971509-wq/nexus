@@ -1,5 +1,6 @@
 //! OS packet-filter firewall (clean-room fail-closed; Mullvad-inspired semantics).
-//! macOS: NexusFwD root daemon + PF anchor `nexus`. Windows: elevated netsh/WFP-class rules.
+//! macOS: NexusFwD root daemon + PF anchor `nexus`.
+//! Windows: `platform_support()` is Unsupported; `windows.rs` is unused stand-in.
 
 mod null;
 pub mod rules;
@@ -33,16 +34,20 @@ pub enum Policy {
         peer: PeerEndpoint,
         tun: bool,
         mixed_port: u16,
+        /// Bootstrap resolvers PF must pass; must match the generated config.
+        dns: Vec<String>,
     },
     Connected {
         peer: PeerEndpoint,
         tun: bool,
         mixed_port: u16,
         tun_if: Option<String>,
+        dns: Vec<String>,
     },
     Blocked {
         peer: Option<PeerEndpoint>,
         mixed_port: u16,
+        dns: Vec<String>,
     },
 }
 
@@ -110,11 +115,13 @@ pub fn policy_from_sm(state: SmState, params: Option<&ConnectParams>) -> Policy 
                     peer: p.peer.clone(),
                     tun: p.tun,
                     mixed_port: p.mixed_port,
+                    dns: p.dns.clone(),
                 }
             } else {
                 Policy::Blocked {
                     peer: None,
                     mixed_port: 2080,
+                    dns: Vec::new(),
                 }
             }
         }
@@ -126,6 +133,7 @@ pub fn policy_from_sm(state: SmState, params: Option<&ConnectParams>) -> Policy 
                         peer: p.peer.clone(),
                         tun: p.tun,
                         mixed_port: p.mixed_port,
+                        dns: p.dns.clone(),
                     }
                 } else {
                     Policy::Connected {
@@ -133,18 +141,21 @@ pub fn policy_from_sm(state: SmState, params: Option<&ConnectParams>) -> Policy 
                         tun: p.tun,
                         mixed_port: p.mixed_port,
                         tun_if: p.tun_if.clone(),
+                        dns: p.dns.clone(),
                     }
                 }
             } else {
                 Policy::Blocked {
                     peer: None,
                     mixed_port: 2080,
+                    dns: Vec::new(),
                 }
             }
         }
         SmState::Disconnecting | SmState::Error => Policy::Blocked {
             peer: params.map(|p| p.peer.clone()),
             mixed_port: params.map(|p| p.mixed_port).unwrap_or(2080),
+            dns: params.map(|p| p.dns.clone()).unwrap_or_default(),
         },
     }
 }
@@ -154,7 +165,9 @@ pub fn apply(policy: Policy) -> Result<(), String> {
     let peer_s = policy_peer_str(&policy);
     let tun_s = policy_tun_str(&policy);
 
-    let result = match platform_support() {
+    // Annotated: on non-macOS both arms are Ok(()), so E is otherwise unpinned
+    // until the tail return — and `e.clone()` below needs it earlier.
+    let result: Result<(), String> = match platform_support() {
         PlatformSupport::Unsupported => Ok(()),
         PlatformSupport::Active => {
             #[cfg(target_os = "macos")]

@@ -19,13 +19,24 @@ pub struct Store {
     /// UI node catalog blob (`nexus.catalog.v1` shape).
     #[serde(default)]
     pub catalog: Option<serde_json::Value>,
-    /// Legacy field ignored (P2: domain/process blocklist removed).
-    #[serde(default, skip_serializing)]
-    pub blocklist: serde_json::Value,
+    /// Bootstrap resolver IPs; empty means DEFAULT_DNS_BOOTSTRAP. Read via
+    /// `dns_bootstrap()` — never use this field directly, it is unvalidated
+    /// user JSON and the values reach PF rule text.
+    #[serde(default)]
+    pub dns_bootstrap: Vec<String>,
 }
 
 fn default_true() -> bool {
     true
+}
+
+impl Store {
+    /// Validated bootstrap resolvers. Non-IP entries are dropped: these are
+    /// interpolated into PF rule text, where a hostname is both a syntax error
+    /// and an injection vector. Falls back to the product default when empty.
+    pub fn dns_bootstrap(&self) -> Vec<String> {
+        crate::defaults::sanitize_dns_bootstrap(&self.dns_bootstrap)
+    }
 }
 
 impl Default for Store {
@@ -35,7 +46,7 @@ impl Default for Store {
             tun: false,
             hide_tray: false,
             catalog: None,
-            blocklist: serde_json::Value::Null,
+            dns_bootstrap: Vec::new(),
         }
     }
 }

@@ -11,24 +11,30 @@ pub fn apply_as_root(policy: &Policy) -> Result<(), String> {
     match policy {
         Policy::Reset => reset_as_root(),
         Policy::Connecting {
-            peer, mixed_port, ..
-        } => load_as_root(&rules::rules_fail_closed(peer, *mixed_port, None)),
+            peer,
+            mixed_port,
+            dns,
+            ..
+        } => load_as_root(&rules::rules_fail_closed(peer, *mixed_port, None, dns)),
         Policy::Connected {
             peer,
             tun,
             mixed_port,
             tun_if,
+            dns,
         } => {
             let iface = if *tun {
                 tun_if.as_deref()
             } else {
                 None
             };
-            load_as_root(&rules::rules_fail_closed(peer, *mixed_port, iface))
+            load_as_root(&rules::rules_fail_closed(peer, *mixed_port, iface, dns))
         }
-        Policy::Blocked { peer, mixed_port } => {
-            load_as_root(&rules::rules_blocked(peer.as_ref(), *mixed_port))
-        }
+        Policy::Blocked {
+            peer,
+            mixed_port,
+            dns,
+        } => load_as_root(&rules::rules_blocked(peer.as_ref(), *mixed_port, dns)),
     }
 }
 

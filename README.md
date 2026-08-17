@@ -35,7 +35,7 @@ Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box 
 
 ## Layout
 
-- `app/` — Tauri 2 (`ui/index.html` is the only product UI)
+- `app/` — Tauri 2 (`ui/index.html` + `ui/app.css` + `ui/i18n.js`)
 - `app/src-tauri/src/core/` — framed IPC + session spawn (unix socket / Windows named pipe)
 - `app/src-tauri/src/data/` — JSON store + pure generate
 - `app/src-tauri/src/sys.rs` — system proxy (macOS networksetup / Windows WinINet registry)
@@ -102,10 +102,10 @@ cd app && npm run tauri dev
 - Catalog (groups/nodes) in store via `catalog_get` / `catalog_put`
 - Node **Traffic** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only Reset traffic zeros)
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled Connectivity (not a proxy-path test)
-- **Firewall (OS fail-closed):** sidebar **防火墙** + macOS **NexusFwD** LaunchDaemon (PF anchor `nexus` in main ruleset); Windows elevated firewall rules (4 policies). Domain/process blocklist removed. Orthogonal to sing-box routing/Core/Tun/proxy. Install helper before connect on mac.
+- **Firewall (OS fail-closed, macOS only):** sidebar Firewall + **NexusFwD** LaunchDaemon (PF anchor `nexus`). Windows is **Unsupported** (`windows.rs` kept, not applied — not a WFP kill-switch). Domain/process blocklist removed. Orthogonal to sing-box routing/Core/Tun/proxy. Install helper before connect on mac.
 - Connection table: merge by Core id, multi-select like nodes (copy), process + PID columns
 - **i18n:** UI chrome + runtime log panel in `zh-CN` / `en` / `ru` / `zh-TW` (live language switch)
-- Advanced routing/DNS settings hidden until generate is wired to them
+- Unwired settings (routing/DNS, inbound, mux, updater, autostart) hidden until store/generate is wired; mixed inbound is `127.0.0.1:2080`
 - Windows: elevated shell, no console flash on helper spawns
 
 ## Status

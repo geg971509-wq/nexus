@@ -1,4 +1,5 @@
-//! Windows WFP kill-switch (clean-room minimal 4 policies). Shell must be elevated.
+//! Unused Windows stand-in (netsh-class 4 policies). Product `apply()` never
+//! calls this — `platform_support()` is Unsupported on non-macOS.
 
 use super::Policy;
 use std::net::IpAddr;
@@ -18,7 +19,9 @@ pub fn apply_policy(policy: &Policy) -> Result<(), String> {
         | Policy::Connected {
             peer, mixed_port, ..
         } => apply_permit_peer(peer.ip, peer.port, *mixed_port, true),
-        Policy::Blocked { peer, mixed_port } => {
+        Policy::Blocked {
+            peer, mixed_port, ..
+        } => {
             if let Some(p) = peer {
                 apply_permit_peer(p.ip, p.port, *mixed_port, true)
             } else {

@@ -11,9 +11,23 @@ use std::process::Command;
 #[cfg(target_os = "macos")]
 use std::time::Duration;
 
+/// Root-owned dir for the setuid copy. A setuid-root binary must never sit in a
+/// user-writable dir: same-uid code could swap the file between `cp` and `chmod`,
+/// or plant a symlink for root's `cp` to follow. Same location the firewall
+/// helper uses.
+#[cfg(target_os = "macos")]
+const PRIV_CORE_DIR: &str = "/Library/PrivilegedHelperTools";
+
 /// Privileged Core path (macOS setuid copy). On Windows, unused — returns data_dir bin path.
 pub fn privileged_core_path() -> PathBuf {
-    crate::paths::data_dir().join("bin").join(core_bin_name())
+    #[cfg(target_os = "macos")]
+    {
+        PathBuf::from(PRIV_CORE_DIR).join("app.nexus.NexusCore")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        crate::paths::data_dir().join("bin").join(core_bin_name())
+    }
 }
 
 fn core_bin_name() -> &'static str {
@@ -65,14 +79,27 @@ pub fn ensure_setuid_core(src: &Path) -> Result<PathBuf, String> {
                 }
             }
         }
-        if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
-        }
-
+        // The dest dir is root-owned, so mkdir happens inside the elevated script.
         let q_src = shell_single_quote(&src.to_string_lossy());
         let q_dest = shell_single_quote(&dest.to_string_lossy());
+        let q_dir = shell_single_quote(PRIV_CORE_DIR);
+        // Versions before this shipped the setuid copy into the user-writable data
+        // dir; that file is still setuid-root and still exploitable, so drop it here
+        // while we already hold root.
+        let q_legacy = shell_single_quote(
+            &crate::paths::data_dir()
+                .join("bin")
+                .join(core_bin_name())
+                .to_string_lossy(),
+        );
+        // chmod 4755 before moving into place: the setuid bit must never exist on a
+        // path an attacker can still swap. Staged under the root-owned dir (not /tmp)
+        // so the rename is atomic and the staging path is never user-writable.
         let shell = format!(
-            "/bin/cp -f {q_src} {q_dest} && /usr/sbin/chown root:wheel {q_dest} && /bin/chmod 4755 {q_dest}"
+            "/bin/mkdir -p {q_dir} && /usr/sbin/chown root:wheel {q_dir} && /bin/chmod 755 {q_dir} && \
+             /bin/cp -f {q_src} {q_dest}.new && /usr/sbin/chown root:wheel {q_dest}.new && \
+             /bin/chmod 4755 {q_dest}.new && /bin/mv -f {q_dest}.new {q_dest} && \
+             /bin/rm -f {q_legacy}"
         );
         let mut script_shell = shell.replace('\\', "\\\\");
         script_shell = script_shell.replace('\"', "\\\"");
@@ -124,7 +151,20 @@ mod tests {
         assert_eq!(shell_single_quote("a'b"), "'a'\\''b'");
     }
 
+    /// The setuid target must live in a root-owned dir. Under the user's home it
+    /// would be swappable between `cp` and `chmod 4755` — local root for free.
     #[test]
+    #[cfg(target_os = "macos")]
+    fn privileged_path_is_root_owned_dir() {
+        let p = privileged_core_path();
+        let s = p.to_string_lossy();
+        assert!(s.starts_with("/Library/PrivilegedHelperTools/"), "{s}");
+        let home = std::env::var("HOME").unwrap_or_default();
+        assert!(!home.is_empty() && !s.starts_with(&home), "{s}");
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
     fn privileged_path_under_data_dir() {
         let p = privileged_core_path();
         let s = p.to_string_lossy();

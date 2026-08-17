@@ -11,19 +11,64 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, HANDLE,
-    INVALID_HANDLE_VALUE, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    CloseHandle, GetLastError, LocalFree, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING,
+    ERROR_PIPE_CONNECTED, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Storage::FileSystem::{ReadFile, WriteFile, FILE_FLAG_OVERLAPPED};
 use windows_sys::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
     PIPE_WAIT,
 };
+use windows_sys::Win32::Security::Authorization::{
+    ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+};
+use windows_sys::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
 use windows_sys::Win32::System::Threading::{CreateEventW, WaitForSingleObject, INFINITE};
 use windows_sys::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
 
 // PIPE_ACCESS_DUPLEX not exported on all windows-sys versions; duplex = 3.
 const PIPE_ACCESS_DUPLEX: u32 = 0x0000_0003;
+
+/// Owner + SYSTEM get full access; nobody else is on the DACL. A NULL security
+/// descriptor would inherit the default pipe DACL, which grants Everyone
+/// generic read/write — any local user could then drive the privileged core.
+const PIPE_SDDL: &str = "D:P(A;;GA;;;OW)(A;;GA;;;SY)";
+
+/// Owns the LocalAlloc'd descriptor behind SECURITY_ATTRIBUTES.
+struct PipeSecurity {
+    sd: PSECURITY_DESCRIPTOR,
+    attrs: SECURITY_ATTRIBUTES,
+}
+
+impl Drop for PipeSecurity {
+    fn drop(&mut self) {
+        if !self.sd.is_null() {
+            unsafe { LocalFree(self.sd as _) };
+        }
+    }
+}
+
+fn pipe_security() -> io::Result<PipeSecurity> {
+    let sddl = to_wide(PIPE_SDDL);
+    let mut sd: PSECURITY_DESCRIPTOR = ptr::null_mut();
+    let ok = unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            sddl.as_ptr(),
+            SDDL_REVISION_1,
+            &mut sd,
+            ptr::null_mut(),
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let attrs = SECURITY_ATTRIBUTES {
+        nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: sd,
+        bInheritHandle: 0,
+    };
+    Ok(PipeSecurity { sd, attrs })
+}
 
 /// Connected duplex byte pipe with optional R/W deadlines (mirrors UnixStream timeouts).
 pub struct PipeStream {
@@ -197,6 +242,7 @@ pub fn accept_one(pipe_name: &str, timeout: Duration) -> io::Result<PipeStream> 
     let wide = to_wide(&full);
     let deadline = Instant::now() + timeout;
 
+    let mut sec = pipe_security()?;
     let h: HANDLE = unsafe {
         CreateNamedPipeW(
             wide.as_ptr(),
@@ -206,7 +252,7 @@ pub fn accept_one(pipe_name: &str, timeout: Duration) -> io::Result<PipeStream> 
             64 * 1024,
             64 * 1024,
             0,
-            ptr::null_mut(),
+            &mut sec.attrs,
         )
     };
     if h == INVALID_HANDLE_VALUE {

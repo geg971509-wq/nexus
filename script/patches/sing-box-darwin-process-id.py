@@ -6,29 +6,23 @@
    IP+port is unique per host socket — same idea UDP already used.
 
 Never touch sagernet/sing-box@version published modules.
+
+Usage: sing-box-darwin-process-id.py <staged-sing-box-module-dir>
+The dir is a writable copy staged by build.sh; the shared module cache under
+~/go/pkg/mod is read-only and must stay byte-identical for `go mod verify`.
 """
-import glob
-import os
 import pathlib
 import sys
 
-patterns = [
-    os.path.expanduser(
-        "~/go/pkg/mod/github.com/!throneproj/sing-box@*/common/process/searcher_darwin_shared.go"
-    ),
-]
+if len(sys.argv) != 2:
+    print("usage: sing-box-darwin-process-id.py <staged-sing-box-module-dir>")
+    sys.exit(2)
 
-files = []
-seen = set()
-for pat in patterns:
-    for p in glob.glob(pat):
-        if p not in seen and os.path.isfile(p):
-            seen.add(p)
-            files.append(pathlib.Path(p))
-
-if not files:
-    print("no throng searcher_darwin_shared.go found; skip")
-    sys.exit(0)
+target = pathlib.Path(sys.argv[1]) / "common" / "process" / "searcher_darwin_shared.go"
+if not target.is_file():
+    print("no throng searcher_darwin_shared.go at", target)
+    sys.exit(1)
+files = [target]
 
 # --- patch A: set ProcessID before path lookup ---
 old_pid = (
@@ -83,6 +77,8 @@ def ensure_writable(p: pathlib.Path) -> None:
         pass
 
 
+missed = []
+
 for p in files:
     t = p.read_text()
     changed = False
@@ -90,6 +86,7 @@ for p in files:
     if "owner.ProcessID = entry.pid" not in t:
         if old_pid not in t:
             print("pattern miss (ProcessID)", p)
+            missed.append("ProcessID")
         else:
             ensure_writable(p)
             t = t.replace(old_pid, new_pid, 1)
@@ -106,6 +103,7 @@ for p in files:
         print("ok TCP-local-fallback", p)
     elif old_match not in t:
         print("pattern miss (TCP-local-fallback)", p)
+        missed.append("TCP-local-fallback")
         # debug first miss only
         if "if network != N.NetworkUDP" in t:
             i = t.find("if network != N.NetworkUDP")
@@ -118,3 +116,9 @@ for p in files:
 
     if changed:
         p.write_text(t)
+
+# A miss means upstream moved the code: the shipped Core would silently lose
+# per-process routing. Fail the build instead of shipping a half-patched core.
+if missed:
+    print("FAILED to apply:", ", ".join(missed), file=sys.stderr)
+    sys.exit(1)

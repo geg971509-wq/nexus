@@ -47,6 +47,8 @@ need go
 need cargo
 need npm
 need rustc
+# Both sides generate from core/server/gen/libcore.proto: Go here, Rust in build.rs.
+need protoc
 if ! xcode-select -p >/dev/null 2>&1; then
   die "Xcode CLT not configured (xcode-select -p)"
 fi
@@ -91,39 +93,48 @@ verify_core_binary() {
 
 [[ -d "$CORE_SRC" ]] || die "core source missing: $CORE_SRC"
 [[ -f "$CORE_SRC/go.mod" ]] || die "missing $CORE_SRC/go.mod"
-[[ -f "$CORE_SRC/gen/libcore.pb.go" ]] || die "missing $CORE_SRC/gen/libcore.pb.go (pre-generated protobuf)"
+[[ -f "$CORE_SRC/gen/libcore.proto" ]] || die "missing $CORE_SRC/gen/libcore.proto"
+
+# --- 0) protobuf: generate Go stubs from the same .proto the Rust build.rs uses.
+log "generating Go protobuf stubs…"
+bash "$ROOT/script/gen-proto.sh" || die "protobuf generation failed"
+ok "protobuf stubs generated"
+
+# --- 0b) sing-box patch: stage a writable copy, patch it, replace via overlay modfile.
+# The shared cache under ~/go/pkg/mod must stay byte-identical or `go mod verify`
+# fails for every other project on this machine. Staging keeps the patch local to
+# this build; go.patched.mod is gitignored so the committed go.mod stays upstream.
+SINGBOX_STAGE="$BIN_DIR/singbox-patched"
+log "staging patched sing-box…"
+(
+  cd "$CORE_SRC"
+  go mod download github.com/sagernet/sing-box
+  src="$(go list -m -f '{{if .Replace}}{{.Replace.Dir}}{{else}}{{.Dir}}{{end}}' github.com/sagernet/sing-box)"
+  [[ -d "$src" ]] || die "cannot locate sing-box module dir"
+  rm -rf "$SINGBOX_STAGE"
+  mkdir -p "$SINGBOX_STAGE"
+  # Cache dirs are 0555; copy then restore write permission on the copy only.
+  cp -R "$src/." "$SINGBOX_STAGE/"
+  chmod -R u+w "$SINGBOX_STAGE"
+  python3 "$ROOT/script/patches/sing-box-darwin-process-id.py" "$SINGBOX_STAGE" \
+    || die "sing-box patch failed to apply (upstream moved? see script/patches/)"
+
+  cp -f go.mod go.patched.mod
+  cp -f go.sum go.patched.sum
+  # -replace overwrites the existing Throneproj replace; appending would conflict.
+  go mod edit -modfile=go.patched.mod \
+    -replace "github.com/sagernet/sing-box=$SINGBOX_STAGE"
+)
+# Both core builds below compile against the patched copy.
+export GOFLAGS="${GOFLAGS:+$GOFLAGS }-modfile=go.patched.mod"
+ok "sing-box patched → $SINGBOX_STAGE"
 
 # --- 1a) NexusCore macOS host ---
 log "building NexusCore macOS (go · tags=$CORE_TAGS_MAC)…"
 (
   cd "$CORE_SRC"
   go mod download
-  # Prior builds patch Throneproj sing-box in module cache; verify fails on dirty dirs.
-  # Drop modified cache dirs once, re-download, then verify clean modules.
-  # go module dirs are often mode 0555; prior ProcessID patch dirties them for verify.
-  if ! go mod verify >/tmp/nexus-gomod-verify.err 2>&1; then
-    while IFS= read -r line; do
-      case "$line" in
-        *"dir has been modified ("*)
-          dirty="${line#*dir has been modified (}"
-          dirty="${dirty%)}"
-          if [[ -n "$dirty" && -d "$dirty" ]]; then
-            log "module cache dirty, re-fetch: $dirty"
-            chmod -R u+w "$dirty" 2>/dev/null || true
-            rm -rf "$dirty"
-          fi
-          ;;
-      esac
-    done < /tmp/nexus-gomod-verify.err
-    go mod download
-    go mod verify || {
-      cat /tmp/nexus-gomod-verify.err 2>/dev/null || true
-      die "go mod verify failed after re-download"
-    }
-  fi
-  # throng darwin searcher had pid but left ConnectionOwner.ProcessID=0
-  # Patch AFTER verify (Throneproj only). Next build re-fetches that dirty dir.
-  python3 "$ROOT/script/patches/sing-box-darwin-process-id.py" || true
+  go mod verify || die "go mod verify failed (module cache is corrupt or tampered)"
 
   VERSION_SINGBOX="$(go list -m -f '{{.Version}}' github.com/sagernet/sing-box)"
   [[ -n "$VERSION_SINGBOX" ]] || die "could not resolve github.com/sagernet/sing-box version from go.mod"
@@ -209,13 +220,17 @@ if ! (cd "$APP_DIR" && npx --no-install tauri --version >/dev/null 2>&1); then
   fi
 fi
 
-# --- 2.5) UI staging: index.html + assets ---
+# --- 2.5) UI staging: page + extracted css/i18n + assets ---
 UI_SRC="$APP_DIR/ui/index.html"
 [[ -f "$UI_SRC" ]] || die "missing UI source: $UI_SRC"
+[[ -f "$APP_DIR/ui/app.css" ]] || die "missing UI css: $APP_DIR/ui/app.css"
+[[ -f "$APP_DIR/ui/i18n.js" ]] || die "missing UI i18n: $APP_DIR/ui/i18n.js"
 UI_STAGE="$TAURI_DIR/ui-release-dist"
 rm -rf "$UI_STAGE"
 mkdir -p "$UI_STAGE"
 cp "$UI_SRC" "$UI_STAGE/index.html"
+cp "$APP_DIR/ui/app.css" "$UI_STAGE/app.css"
+cp "$APP_DIR/ui/i18n.js" "$UI_STAGE/i18n.js"
 if [[ -d "$APP_DIR/ui/assets" ]]; then
   cp -R "$APP_DIR/ui/assets" "$UI_STAGE/assets"
 fi

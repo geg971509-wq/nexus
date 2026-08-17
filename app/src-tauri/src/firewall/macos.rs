@@ -1,6 +1,6 @@
 //! macOS firewall client: talk to NexusFwD; install/uninstall LaunchDaemon (H2).
 
-use super::wire::{self, PolicyDto, Request, Response};
+use super::wire::{PolicyDto, Request, Response};
 use super::Policy;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
@@ -60,7 +60,7 @@ pub fn ensure_helper_ready() -> Result<(), String> {
             return Ok(());
         }
     }
-    Err("firewall helper not running — install via 防火墙 tab (NexusFwD)".into())
+    Err("firewall helper not running — install via the Firewall tab (NexusFwD)".into())
 }
 
 /// One-shot admin install: copy binary + plist + bootstrap.

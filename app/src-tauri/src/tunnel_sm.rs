@@ -7,6 +7,7 @@ use std::sync::Mutex;
 static CONNECT_GEN: AtomicU64 = AtomicU64::new(1);
 static STATE: Mutex<State> = Mutex::new(State::Idle);
 static LAST_PARAMS: Mutex<Option<ConnectParams>> = Mutex::new(None);
+static LAST_ERROR: Mutex<Option<String>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -44,6 +45,9 @@ pub struct ConnectParams {
     pub tun: bool,
     pub mixed_port: u16,
     pub tun_if: Option<String>,
+    /// Bootstrap resolvers this connection's config was generated against; the
+    /// firewall passes exactly these, so they travel with the params.
+    pub dns: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -85,10 +89,18 @@ pub fn last_params() -> Option<ConnectParams> {
         .clone()
 }
 
+pub fn last_error() -> Option<String> {
+    LAST_ERROR
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
 /// Apply event; returns transition for firewall/proxy wiring.
 pub fn apply(event: Event) -> Transition {
     let mut g = STATE.lock().unwrap_or_else(|e| e.into_inner());
     let mut lp = LAST_PARAMS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut le = LAST_ERROR.lock().unwrap_or_else(|e| e.into_inner());
     let from = *g;
     let (to, params, error, bump) = match (&event, from) {
         (Event::BeginConnect(p), _) => {
@@ -122,6 +134,17 @@ pub fn apply(event: Event) -> Transition {
     if bump {
         let _ = CONNECT_GEN.fetch_add(1, Ordering::SeqCst);
     }
+    match &event {
+        Event::BeginConnect(_) | Event::MarkConnected { .. } | Event::ResetIdle => {
+            *le = None;
+        }
+        Event::Fail(_) | Event::CoreLost => {
+            if error.is_some() {
+                *le = error.clone();
+            }
+        }
+        Event::BeginDisconnect => {}
+    }
     *g = to;
     let gen = CONNECT_GEN.load(Ordering::SeqCst);
     Transition {
@@ -149,7 +172,14 @@ pub fn update_tun_if(tun_if: Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::Ipv4Addr;
+    use std::net::{IpAddr, Ipv4Addr};
+
+    // ponytail: process-global SM; serialize tests or they stomp STATE.
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn lock() -> std::sync::MutexGuard<'static, ()> {
+        TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     fn peer() -> PeerEndpoint {
         let ip = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
@@ -160,16 +190,16 @@ mod tests {
         }
     }
 
-    use std::net::IpAddr;
-
     #[test]
     fn connect_fail_error_then_idle() {
+        let _g = lock();
         let _ = apply(Event::ResetIdle);
         let t = apply(Event::BeginConnect(ConnectParams {
             peer: peer(),
             tun: true,
             mixed_port: 2080,
             tun_if: None,
+            dns: Vec::new(),
         }));
         assert_eq!(t.to, State::Connecting);
         let t = apply(Event::Fail("boom".into()));
@@ -184,12 +214,14 @@ mod tests {
 
     #[test]
     fn core_lost_stays_error_not_idle() {
+        let _g = lock();
         let _ = apply(Event::ResetIdle);
         let _ = apply(Event::BeginConnect(ConnectParams {
             peer: peer(),
             tun: false,
             mixed_port: 2080,
             tun_if: None,
+            dns: Vec::new(),
         }));
         set_state(State::Connected);
         let t = apply(Event::CoreLost);
@@ -197,5 +229,26 @@ mod tests {
         assert_ne!(t.to, State::Idle);
         assert!(t.params.is_some());
         assert!(last_params().is_some());
+        assert_eq!(last_error().as_deref(), Some("core lost"));
+    }
+
+    #[test]
+    fn fail_error_survives_until_reset() {
+        let _g = lock();
+        let _ = apply(Event::ResetIdle);
+        assert!(last_error().is_none());
+        let _ = apply(Event::BeginConnect(ConnectParams {
+            peer: peer(),
+            tun: true,
+            mixed_port: 2080,
+            tun_if: Some("utun8".into()),
+            dns: Vec::new(),
+        }));
+        set_state(State::Connected);
+        let t = apply(Event::Fail("firewall tun rebind: boom".into()));
+        assert_eq!(t.to, State::Error);
+        assert_eq!(last_error().as_deref(), Some("firewall tun rebind: boom"));
+        let _ = apply(Event::ResetIdle);
+        assert!(last_error().is_none());
     }
 }

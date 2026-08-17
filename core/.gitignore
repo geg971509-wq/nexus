@@ -6,3 +6,6 @@
 *.db
 server/gen/*.pb.go
 server/gen/*.pb.*.go
+# build.sh overlay modfile: replaces sing-box with the patched copy under bin/
+server/go.patched.mod
+server/go.patched.sum

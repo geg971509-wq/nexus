@@ -213,16 +213,29 @@ pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
     }
 }
 
+/// IPs that `networksetup -setdnsservers` will receive.
+/// Same validation as store/PF: a hostname is neither a resolver nor safe argv.
+/// Empty / all-invalid falls back to the product default so OS, config, and PF
+/// stay on one list.
+pub fn dns_servers_for_os(servers: &[String]) -> Vec<String> {
+    crate::defaults::sanitize_dns_bootstrap(servers)
+}
+
 /// Tun + fail-closed blocks bare DNS to LAN resolvers (router :53).
-/// Point primary services at bootstrap resolvers already allowed by PF (8.8.8.8/1.1.1.1).
-/// `enabled=false` restores DHCP (`Empty`).
+/// Point primary services at the same bootstrap list PF already passes.
+/// `enabled=false` restores DHCP (`Empty`); `servers` is ignored then.
 #[cfg(target_os = "macos")]
-pub fn set_system_dns_bootstrap(enabled: bool) -> Result<String, String> {
+pub fn set_system_dns_bootstrap(enabled: bool, servers: &[String]) -> Result<String, String> {
+    let ips = dns_servers_for_os(servers);
     let hot = hot_services(true);
     let primary = hot.first().cloned().unwrap_or_else(|| "Wi-Fi".into());
     let apply_one_dns = |service: &str, on: bool| -> Result<(), String> {
         if on {
-            run_ns(&["-setdnsservers", service, "8.8.8.8", "1.1.1.1"])
+            let mut argv: Vec<&str> = vec!["-setdnsservers", service];
+            for ip in &ips {
+                argv.push(ip.as_str());
+            }
+            run_ns(&argv)
         } else {
             run_ns(&["-setdnsservers", service, "Empty"])
         }
@@ -232,18 +245,28 @@ pub fn set_system_dns_bootstrap(enabled: bool) -> Result<String, String> {
     let rest: Vec<String> = hot.into_iter().skip(1).collect();
     let rest_n = rest.len();
     if rest_n > 0 {
+        let ips_bg = ips.clone();
         std::thread::Builder::new()
             .name("nexus-sysdns".into())
             .spawn(move || {
                 for s in rest {
-                    let _ = apply_one_dns(&s, enabled);
+                    if enabled {
+                        let mut argv: Vec<&str> = vec!["-setdnsservers", &s];
+                        for ip in &ips_bg {
+                            argv.push(ip.as_str());
+                        }
+                        let _ = run_ns(&argv);
+                    } else {
+                        let _ = run_ns(&["-setdnsservers", &s, "Empty"]);
+                    }
                 }
             })
             .ok();
     }
     if enabled {
         Ok(format!(
-            "system dns 8.8.8.8,1.1.1.1 · primary {primary}{}",
+            "system dns {} · primary {primary}{}",
+            ips.join(","),
             if rest_n > 0 {
                 format!(" · +{rest_n} bg")
             } else {
@@ -263,9 +286,34 @@ pub fn set_system_dns_bootstrap(enabled: bool) -> Result<String, String> {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn set_system_dns_bootstrap(enabled: bool) -> Result<String, String> {
-    let _ = enabled;
+pub fn set_system_dns_bootstrap(enabled: bool, servers: &[String]) -> Result<String, String> {
+    let _ = (enabled, servers);
     Ok("system dns: no-op".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dns_servers_for_os;
+
+    #[test]
+    fn os_dns_uses_custom_not_google() {
+        let v = dns_servers_for_os(&["9.9.9.9".into()]);
+        assert_eq!(v, vec!["9.9.9.9".to_string()]);
+        assert!(!v.iter().any(|s| s == "8.8.8.8"));
+    }
+
+    #[test]
+    fn os_dns_drops_hostnames_and_falls_back() {
+        let v = dns_servers_for_os(&["dns.google".into(), "".into()]);
+        assert!(v.contains(&"8.8.8.8".to_string()), "{v:?}");
+        assert!(!v.iter().any(|s| s == "dns.google"));
+    }
+
+    #[test]
+    fn os_dns_keeps_valid_from_mixed() {
+        let v = dns_servers_for_os(&["dns.google".into(), "9.9.9.9".into()]);
+        assert_eq!(v, vec!["9.9.9.9".to_string()]);
+    }
 }
 
 /// Windows: HKCU Internet Settings (WinINet) + notify — no PowerShell (avoids console flash).

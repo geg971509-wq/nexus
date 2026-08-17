@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+jobs:
+  ui:
+    name: UI (i18n)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # t() falls back to zh-CN, so a missing translation ships as Chinese text
+      # in the English UI without any error. ubuntu runners have ruby preinstalled.
+      - run: bash script/check-i18n.sh
+
+  core:
+    name: Core (Go)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/server/go.mod
+          cache-dependency-path: core/server/go.sum
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      # Generated *.pb.go are gitignored, so nothing compiles without this.
+      - run: bash script/gen-proto.sh
+      - run: go vet ./...
+        working-directory: core/server
+      # -race only: it is a superset of the plain run, and the suite is seconds.
+      # The IPC dispatcher hands every request to its own goroutine.
+      - run: go test -race ./...
+        working-directory: core/server
+
+  shell:
+    name: Shell (Rust, macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      # build.rs runs prost-build against core/server/gen/libcore.proto.
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      # repo-root rust-toolchain.toml pins 1.94.0; install that, not stable.
+      - uses: dtolnay/rust-toolchain@1.94.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      # tauri-build hard-fails on a missing externalBin, and the real sidecar is
+      # gitignored (~70MB). CI type-checks the shell; it does not bundle an app.
+      - name: stub sidecar
+        run: |
+          mkdir -p app/src-tauri/binaries
+          touch app/src-tauri/binaries/NexusCore-$(rustc -vV | sed -n 's/^host: //p')
+      - run: cargo test --lib
+        working-directory: app/src-tauri
+
+  windows:
+    name: Shell (Rust, Windows)
+    # winpipe.rs / firewall/windows.rs are cfg-gated out on macOS, and both have
+    # already shipped breakage a macOS-only build could not see.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@1.94.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      - name: stub sidecar
+        shell: bash
+        run: |
+          mkdir -p app/src-tauri/binaries
+          touch app/src-tauri/binaries/NexusCore-$(rustc -vV | sed -n 's/^host: //p').exe
+      - run: cargo check --lib
+        working-directory: app/src-tauri

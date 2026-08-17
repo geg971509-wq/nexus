@@ -26,6 +26,10 @@ pub enum PolicyDto {
         peer_ips: Vec<String>,
         tun: bool,
         mixed_port: u16,
+        /// Bootstrap resolvers PF passes. Absent = older shell; rules.rs falls
+        /// back to the product default rather than emitting an empty PF list.
+        #[serde(default)]
+        dns: Vec<String>,
     },
     Connected {
         peer_ip: String,
@@ -35,6 +39,8 @@ pub enum PolicyDto {
         tun: bool,
         mixed_port: u16,
         tun_if: Option<String>,
+        #[serde(default)]
+        dns: Vec<String>,
     },
     Blocked {
         peer_ip: Option<String>,
@@ -42,6 +48,8 @@ pub enum PolicyDto {
         #[serde(default)]
         peer_ips: Vec<String>,
         mixed_port: u16,
+        #[serde(default)]
+        dns: Vec<String>,
     },
 }
 
@@ -72,18 +80,21 @@ impl PolicyDto {
                 peer,
                 tun,
                 mixed_port,
+                dns,
             } => PolicyDto::Connecting {
                 peer_ip: peer.ip.to_string(),
                 peer_port: peer.port,
                 peer_ips: peer_ip_list(peer),
                 tun: *tun,
                 mixed_port: *mixed_port,
+                dns: dns.clone(),
             },
             Policy::Connected {
                 peer,
                 tun,
                 mixed_port,
                 tun_if,
+                dns,
             } => PolicyDto::Connected {
                 peer_ip: peer.ip.to_string(),
                 peer_port: peer.port,
@@ -91,12 +102,18 @@ impl PolicyDto {
                 tun: *tun,
                 mixed_port: *mixed_port,
                 tun_if: tun_if.clone(),
+                dns: dns.clone(),
             },
-            Policy::Blocked { peer, mixed_port } => PolicyDto::Blocked {
+            Policy::Blocked {
+                peer,
+                mixed_port,
+                dns,
+            } => PolicyDto::Blocked {
                 peer_ip: peer.as_ref().map(|p| p.ip.to_string()),
                 peer_port: peer.as_ref().map(|p| p.port),
                 peer_ips: peer.as_ref().map(peer_ip_list).unwrap_or_default(),
                 mixed_port: *mixed_port,
+                dns: dns.clone(),
             },
         }
     }
@@ -110,10 +127,12 @@ impl PolicyDto {
                 peer_ips,
                 tun,
                 mixed_port,
+                dns,
             } => Ok(Policy::Connecting {
                 peer: parse_peer(&peer_ip, peer_port, &peer_ips)?,
                 tun,
                 mixed_port,
+                dns,
             }),
             PolicyDto::Connected {
                 peer_ip,
@@ -122,23 +141,30 @@ impl PolicyDto {
                 tun,
                 mixed_port,
                 tun_if,
+                dns,
             } => Ok(Policy::Connected {
                 peer: parse_peer(&peer_ip, peer_port, &peer_ips)?,
                 tun,
                 mixed_port,
                 tun_if,
+                dns,
             }),
             PolicyDto::Blocked {
                 peer_ip,
                 peer_port,
                 peer_ips,
                 mixed_port,
+                dns,
             } => {
                 let peer = match (peer_ip, peer_port) {
                     (Some(ip), Some(port)) => Some(parse_peer(&ip, port, &peer_ips)?),
                     _ => None,
                 };
-                Ok(Policy::Blocked { peer, mixed_port })
+                Ok(Policy::Blocked {
+                    peer,
+                    mixed_port,
+                    dns,
+                })
             }
         }
     }

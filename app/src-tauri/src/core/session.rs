@@ -385,10 +385,12 @@ impl CoreSession {
         Ok(decode_has_privilege(&data))
     }
 
-    pub fn recycle_privileged(&mut self) -> Result<(), String> {
-        let bin = Self::ensure_privileged_core()?;
+    /// Takes the already-elevated binary rather than elevating itself: callers hold
+    /// the SESSION lock here, and `ensure_privileged_core` can raise an osascript
+    /// password sheet that blocks on user input for as long as the user ignores it.
+    pub fn recycle_privileged(&mut self, bin: &Path) -> Result<(), String> {
         let _ = self.stop_core_process();
-        *self = Self::start(&bin).map_err(|e| format!("restart privileged core: {e}"))?;
+        *self = Self::start(bin).map_err(|e| format!("restart privileged core: {e}"))?;
         Ok(())
     }
 

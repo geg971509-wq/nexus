@@ -49,6 +49,11 @@ func RunCore() {
 		}
 		retryDelay = 250 * time.Millisecond
 
+		if peerErr := ipc.VerifyPeerIsParent(conn); peerErr != nil {
+			conn.Close() //nolint:errcheck -- already failing this connection
+			log.Fatalf("refusing IPC peer: %v", peerErr)
+		}
+
 		fmt.Println("Core Has Successfully Connected to Nexus!")
 		if dispatchErr := runDispatch(conn); dispatchErr != nil && debug {
 			log.Printf("GUI IPC disconnected: %v", dispatchErr)

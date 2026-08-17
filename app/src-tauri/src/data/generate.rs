@@ -16,6 +16,9 @@ pub struct GenerateInput<'a> {
     pub mux_default_on: bool,
     pub mux_protocol: &'a str,
     pub mux_concurrency: i64,
+    /// Bootstrap resolvers; empty = product default. The firewall passes exactly
+    /// this list, so config and PF must be generated from the same source.
+    pub dns_bootstrap: &'a [String],
 }
 
 /// Decision table: unspecified outbound + mux_default_on → enable only if capability == "yes".
@@ -51,12 +54,16 @@ pub fn apply_mux_gate(
 /// - dns-remote detours via proxy only when outbound is not `direct` (sing-box rejects detour→direct).
 /// - Proxy server hostname (if any) resolves via dns-direct so chain bootstrap cannot deadlock.
 /// - Tun on Darwin: avoid type=local for bootstrap (upstream uses underlying/udp).
-fn build_dns_section(outbound: &Value, tun: bool) -> Value {
+fn build_dns_section(outbound: &Value, tun: bool, dns_bootstrap: &[String]) -> Value {
     let is_direct = outbound.get("type").and_then(|t| t.as_str()) == Some("direct");
+    // Same sanitize as PF/OS: a hostname here would be the config resolver
+    // while PF falls back to 8.8.8.8 and system DNS dies.
+    let cleaned = crate::defaults::sanitize_dns_bootstrap(dns_bootstrap);
+    let resolver = cleaned[0].as_str();
 
     // Bootstrap resolver: local is fine without Tun; under Tun/macOS use UDP IP (no system getaddrinfo).
     let dns_local = if tun {
-        json!({"type": "udp", "tag": "dns-local", "server": "8.8.8.8"})
+        json!({"type": "udp", "tag": "dns-local", "server": resolver})
     } else {
         json!({"type": "local", "tag": "dns-local"})
     };
@@ -65,7 +72,7 @@ fn build_dns_section(outbound: &Value, tun: bool) -> Value {
     let dns_direct = json!({
         "type": "https",
         "tag": "dns-direct",
-        "server": "8.8.8.8",
+        "server": resolver,
         "path": "/dns-query",
         "domain_resolver": "dns-local"
     });
@@ -73,7 +80,7 @@ fn build_dns_section(outbound: &Value, tun: bool) -> Value {
     let mut dns_remote = json!({
         "type": "https",
         "tag": "dns-remote",
-        "server": "8.8.8.8",
+        "server": resolver,
         "path": "/dns-query",
         "domain_resolver": "dns-local"
     });
@@ -141,7 +148,7 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         input.mux_protocol,
         input.mux_concurrency,
     );
-    let dns = build_dns_section(&outbound, input.tun);
+    let dns = build_dns_section(&outbound, input.tun, input.dns_bootstrap);
 
     // sing-box 1.12+: dial fields need domain_resolver. Without it, proxy server
     // hostname resolves via dns-remote→detour proxy → "DNS query loopback".
@@ -359,6 +366,7 @@ pub fn generate_with_outbound(
     outbound: Value,
     port: u16,
     tun: bool,
+    dns_bootstrap: &[String],
 ) -> Value {
     // ensure tag
     let mut outbound = outbound;
@@ -377,6 +385,7 @@ pub fn generate_with_outbound(
         mux_default_on: false,
         mux_protocol: "h2mux",
         mux_concurrency: 8,
+        dns_bootstrap,
     })
 }
 
@@ -399,6 +408,7 @@ mod tests {
             mux_default_on: false,
             mux_protocol: "smux",
             mux_concurrency: 8,
+            dns_bootstrap: &[],
         })
     }
 
@@ -497,6 +507,63 @@ mod tests {
             path.starts_with('/') || path.contains(':'),
             "cache_file.path must be absolute, got {path}"
         );
+    }
+
+    /// Config resolver, PF :53 set, and OS argv must be the same list.
+    /// Hardcoding 8.8.8.8 in generate.rs used to pass every other test.
+    #[test]
+    fn tun_resolver_is_in_pf_and_os_set() {
+        use crate::firewall::rules::rules_fail_closed;
+        use crate::sys::dns_servers_for_os;
+        use crate::tunnel_sm::PeerEndpoint;
+        use std::net::{IpAddr, Ipv4Addr};
+
+        let cases: &[&[&str]] = &[
+            &[],
+            &["9.9.9.9"],
+            &["dns.google"],
+            &["dns.google", "9.9.9.9"],
+            &["2001:4860:4860::8888"],
+        ];
+        let peer = PeerEndpoint {
+            ip: IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)),
+            port: 443,
+            ips: vec![],
+        };
+        for raw in cases {
+            let list: Vec<String> = raw.iter().map(|s| s.to_string()).collect();
+            let cfg = generate_with_outbound(
+                json!({"type":"socks","tag":"proxy","server":"1.2.3.4","server_port":1080}),
+                2080,
+                true,
+                &list,
+            );
+            let servers = cfg["dns"]["servers"].as_array().expect("dns.servers");
+            let resolver = servers
+                .iter()
+                .find(|s| s["tag"] == "dns-local")
+                .and_then(|s| s["server"].as_str())
+                .expect("tun dns-local.server")
+                .to_string();
+            let pf = rules_fail_closed(&peer, 2080, Some("utun9"), &list);
+            let dns53 = pf
+                .lines()
+                .find(|l| l.contains("port 53") && l.starts_with("pass out"))
+                .unwrap_or("");
+            assert!(
+                dns53.contains(&resolver),
+                "PF must pass config resolver {resolver} for {raw:?}: {dns53}"
+            );
+            let os = dns_servers_for_os(&list);
+            assert!(
+                os.contains(&resolver),
+                "OS argv must include config resolver {resolver} for {raw:?}: {os:?}"
+            );
+            if list.iter().any(|s| s == "9.9.9.9") {
+                assert_eq!(resolver, "9.9.9.9", "{raw:?}");
+                assert!(!os.contains(&"8.8.8.8".to_string()), "{raw:?} {os:?}");
+            }
+        }
     }
 
     #[test]

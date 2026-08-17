@@ -28,7 +28,7 @@ fn current_connect_gen() -> u64 {
 /// Clear bootstrap DNS only if this session set it (1A: never wipe custom DNS).
 fn clear_dns_bootstrap_if_set() {
     if DNS_BOOTSTRAP_SET.swap(false, AtomicOrdering::SeqCst) {
-        let _ = sys::set_system_dns_bootstrap(false);
+        let _ = sys::set_system_dns_bootstrap(false, &[]);
     }
 }
 
@@ -82,6 +82,7 @@ fn apply_post_start_side_effects(
     use_sys_proxy: bool,
     use_tun: bool,
     port: u16,
+    dns_bootstrap: &[String],
 ) -> Option<String> {
     if gen == 0 || gen != current_connect_gen() {
         return Some("skipped proxy: connect superseded".into());
@@ -109,7 +110,7 @@ fn apply_post_start_side_effects(
     notes.push(proxy_note);
     // 1A: Tun only — set bootstrap DNS; non-Tun never touch system DNS.
     if use_tun {
-        match sys::set_system_dns_bootstrap(true) {
+        match sys::set_system_dns_bootstrap(true, dns_bootstrap) {
             Ok(m) => {
                 DNS_BOOTSTRAP_SET.store(true, AtomicOrdering::SeqCst);
                 notes.push(m);
@@ -143,7 +144,7 @@ fn apply_post_start_side_effects(
     Some(notes.join(" · "))
 }
 
-/// Share-link → SVG QR (offline; for 显示二维码 dialog).
+/// Share-link → SVG QR (offline; for the share-QR dialog).
 #[tauri::command]
 fn qr_svg(text: String) -> Result<serde_json::Value, String> {
     let t = text.trim();
@@ -151,7 +152,7 @@ fn qr_svg(text: String) -> Result<serde_json::Value, String> {
         return Err("empty qr payload".into());
     }
     if t.len() > 2000 {
-        return Err("内容过长，无法生成二维码".into());
+        return Err("payload too long for QR".into());
     }
     use qrcode::render::svg;
     use qrcode::QrCode;
@@ -242,6 +243,7 @@ async fn session_status() -> Result<serde_json::Value, String> {
         let live = rpc_running || (process_alive && mixed_open);
         // 2A: SM still Connected/Connecting but Core gone → Error + Blocked (peer kept).
         let sm = tunnel_sm::state();
+        let mut firewall_err: Option<String> = None;
         if !live
             && matches!(
                 sm,
@@ -250,7 +252,9 @@ async fn session_status() -> Result<serde_json::Value, String> {
         {
             let tr = tunnel_sm::apply(tunnel_sm::Event::CoreLost);
             let params = tr.params.or_else(tunnel_sm::last_params);
-            let _ = firewall::apply(firewall::policy_from_sm(tr.to, params.as_ref()));
+            // Core died with the tunnel up: if fail-closed does not land, the box is
+            // wide open. Surfaced below so the UI can say so instead of showing Idle.
+            firewall_err = firewall::apply(firewall::policy_from_sm(tr.to, params.as_ref())).err();
             clear_dns_bootstrap_if_set();
             tray_spin::set_spinning(false);
         } else {
@@ -266,6 +270,7 @@ async fn session_status() -> Result<serde_json::Value, String> {
             "tun": st.tun,
             "system_proxy": st.system_proxy,
             "tunnel_state": tunnel_sm::state().as_str(),
+            "firewall_error": firewall_err.or_else(tunnel_sm::last_error),
         }))
     })
     .await
@@ -367,7 +372,12 @@ async fn generate_preview(
         } else {
             return Err("no selected node link/outbound for preview".into());
         };
-        Ok(generate_with_outbound(ob, MIXED_PORT, st.tun))
+        Ok(generate_with_outbound(
+            ob,
+            MIXED_PORT,
+            st.tun,
+            &st.dns_bootstrap(),
+        ))
     })
     .await
     .map_err(|e| format!("generate_preview join: {e}"))?
@@ -462,7 +472,7 @@ async fn set_tun_cmd(enabled: bool) -> Result<serde_json::Value, String> {
                     if let Some(s) = g.as_mut() {
                         let priv_now = s.is_privileged().unwrap_or(false);
                         if !priv_now {
-                            match s.recycle_privileged() {
+                            match s.recycle_privileged(&path) {
                                 Ok(()) => recycled = true,
                                 Err(e) => {
                                     let _ = Store::update(|st| {
@@ -533,14 +543,16 @@ fn connect_selected_sync(
 
     // Start uses current checkbox state, not a stale disk flag.
     // Prefer explicit UI args; persist so next cold Start matches chips.
-    let (use_tun, use_sys_proxy) = Store::update(|st| {
+    // One read: config and PF must agree on the resolver list or PF blocks the
+    // server the config just chose.
+    let (use_tun, use_sys_proxy, dns_bootstrap) = Store::update(|st| {
         if let Some(v) = tun {
             st.tun = v;
         }
         if let Some(v) = system_proxy {
             st.system_proxy = v;
         }
-        Ok((st.tun, st.system_proxy))
+        Ok((st.tun, st.system_proxy, st.dns_bootstrap()))
     })?;
     let port = MIXED_PORT;
     let pid = profile_id.unwrap_or(1);
@@ -560,7 +572,7 @@ fn connect_selected_sync(
     };
 
     // generate.cpp: tun inbound only if spmode_vpn
-    let mut cfg = generate_with_outbound(ob.clone(), port, use_tun);
+    let mut cfg = generate_with_outbound(ob.clone(), port, use_tun, &dns_bootstrap);
 
     // mac Tun: pin next free utunN into Core config + PF Connected.
     // Detection-only (172.19 / new-utun / stale core.log) left pure-Tun dead under
@@ -595,9 +607,12 @@ fn connect_selected_sync(
 
     // Tun: setuid Core before LoadConfig (upstream profile_start elevation).
     // osascript password sheet runs here if setuid copy missing — outside SESSION.
-    if use_tun {
-        CoreSession::ensure_privileged_core()?;
-    }
+    // The path is kept so the recycle below cannot re-enter elevation under the lock.
+    let privileged_core = if use_tun {
+        Some(CoreSession::ensure_privileged_core()?)
+    } else {
+        None
+    };
 
     // Firewall: helper ready → peer → Connecting before Core Start (C2 L3/L5).
     firewall::require_ready_for_connect()?;
@@ -617,6 +632,7 @@ fn connect_selected_sync(
         // Planned ifname is known before Start; Connected uses it so pass-on-utun
         // is not gated on post-Start detection races.
         tun_if: planned_tun_if.clone(),
+        dns: dns_bootstrap.clone(),
     };
     let tr = tunnel_sm::apply(tunnel_sm::Event::BeginConnect(connect_params.clone()));
     if let Err(e) = firewall::apply(firewall::policy_from_sm(tr.to, Some(&connect_params))) {
@@ -668,10 +684,10 @@ fn connect_selected_sync(
             }
         }
         let s = g.as_mut().unwrap();
-        if use_tun {
+        if let Some(bin) = privileged_core.as_deref() {
             let priv_now = s.is_privileged().unwrap_or(false);
             if !priv_now {
-                if let Err(e) = s.recycle_privileged() {
+                if let Err(e) = s.recycle_privileged(bin) {
                     return Err(fail_closed(e, &connect_params));
                 }
             }
@@ -809,7 +825,13 @@ fn connect_selected_sync(
     }
 
     // cycle2 2A: proxy/spin only if this connect gen still owns the live session.
-    let proxy_note = apply_post_start_side_effects(connect_gen, use_sys_proxy, use_tun, port);
+    let proxy_note = apply_post_start_side_effects(
+        connect_gen,
+        use_sys_proxy,
+        use_tun,
+        port,
+        &dns_bootstrap,
+    );
     // If proxy path rolled back because gen died mid-call, still report not started.
     let still = current_connect_gen() == connect_gen
         && SESSION.lock().ok().map(|g| g.is_some()).unwrap_or(false);
@@ -860,6 +882,24 @@ fn detect_tun_ifname(before: &[String]) -> Option<String> {
     }
 }
 
+/// Tear down like connect-time Connected apply fail (Blocked, not Reset).
+fn fail_closed_from_rebind(p: &tunnel_sm::ConnectParams, msg: String) {
+    let _ = SESSION.lock().ok().and_then(|mut g| {
+        if let Some(mut s) = g.take() {
+            let _ = s.stop_rpc();
+            let _ = s.stop_core_process();
+        }
+        Some(())
+    });
+    CoreSession::kill_stray_cores(None);
+    let _ = bump_connect_gen();
+    let tr = tunnel_sm::apply(tunnel_sm::Event::Fail(msg));
+    let _ = firewall::apply(firewall::policy_from_sm(tr.to, Some(p)));
+    let _ = sys::set_system_proxy(false, p.mixed_port);
+    clear_dns_bootstrap_if_set();
+    tray_spin::set_spinning(false);
+}
+
 /// Background: if planned ifname missing or Core used another utun, rebind pass-on-utun.
 fn spawn_tun_if_rebind(gen: u64, params: tunnel_sm::ConnectParams, before: Vec<String>) {
     std::thread::spawn(move || {
@@ -881,13 +921,26 @@ fn spawn_tun_if_rebind(gen: u64, params: tunnel_sm::ConnectParams, before: Vec<S
                         return;
                     }
                     tunnel_sm::update_tun_if(p.tun_if.clone());
-                    let _ = firewall::apply(firewall::policy_from_sm(
+                    if let Err(e) = firewall::apply(firewall::policy_from_sm(
                         tunnel_sm::State::Connected,
                         Some(&p),
-                    ));
+                    )) {
+                        fail_closed_from_rebind(&p, format!("firewall tun rebind: {e}"));
+                    }
                     return;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            if gen != current_connect_gen() || tunnel_sm::state() != tunnel_sm::State::Connected {
+                return;
+            }
+            let planned_live = params
+                .tun_if
+                .as_deref()
+                .map(if_exists)
+                .unwrap_or(false);
+            if !planned_live {
+                fail_closed_from_rebind(&params, "firewall tun rebind: ifname timeout".into());
             }
         }
         #[cfg(not(target_os = "macos"))]
@@ -1200,14 +1253,18 @@ fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
     let _ = bump_connect_gen();
     // L9: Blocked first so traffic cannot leak while Core/proxy tear down.
     // eng 2A: keep last peer on intermediate Blocked when present.
-    let (peer, mixed_port) = match tunnel_sm::last_params() {
-        Some(p) => (Some(p.peer), p.mixed_port),
-        None => (None, MIXED_PORT),
+    let (peer, mixed_port, dns) = match tunnel_sm::last_params() {
+        Some(p) => (Some(p.peer), p.mixed_port, p.dns),
+        None => (None, MIXED_PORT, Vec::new()),
     };
-    let _ = firewall::apply(firewall::Policy::Blocked {
+    // If this fails traffic can leak while Core tears down, and the ResetIdle below
+    // overwrites last_error — so carry it out rather than letting it vanish.
+    let blocked_err = firewall::apply(firewall::Policy::Blocked {
         peer,
         mixed_port,
-    });
+        dns,
+    })
+    .err();
     let (stop_err, running, pid) = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         if g.is_none() {
@@ -1231,10 +1288,13 @@ fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
         Err(e) => notes.push(format!("clear system proxy: {e}")),
     }
     if DNS_BOOTSTRAP_SET.swap(false, AtomicOrdering::SeqCst) {
-        match sys::set_system_dns_bootstrap(false) {
+        match sys::set_system_dns_bootstrap(false, &[]) {
             Ok(m) => notes.push(m),
             Err(e) => notes.push(format!("clear system dns: {e}")),
         }
+    }
+    if let Some(e) = &blocked_err {
+        notes.push(format!("firewall blocked: {e}"));
     }
     let proxy_note = Some(notes.join(" · "));
     tray_spin::set_spinning(false);
@@ -1247,6 +1307,7 @@ fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
         "running": running,
         "profile_id": pid,
         "proxy_note": proxy_note,
+        "firewall_error": blocked_err,
         "tunnel_state": tunnel_sm::state().as_str(),
         "firewall": firewall_status_json(),
     }))
@@ -1502,7 +1563,7 @@ fn tunnel_is_live() -> bool {
 fn confirm_disconnect_quit() -> bool {
     #[cfg(target_os = "macos")]
     {
-        let script = r#"display dialog "当前隧道仍在运行（含 Tun / 系统代理）。退出将停止 Core、关闭系统代理并拆除隧道。" with title "Nexus" buttons {"取消", "断开并退出"} default button "断开并退出" cancel button "取消" with icon caution"#;
+        let script = r#"display dialog "Tunnel still running (Tun / system proxy). Exit will stop Core, clear system proxy, and tear down the tunnel." with title "Nexus" buttons {"Cancel", "Disconnect and Quit"} default button "Disconnect and Quit" cancel button "Cancel" with icon caution"#;
         return std::process::Command::new("osascript")
             .args(["-e", script])
             .status()
@@ -1609,8 +1670,8 @@ pub fn run() {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             use tauri::Manager;
 
-            let show_i = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
-            let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let show_i = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
             let icon = app
                 .default_window_icon()
