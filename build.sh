@@ -57,12 +57,15 @@ export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
 TRIPLE="$(target_triple)"
 log "root=$ROOT triple=$TRIPLE (full dual release rebuild)"
 
-# Feature tags required in NexusCore (stubs if missing)
-# Windows Core: with_purego + with_naive_outbound (CGO off cross-build)
-# CORE_TAGS_WIN is mirrored in .github/workflows/ci.yml (cross-build Windows Core).
-CORE_TAGS_MAC="${NEXUS_CORE_TAGS:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,badlinkname,tfogo_checklinkname0}"
-CORE_TAGS_WIN="${NEXUS_CORE_TAGS_WIN:-with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,with_purego,badlinkname,tfogo_checklinkname0}"
-CORE_REQUIRED_TAGS=(with_clash_api with_gvisor with_quic with_wireguard with_utls with_dhcp with_tailscale with_naive_outbound badlinkname tfogo_checklinkname0)
+# Feature tags required in NexusCore (stubs if missing). One list — MAC/WIN/REQUIRED
+# used to be three hand-synced copies, so adding a tag in two of three went unnoticed
+# (a missed CORE_REQUIRED_TAGS entry silently drops it from verify_core_binary).
+# Windows adds with_purego: CGO-off cross-build.
+# Mirrored in .github/workflows/ci.yml (cross-build Windows Core) — keep in sync.
+CORE_TAGS_BASE="with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,badlinkname,tfogo_checklinkname0"
+CORE_TAGS_MAC="${NEXUS_CORE_TAGS:-$CORE_TAGS_BASE}"
+CORE_TAGS_WIN="${NEXUS_CORE_TAGS_WIN:-$CORE_TAGS_BASE,with_purego}"
+IFS=',' read -ra CORE_REQUIRED_TAGS <<< "$CORE_TAGS_BASE"
 mkdir -p "$BIN_DIR" "$BINARIES_DIR" "$WIN_DIST"
 
 verify_core_binary() {

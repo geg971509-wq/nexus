@@ -7,13 +7,18 @@ on:
 
 jobs:
   ui:
-    name: UI (i18n)
+    name: UI (i18n + syntax)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       # t() falls back to zh-CN, so a missing translation ships as Chinese text
       # in the English UI without any error. ubuntu runners have ruby preinstalled.
       - run: bash script/check-i18n.sh
+      # Nothing else parses the hand-edited UI scripts; a syntax error there is a
+      # blank window at launch. package.json is type:module, so node parses these
+      # stricter than the browser's classic-script load — that also catches a
+      # duplicate top-level declaration silently shadowing the earlier one.
+      - run: node --check app/ui/app.js && node --check app/ui/i18n.js
 
   core:
     name: Core (Go)

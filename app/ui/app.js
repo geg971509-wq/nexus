@@ -3162,11 +3162,6 @@
     const p = (x) => String(x).padStart(2, '0');
     return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   }
-  function escHtml(s) {
-    return String(s ?? '').replace(/[&<>"']/g, c => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
-  }
   /** Stable row key: Core connection id; composite fallback if id missing. */
   function connRowKey(c) {
     const id = String(c?.id ?? '').trim();
