@@ -14,7 +14,12 @@ type Lock struct {
 }
 
 func Acquire(name string) (*Lock, error) {
-	file, err := os.OpenFile(name+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	// 0666, not 0600: the same path is opened both by a root Core (setuid, Tun on)
+	// and by an ordinary-user Core (Tun off), and the lock file outlives either.
+	// At 0600 a leftover root-owned file made the next user-owned Core fail with
+	// EACCES once a PID was reused. The containing directory is the user's own
+	// 0700 temp dir, so the wider mode grants nothing across users.
+	file, err := os.OpenFile(name+".lock", os.O_CREATE|os.O_RDWR, 0o666)
 	if err != nil {
 		return nil, fmt.Errorf("open core lock: %w", err)
 	}

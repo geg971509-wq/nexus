@@ -27,6 +27,13 @@ impl Drop for CoreSession {
         #[cfg(unix)]
         {
             let _ = std::fs::remove_file(&self.listener_path);
+            // Core's corelock never unlinks its own file, so these accumulated one
+            // per run. Safe here: stop_core_process already ran, so nothing holds
+            // the flock. An abnormal exit still leaves one behind — that is what
+            // the lock file's wider mode covers.
+            let mut lock = self.listener_path.clone().into_os_string();
+            lock.push(".lock");
+            let _ = std::fs::remove_file(std::path::PathBuf::from(lock));
         }
     }
 }
@@ -36,8 +43,16 @@ impl CoreSession {
     pub fn socket_path() -> PathBuf {
         #[cfg(unix)]
         {
+            use std::os::unix::fs::PermissionsExt;
             let dir = std::env::temp_dir().join("nexus");
             let _ = std::fs::create_dir_all(&dir);
+            // 0700 explicitly. create_dir_all leaves 0755, and Core's peer check
+            // documents this directory as the primary control with its own pid
+            // check as defence in depth. On macOS $TMPDIR is per-user 0700 so the
+            // property held by accident; on any other unix /tmp is world-listable
+            // and it did not. This also closes the bind-then-chmod window on the
+            // socket itself: nobody else can reach the path to begin with.
+            let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
             return dir.join(format!("nexus-core-{}.sock", std::process::id()));
         }
         #[cfg(windows)]
@@ -145,21 +160,32 @@ impl CoreSession {
         crate::paths::ensure_data_dir()
     }
 
+    /// Executable names a real Core can have: the bundled sidecar and the setuid
+    /// copy installed under /Library/PrivilegedHelperTools.
+    #[cfg(unix)]
+    const CORE_EXEC_NAMES: [&'static str; 2] = ["NexusCore", "app.nexus.NexusCore"];
+
+    /// PIDs whose executable *is* a Core.
+    ///
+    /// Not `pgrep -f NexusCore`: that matches the whole command line, so
+    /// `tail -f bin/NexusCore.log`, an editor holding a Core source file, or the
+    /// `go build -o bin/NexusCore` inside build.sh all matched — and this runs on
+    /// every connect and disconnect, so they got SIGTERM and then SIGKILL.
+    /// `ps -o comm=` gives the executable path; compare its basename exactly.
+    #[cfg(unix)]
+    fn core_pids() -> Vec<u32> {
+        let Ok(out) = Command::new("/bin/ps").args(["-axo", "pid=,comm="]).output() else {
+            return Vec::new();
+        };
+        parse_core_pids(&String::from_utf8_lossy(&out.stdout))
+    }
+
     /// Kill every other NexusCore before we spawn (keep `except` = our child).
     pub fn kill_stray_cores(except: Option<u32>) {
         #[cfg(unix)]
         {
-            let Ok(out) = Command::new("/usr/bin/pgrep").args(["-f", "NexusCore"]).output() else {
-                return;
-            };
-            if !out.status.success() && out.stdout.is_empty() {
-                return;
-            }
             let me = std::process::id();
-            for tok in String::from_utf8_lossy(&out.stdout).split_whitespace() {
-                let Ok(pid) = tok.parse::<u32>() else {
-                    continue;
-                };
+            for pid in Self::core_pids() {
                 if pid == me || except == Some(pid) {
                     continue;
                 }
@@ -170,14 +196,8 @@ impl CoreSession {
             // Poll exit instead of fixed 250ms; only KILL survivors.
             let deadline = Instant::now() + Duration::from_millis(400);
             loop {
-                let Ok(out2) = Command::new("/usr/bin/pgrep").args(["-f", "NexusCore"]).output() else {
-                    return;
-                };
                 let mut survivors = false;
-                for tok in String::from_utf8_lossy(&out2.stdout).split_whitespace() {
-                    let Ok(pid) = tok.parse::<u32>() else {
-                        continue;
-                    };
+                for pid in Self::core_pids() {
                     if pid == me || except == Some(pid) {
                         continue;
                     }
@@ -489,17 +509,11 @@ impl CoreSession {
     pub fn core_process_alive() -> bool {
         #[cfg(unix)]
         {
-            let Ok(out) = Command::new("/usr/bin/pgrep").args(["-f", "NexusCore"]).output() else {
-                return false;
-            };
-            if out.stdout.is_empty() {
-                return false;
-            }
+            // Same executable-name match as kill_stray_cores. A command line that
+            // merely mentions NexusCore used to read as a live Core here, which
+            // made session_status report an orphan Core that never existed.
             let me = std::process::id();
-            return String::from_utf8_lossy(&out.stdout)
-                .split_whitespace()
-                .filter_map(|t| t.parse::<u32>().ok())
-                .any(|pid| pid != me);
+            return Self::core_pids().into_iter().any(|pid| pid != me);
         }
         #[cfg(windows)]
         {
@@ -527,3 +541,68 @@ impl CoreSession {
 
 /// Process-wide optional session for Tauri commands.
 pub static SESSION: Mutex<Option<CoreSession>> = Mutex::new(None);
+
+/// Pick out PIDs whose executable basename is a Core, from `ps -axo pid=,comm=`.
+///
+/// Split from the spawn so the matching can be exercised against real `ps` text:
+/// this is the guard that stops a command line merely *mentioning* NexusCore from
+/// being SIGKILLed.
+#[cfg(unix)]
+fn parse_core_pids(ps_output: &str) -> Vec<u32> {
+    let mut pids = Vec::new();
+    for line in ps_output.lines() {
+        let line = line.trim_start();
+        let Some((pid_s, comm)) = line.split_once(char::is_whitespace) else {
+            continue;
+        };
+        let Ok(pid) = pid_s.trim().parse::<u32>() else {
+            continue;
+        };
+        let name = comm.trim().rsplit('/').next().unwrap_or("");
+        if CoreSession::CORE_EXEC_NAMES.contains(&name) {
+            pids.push(pid);
+        }
+    }
+    pids
+}
+
+#[cfg(all(test, unix))]
+mod stray_tests {
+    use super::*;
+
+    /// Verbatim shape of `ps -axo pid=,comm=` on macOS, including the setuid copy
+    /// under its own name and the decoys that `pgrep -f NexusCore` used to hit.
+    const PS: &str = "\
+  1 /sbin/launchd
+ 5948 /Library/PrivilegedHelperTools/app.nexus.NexusCore
+ 6001 /Volumes/work/bin/NexusCore
+ 5103 /usr/bin/tail
+ 7000 /usr/local/go/bin/go
+ 7100 /Applications/Nexus.app/Contents/MacOS/nexus
+ 7200 /usr/bin/NexusCoreHelper
+";
+
+    #[test]
+    fn matches_both_core_names_only() {
+        let pids = parse_core_pids(PS);
+        assert_eq!(pids, vec![5948, 6001], "{pids:?}");
+    }
+
+    /// The whole point: `tail -f bin/NexusCore.log` and `go build -o bin/NexusCore`
+    /// carry the string on their command line but are not Cores. comm holds the
+    /// executable, so they never appear — and neither does a longer name that
+    /// merely starts with ours.
+    #[test]
+    fn decoys_and_prefix_names_are_not_cores() {
+        let pids = parse_core_pids(PS);
+        for not_core in [5103u32, 7000, 7100, 7200] {
+            assert!(!pids.contains(&not_core), "{not_core} matched: {pids:?}");
+        }
+    }
+
+    #[test]
+    fn junk_lines_are_skipped() {
+        assert!(parse_core_pids("").is_empty());
+        assert!(parse_core_pids("garbage\nno-pid /bin/NexusCore\n").is_empty());
+    }
+}

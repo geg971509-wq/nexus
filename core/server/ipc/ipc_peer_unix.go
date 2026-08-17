@@ -9,9 +9,10 @@ import (
 )
 
 // VerifyPeerIsParent fails when the IPC server we connected to is not the
-// process that spawned this core. The socket lives in a 0700 dir, so this is
-// defense in depth: it closes the window where a stale or hijacked socket path
-// points at another local process that would then drive privileged Start/Stop.
+// process that spawned this core. The shell creates the socket 0600 inside a
+// directory it chmods to 0700, so this is defense in depth: it closes the window
+// where a stale or hijacked socket path points at another local process that
+// would then drive privileged Start/Stop.
 func VerifyPeerIsParent(conn net.Conn) error {
 	uc, ok := conn.(*net.UnixConn)
 	if !ok {
