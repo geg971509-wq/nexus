@@ -18,25 +18,36 @@ pub struct ClashNode {
 
 /// Throne `RawUpdater::updateClash`: deserialize YAML, take `proxies`, map each.
 /// Returns Err only on whole-document YAML failure; per-proxy errors are skipped.
-pub fn parse_clash_yaml(body: &str) -> Result<Vec<ClashNode>, String> {
+/// Returns `(nodes, skipped_types)` — see [`crate::data::share_link::parse_share_body`]
+/// for why the skipped half is reported rather than folded into a smaller count.
+pub fn parse_clash_yaml(body: &str) -> Result<(Vec<ClashNode>, Vec<String>), String> {
     let root: Value = serde_yaml::from_str(body).map_err(|e| format!("Clash YAML parse error: {e}"))?;
     let Some(proxies) = root.get("proxies").and_then(|v| v.as_array()) else {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     };
     let mut out = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
+    let mut note = |label: String| {
+        if !skipped.contains(&label) {
+            skipped.push(label);
+        }
+    };
     for p in proxies {
         if out.len() >= 5000 {
             break;
         }
+        // See share_link: Xray-only VLESS parses but cannot run on sing-box.
+        if s(p, "type") == "vless" && crate::data::xray::needs_xray_clash(p) {
+            note(crate::data::xray::XRAY_VLESS_LABEL.to_string());
+            continue;
+        }
         match proxy_to_node(p) {
             Ok(Some(n)) => out.push(n),
-            Ok(None) => {}
-            Err(_) => {
-                // Throne: per-proxy isolation — skip malformed, continue
-            }
+            // Throne: per-proxy isolation — skip malformed, continue
+            Ok(None) | Err(_) => note(crate::data::skipped_label(&s(p, "type"))),
         }
     }
-    Ok(out)
+    Ok((out, skipped))
 }
 
 fn proxy_to_node(p: &Value) -> Result<Option<ClashNode>, String> {
@@ -867,7 +878,7 @@ rules:
 
     #[test]
     fn parse_nested_opts_and_skip_groups() {
-        let nodes = parse_clash_yaml(SAMPLE).expect("yaml");
+        let (nodes, _skipped) = parse_clash_yaml(SAMPLE).expect("yaml");
         assert_eq!(nodes.len(), 5, "proxy-groups/rules must not become nodes");
 
         let v = &nodes[0];
@@ -906,7 +917,7 @@ rules:
 
     #[test]
     fn empty_proxies_ok() {
-        let nodes = parse_clash_yaml("port: 7890\nproxies: []\n").unwrap();
+        let (nodes, _skipped) = parse_clash_yaml("port: 7890\nproxies: []\n").unwrap();
         assert!(nodes.is_empty());
     }
 }

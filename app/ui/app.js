@@ -1777,10 +1777,19 @@
     if (/^<!DOCTYPE\s+html/i.test(text) || /^<html[\s>]/i.test(text)) return [];
     const inv = window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke;
     const hasRust = typeof inv === 'function';
+    /** Say which protocols were dropped. "Imported 0 nodes" alone cannot tell an
+     *  empty subscription apart from one we have no parser for. */
+    const noteSkipped = (res) => {
+      const list = res?.skipped;
+      if (Array.isArray(list) && list.length) {
+        log('SYS', 'warn', t('log.importSkipped', { list: list.join(', ') }));
+      }
+    };
     // Prefer Rust share parse whenever invoke exists (not only when line looks like URI).
     if (hasRust) {
       try {
         const res = await inv('sub_parse_share', { body: text });
+        noteSkipped(res);
         if (res && res.ok && Array.isArray(res.nodes) && res.nodes.length) {
           return res.nodes.map(nodeFromRustSub).filter(Boolean);
         }
@@ -1795,6 +1804,7 @@
       if (hasRust) {
         try {
           const res = await inv('sub_parse_share', { body: decoded });
+          noteSkipped(res);
           if (res && res.ok && Array.isArray(res.nodes) && res.nodes.length) {
             return res.nodes.map(nodeFromRustSub).filter(Boolean);
           }
@@ -1820,6 +1830,7 @@
       if (typeof inv === 'function') {
         try {
           const res = await inv('sub_parse_clash', { body: text });
+          noteSkipped(res);
           if (res && res.ok && Array.isArray(res.nodes) && res.nodes.length) {
             return res.nodes.map(nodeFromRustSub).filter(Boolean);
           }

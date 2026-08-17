@@ -17,8 +17,17 @@ pub struct ShareNode {
 
 /// Parse a free-list / share-URI body into catalog nodes with full outbound JSON.
 /// Per-line isolation: bad lines are skipped. Cap 5000 like Clash path.
-pub fn parse_share_body(body: &str) -> Vec<ShareNode> {
+/// Returns `(nodes, skipped_schemes)`. The second half exists because "imported 0
+/// nodes" alone cannot tell an empty subscription apart from one full of a
+/// protocol we do not parse — the user has no way to report the difference.
+pub fn parse_share_body(body: &str) -> (Vec<ShareNode>, Vec<String>) {
     let mut out = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
+    let mut note = |label: String| {
+        if !skipped.contains(&label) {
+            skipped.push(label);
+        }
+    };
     for line in body.lines() {
         if out.len() >= 5000 {
             break;
@@ -31,16 +40,25 @@ pub fn parse_share_body(body: &str) -> Vec<ShareNode> {
         if (line.starts_with("http://") || line.starts_with("https://")) && !line.contains('@') {
             continue;
         }
+        // Xray-only VLESS would parse fine and then fail at connect, because
+        // sing-box cannot carry it and the shell has no Xray config generator.
+        // Turn it away by name instead.
+        if line.to_ascii_lowercase().starts_with("vless://")
+            && crate::data::xray::needs_xray_link(line)
+        {
+            note(crate::data::xray::XRAY_VLESS_LABEL.to_string());
+            continue;
+        }
         match parse_to_outbound(line) {
-            Ok(outbound) => {
-                if let Some(n) = share_node_from_outbound(line, &outbound, out.len()) {
-                    out.push(n);
-                }
-            }
-            Err(_) => continue,
+            Ok(outbound) => match share_node_from_outbound(line, &outbound, out.len()) {
+                Some(n) => out.push(n),
+                // Parsed, but no usable server/port — still a dropped entry.
+                None => note(crate::data::scheme_of(line)),
+            },
+            Err(_) => note(crate::data::scheme_of(line)),
         }
     }
-    out
+    (out, skipped)
 }
 
 fn share_node_from_outbound(link: &str, outbound: &Value, idx: usize) -> Option<ShareNode> {
@@ -80,7 +98,8 @@ fn share_node_from_outbound(link: &str, outbound: &Value, idx: usize) -> Option<
         }
         "anytls" => "AnyTLS",
         "tuic" => "TUIC",
-        "hysteria2" | "hysteria" => "Hysteria2",
+        "hysteria2" => "Hysteria2",
+        "hysteria" => "Hysteria",
         other => other,
     }
     .to_string();
@@ -164,6 +183,10 @@ pub fn parse_to_outbound(input: &str) -> Result<Value, String> {
         parse_anytls(s)
     } else if lower.starts_with("tuic://") {
         parse_tuic(s)
+    } else if lower.starts_with("hysteria2://") || lower.starts_with("hy2://") {
+        parse_hysteria(s, 2)
+    } else if lower.starts_with("hysteria://") {
+        parse_hysteria(s, 1)
     } else if lower.starts_with("http://") || lower.starts_with("https://") {
         // only treat as http proxy if looks like user@host:port (not a subscription URL)
         if s.contains('@') {
@@ -682,6 +705,93 @@ fn parse_tuic(link: &str) -> Result<Value, String> {
     Ok(Value::Object(o))
 }
 
+/// `hysteria::ParseFromLink`. `ver` 1 = `hysteria://`, 2 = `hysteria2://` / `hy2://`.
+/// The Clash path already produced these outbounds; only the URI form was missing,
+/// so a hysteria2 node imported from a YAML sub but vanished from a share list.
+fn parse_hysteria(link: &str, ver: u8) -> Result<Value, String> {
+    let u = UrlParts::parse(link)?;
+    if u.host.is_empty() {
+        return Err("hysteria: need host".into());
+    }
+    let ty = if ver == 1 { "hysteria" } else { "hysteria2" };
+    let mut o = Map::new();
+    o.insert("type".into(), json!(ty));
+    o.insert("tag".into(), json!("proxy"));
+    o.insert("server".into(), json!(u.host));
+    // Upstream falls back to the TLS port; hysteria is always TLS.
+    o.insert(
+        "server_port".into(),
+        json!(if u.port == 0 { 443 } else { u.port }),
+    );
+
+    let q = &u.query;
+    if ver == 1 {
+        if let Some(auth) = q.get("auth").filter(|s| !s.is_empty()) {
+            o.insert("auth_str".into(), json!(auth));
+        }
+        if let Some(obfs) = q.get("obfsParam").filter(|s| !s.is_empty()) {
+            o.insert("obfs".into(), json!(obfs));
+        }
+        for (key, out) in [
+            ("recv_window_conn", "recv_window_conn"),
+            ("recv_window", "recv_window"),
+        ] {
+            if let Some(n) = q.get(key).and_then(|v| v.parse::<u64>().ok()).filter(|n| *n > 0) {
+                o.insert(out.into(), json!(n));
+            }
+        }
+        if q.get("disable_mtu_discovery").map(|v| v == "1" || v == "true") == Some(true) {
+            o.insert("disable_mtu_discovery".into(), json!(true));
+        }
+    } else {
+        // userinfo is the password; `user:pass` keeps both halves (upstream).
+        let password = if u.password.is_empty() {
+            u.user.clone()
+        } else {
+            format!("{}:{}", u.user, u.password)
+        };
+        if !password.is_empty() {
+            o.insert("password".into(), json!(password));
+        }
+        if let Some(pw) = q.get("obfs-password").filter(|s| !s.is_empty()) {
+            o.insert(
+                "obfs".into(),
+                json!({ "type": "salamander", "password": pw }),
+            );
+        }
+    }
+
+    for (key, out) in [("upmbps", "up_mbps"), ("downmbps", "down_mbps")] {
+        if let Some(n) = q.get(key).and_then(|v| v.parse::<u64>().ok()).filter(|n| *n > 0) {
+            o.insert(out.into(), json!(n));
+        }
+    }
+    // Port hopping: `mport=1000,2000-3000` becomes sing-box `server_ports`.
+    if let Some(mport) = q.get("mport").filter(|s| !s.is_empty()) {
+        let ports: Vec<Value> = mport
+            .split(|c: char| c == ',' || c == '/')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| json!(s))
+            .collect();
+        if !ports.is_empty() {
+            o.insert("server_ports".into(), Value::Array(ports));
+        }
+    }
+    if let Some(hop) = q.get("hop_interval").filter(|s| !s.is_empty()) {
+        o.insert("hop_interval".into(), json!(hop));
+    }
+
+    // Always TLS, whether or not the link says security=tls.
+    let mut tls = match tls_from_query(q, true) {
+        Some(Value::Object(m)) => m,
+        _ => Map::new(),
+    };
+    tls.insert("enabled".into(), json!(true));
+    o.insert("tls".into(), Value::Object(tls));
+    Ok(Value::Object(o))
+}
+
 fn tls_from_query(q: &HashMap<String, String>, default_enable_if_security: bool) -> Option<Value> {
     // TLS::ParseFromLink keys: security=tls|reality, sni, alpn, fp, pbk, sid, spx, insecure
     let security = q
@@ -966,7 +1076,7 @@ mod tests {
             "trojan://secretpass@9.9.9.9:443",
             "?security=tls&sni=trojan.example.com&type=ws&host=trojan.example.com&path=%2Ftrojan#TrojanWs\n",
         );
-        let nodes = parse_share_body(body);
+        let (nodes, _skipped) = parse_share_body(body);
         assert_eq!(nodes.len(), 3);
         let r = &nodes[0];
         assert_eq!(r.name, "RealityNode");
@@ -1117,6 +1227,69 @@ mod tests {
         assert_eq!(o["congestion_control"], "bbr");
         assert_eq!(o["tls"]["enabled"], true);
         assert_eq!(o["tls"]["alpn"][0], "h3");
+    }
+
+    #[test]
+    fn hysteria2_and_hy2_alias() {
+        for link in [
+            "hysteria2://pw123@hy.example.com:8443?obfs-password=sala&upmbps=50&downmbps=200&sni=cdn.example#hk",
+            "hy2://pw123@hy.example.com:8443?obfs-password=sala&upmbps=50&downmbps=200&sni=cdn.example#hk",
+        ] {
+            let o = parse_to_outbound(link).unwrap();
+            assert_eq!(o["type"], "hysteria2", "{link}");
+            assert_eq!(o["password"], "pw123");
+            assert_eq!(o["server"], "hy.example.com");
+            assert_eq!(o["server_port"], 8443);
+            assert_eq!(o["obfs"]["type"], "salamander");
+            assert_eq!(o["obfs"]["password"], "sala");
+            assert_eq!(o["up_mbps"], 50);
+            assert_eq!(o["down_mbps"], 200);
+            // hysteria is always TLS even when the link never says security=tls.
+            assert_eq!(o["tls"]["enabled"], true);
+            assert_eq!(o["tls"]["server_name"], "cdn.example");
+        }
+    }
+
+    /// v1 is a different outbound type with different keys — not an alias of v2.
+    #[test]
+    fn hysteria_v1_keys_and_port_hopping() {
+        let o = parse_to_outbound(
+            "hysteria://hy1.example.com:443?auth=secret&obfsParam=xyz&mport=1000,2000-3000&upmbps=10#v1",
+        )
+        .unwrap();
+        assert_eq!(o["type"], "hysteria");
+        assert_eq!(o["auth_str"], "secret");
+        assert_eq!(o["obfs"], "xyz");
+        assert_eq!(o["server_ports"][0], "1000");
+        assert_eq!(o["server_ports"][1], "2000-3000");
+        assert_eq!(o["up_mbps"], 10);
+        assert!(o.get("password").is_none(), "v1 has no password field");
+    }
+
+    /// The whole point of the gap: these lines used to be dropped on the floor.
+    #[test]
+    fn share_body_keeps_hysteria_nodes() {
+        let body = "hysteria2://pw@a.example.com:443#one\nvless://11111111-1111-1111-1111-111111111111@b.example.com:443?encryption=none#two\n";
+        let (nodes, skipped) = parse_share_body(body);
+        assert_eq!(nodes.len(), 2, "{nodes:?}");
+        assert_eq!(nodes[0].type_label, "Hysteria2");
+        assert_eq!(nodes[0].name, "one");
+        assert!(skipped.is_empty(), "{skipped:?}");
+    }
+
+    /// Dropped entries must be named. An Xray-only VLESS parses fine on this path,
+    /// so without the explicit check it would import and then fail at connect.
+    #[test]
+    fn skipped_entries_are_named_including_xray_vless() {
+        let body = concat!(
+            "vless://11111111-1111-1111-1111-111111111111@a.example.com:443?type=xhttp#x\n",
+            "juicity://pw@b.example.com:443#j\n",
+            "vless://11111111-1111-1111-1111-111111111111@c.example.com:443?encryption=none#ok\n",
+        );
+        let (nodes, skipped) = parse_share_body(body);
+        assert_eq!(nodes.len(), 1, "only the plain vless survives: {nodes:?}");
+        assert!(skipped.contains(&"vless-xray".to_string()), "{skipped:?}");
+        assert!(skipped.contains(&"juicity".to_string()), "{skipped:?}");
     }
 }
 

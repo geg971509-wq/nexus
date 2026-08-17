@@ -1164,7 +1164,7 @@ async fn sub_fetch(url: String) -> Result<serde_json::Value, String> {
 #[tauri::command]
 async fn sub_parse_clash(body: String) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let nodes = data::clash::parse_clash_yaml(&body)?;
+        let (nodes, skipped) = data::clash::parse_clash_yaml(&body)?;
         let arr: Vec<serde_json::Value> = nodes
             .into_iter()
             .map(|n| {
@@ -1178,7 +1178,7 @@ async fn sub_parse_clash(body: String) -> Result<serde_json::Value, String> {
                 })
             })
             .collect();
-        Ok(serde_json::json!({ "ok": true, "nodes": arr, "count": arr.len() }))
+        Ok(serde_json::json!({ "ok": true, "nodes": arr, "count": arr.len(), "skipped": skipped }))
     })
     .await
     .map_err(|e| format!("sub_parse_clash join: {e}"))?
@@ -1188,7 +1188,7 @@ async fn sub_parse_clash(body: String) -> Result<serde_json::Value, String> {
 #[tauri::command]
 async fn sub_parse_share(body: String) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let nodes = data::share_link::parse_share_body(&body);
+        let (nodes, skipped) = data::share_link::parse_share_body(&body);
         let arr: Vec<serde_json::Value> = nodes
             .into_iter()
             .map(|n| {
@@ -1203,7 +1203,7 @@ async fn sub_parse_share(body: String) -> Result<serde_json::Value, String> {
                 })
             })
             .collect();
-        Ok(serde_json::json!({ "ok": true, "nodes": arr, "count": arr.len() }))
+        Ok(serde_json::json!({ "ok": true, "nodes": arr, "count": arr.len(), "skipped": skipped }))
     })
     .await
     .map_err(|e| format!("sub_parse_share join: {e}"))?
