@@ -48,7 +48,9 @@ fn app_identity() -> serde_json::Value {
 /// Only reinstalls when `gen` is still current and the slot is empty.
 /// Returns true when the session was reinstalled under this gen.
 fn put_session_back(mut session: CoreSession, gen: u64) -> bool {
-    if session.child_exited() {
+    // A desynced IPC stream is as dead as an exited child: reinstalling it means
+    // every later call misparses. Drop it so the next connect spawns a fresh Core.
+    if session.child_exited() || session.client_broken() {
         let _ = session.stop_core_process();
         return false;
     }
@@ -182,7 +184,7 @@ mod qr_tests {
 
 /// Reinstall a short-poll session only if gen still current and slot empty.
 fn reinstall_poll_session(mut session: CoreSession, gen: u64) {
-    if gen == 0 || gen != current_connect_gen() {
+    if gen == 0 || gen != current_connect_gen() || session.client_broken() {
         let _ = session.stop_core_process();
         return;
     }

@@ -3,8 +3,6 @@
 #[cfg(target_os = "macos")]
 use std::process::{Command, Stdio};
 #[cfg(target_os = "macos")]
-use std::sync::OnceLock;
-#[cfg(target_os = "macos")]
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "macos")]
@@ -104,25 +102,26 @@ fn is_secondary_service(name: &str) -> bool {
         || n.contains("virtual")
 }
 
+/// Listed fresh on every call, not cached for the process lifetime: a dock or
+/// USB NIC attached after launch would otherwise never receive the proxy, and
+/// traffic over it would leave unproxied. This runs only on connect/disconnect,
+/// so one `networksetup` listing is not on any hot path.
 #[cfg(target_os = "macos")]
-fn ordered_services() -> &'static Vec<String> {
-    static CACHE: OnceLock<Vec<String>> = OnceLock::new();
-    CACHE.get_or_init(|| {
-        let mut svcs = list_network_services();
-        svcs.sort_by_key(|s| {
-            let l = s.to_ascii_lowercase();
-            if l == "wi-fi" || l == "wifi" {
-                0u8
-            } else if l.contains("ethernet") || l.contains("usb") || l.starts_with("ax") {
-                1
-            } else if is_secondary_service(s) {
-                3
-            } else {
-                2
-            }
-        });
-        svcs
-    })
+fn ordered_services() -> Vec<String> {
+    let mut svcs = list_network_services();
+    svcs.sort_by_key(|s| {
+        let l = s.to_ascii_lowercase();
+        if l == "wi-fi" || l == "wifi" {
+            0u8
+        } else if l.contains("ethernet") || l.contains("usb") || l.starts_with("ax") {
+            1
+        } else if is_secondary_service(s) {
+            3
+        } else {
+            2
+        }
+    });
+    svcs
 }
 
 #[cfg(target_os = "macos")]
@@ -149,7 +148,7 @@ fn apply_one(service: &str, enabled: bool, host: &str, port_s: &str) -> Result<(
 
 #[cfg(target_os = "macos")]
 fn hot_services(enabled: bool) -> Vec<String> {
-    let services = ordered_services().clone();
+    let services = ordered_services();
     if enabled {
         let real: Vec<String> = services
             .iter()
@@ -180,16 +179,28 @@ pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
     let rest: Vec<String> = hot.into_iter().skip(1).collect();
     let rest_n = rest.len();
     if rest_n > 0 {
-        let host = host.to_string();
-        let port_s = port_s.clone();
-        std::thread::Builder::new()
-            .name("nexus-sysproxy".into())
-            .spawn(move || {
-                for s in rest {
-                    let _ = apply_one(&s, enabled, &host, &port_s);
-                }
-            })
-            .ok();
+        if enabled {
+            // Enabling late only costs latency, so the secondary services can
+            // finish behind the connect.
+            let host = host.to_string();
+            let port_s = port_s.clone();
+            std::thread::Builder::new()
+                .name("nexus-sysproxy".into())
+                .spawn(move || {
+                    for s in rest {
+                        let _ = apply_one(&s, enabled, &host, &port_s);
+                    }
+                })
+                .ok();
+        } else {
+            // Disabling must not be: quit calls this and then exits, killing a
+            // detached thread mid-clear and leaving those services pointed at a
+            // dead 127.0.0.1:port — that interface simply stops working until the
+            // user fixes it by hand.
+            for s in &rest {
+                let _ = apply_one(s, enabled, host, &port_s);
+            }
+        }
     }
 
     if enabled {

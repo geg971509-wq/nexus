@@ -480,6 +480,12 @@ impl CoreSession {
         }
     }
 
+    /// The IPC stream lost its frame boundary. Core may well still be healthy,
+    /// but this connection can only misparse now, so the session has to go.
+    pub fn client_broken(&self) -> bool {
+        self.client.as_ref().is_some_and(|c| c.is_broken())
+    }
+
     pub fn core_process_alive() -> bool {
         #[cfg(unix)]
         {
