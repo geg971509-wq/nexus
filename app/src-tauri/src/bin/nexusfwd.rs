@@ -55,14 +55,35 @@ fn run() -> Result<(), String> {
             Ok(stream) => {
                 std::thread::spawn(move || {
                     if let Err(e) = handle_client(stream) {
-                        eprintln!("client: {e}");
+                        eprintln!("client: {}", clamp_log(&e));
                     }
                 });
             }
-            Err(e) => eprintln!("accept: {e}"),
+            Err(e) => eprintln!("accept: {}", clamp_log(&e.to_string())),
         }
     }
     Ok(())
+}
+
+/// Cap on any one line reaching this process's stderr.
+///
+/// launchd points that at /var/log/nexusfwd.log and never rotates it, so every
+/// byte written here is unbounded growth on the root filesystem, driven by
+/// whoever is connecting. Bounding at the sink means no future log line can
+/// reopen that hole by accident.
+#[cfg(target_os = "macos")]
+fn clamp_log(msg: &str) -> String {
+    const MAX: usize = 200;
+    let one_line: String = msg
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .take(MAX)
+        .collect();
+    if msg.chars().count() > MAX {
+        format!("{one_line}… (+{} chars)", msg.chars().count() - MAX)
+    } else {
+        one_line
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -172,8 +193,12 @@ fn handle_client(stream: std::os::unix::net::UnixStream) -> Result<(), String> {
         return Ok(());
     }
 
-    let req: wire::Request =
-        serde_json::from_str(line).map_err(|e| format!("bad json: {e}: {line}"))?;
+    // Never echo the request. It carries peer IPs, the resolver list and the tun
+    // ifname, and the sink is a world-readable root-owned file that nothing
+    // rotates — so echoing let any allowed caller write 64 KiB per connection
+    // into it. The parse error and a length are what a bug report actually needs.
+    let req: wire::Request = serde_json::from_str(line)
+        .map_err(|e| format!("bad json ({e}) in {} byte request", line.len()))?;
     let resp = match req {
         wire::Request::Ping | wire::Request::Status => wire::Response {
             ok: true,
@@ -255,5 +280,34 @@ mod tests {
         let mut under = vec![b'a'; MAX_REQUEST_BYTES as usize - 2];
         under.push(b'\n');
         assert!(read_request_line(&under[..]).is_ok());
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod log_tests {
+    use super::*;
+
+    /// launchd never rotates this file, so a caller must not be able to choose how
+    /// many bytes land in it.
+    #[test]
+    fn long_input_is_clamped_and_counted() {
+        let huge = "x".repeat(64 * 1024);
+        let out = clamp_log(&huge);
+        assert!(out.chars().count() < 260, "len {}", out.chars().count());
+        assert!(out.contains("+65336 chars"), "{out}");
+    }
+
+    #[test]
+    fn short_input_is_passed_through() {
+        assert_eq!(clamp_log("denied uid 501"), "denied uid 501");
+    }
+
+    /// Newlines would let a caller forge extra log lines; control bytes are
+    /// flattened to spaces rather than reaching the file.
+    #[test]
+    fn control_characters_cannot_forge_lines() {
+        let out = clamp_log("a\nnexusfwd listening on /tmp/evil\r\tb");
+        assert!(!out.contains('\n') && !out.contains('\r') && !out.contains('\t'), "{out}");
+        assert_eq!(out, "a nexusfwd listening on /tmp/evil  b");
     }
 }

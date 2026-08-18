@@ -13,6 +13,10 @@ const SOCK: &str = "/var/run/nexusfwd.sock";
 const PLIST_LABEL: &str = "app.nexus.firewall";
 const PLIST_PATH: &str = "/Library/LaunchDaemons/app.nexus.firewall.plist";
 const HELPER_PATH: &str = "/Library/PrivilegedHelperTools/app.nexus.NexusFwD";
+/// launchd stdout/stderr sink for the daemon. Pre-created 0600 at install because
+/// launchd would otherwise make it 0644, and it only ever appends to an existing
+/// file — so creating it ourselves is the one chance to set the mode.
+const LOG_PATH: &str = "/var/log/nexusfwd.log";
 
 pub fn apply_policy(policy: &Policy) -> Result<(), String> {
     ensure_helper_ready()?;
@@ -90,6 +94,7 @@ pub fn install_helper(src_bin: &Path) -> Result<(), String> {
          /bin/cp -f {q_src} {q_dest} && /usr/sbin/chown root:wheel {q_dest} && /bin/chmod 755 {q_dest} && \
          /bin/cp -f {q_plist_src} {q_plist} && /usr/sbin/chown root:wheel {q_plist} && /bin/chmod 644 {q_plist} && \
          /bin/cp -f {q_allow_src} /var/run/nexusfwd.allow && /usr/sbin/chown root:wheel /var/run/nexusfwd.allow && /bin/chmod 644 /var/run/nexusfwd.allow && \
+         /usr/bin/touch {LOG_PATH} && /usr/sbin/chown root:wheel {LOG_PATH} && /bin/chmod 600 {LOG_PATH} && \
          /bin/launchctl bootout system/{PLIST_LABEL} >/dev/null 2>&1; \
          /bin/launchctl bootstrap system {q_plist} && \
          /bin/launchctl enable system/{PLIST_LABEL} && \
@@ -106,7 +111,7 @@ pub fn install_helper(src_bin: &Path) -> Result<(), String> {
 pub fn uninstall_helper() -> Result<(), String> {
     let shell = format!(
         "/bin/launchctl bootout system/{PLIST_LABEL} >/dev/null 2>&1; \
-         /bin/rm -f {PLIST_PATH} {HELPER_PATH} /var/run/nexusfwd.allow /var/run/nexusfwd.sock /var/run/nexus-pf.conf; \
+         /bin/rm -f {PLIST_PATH} {HELPER_PATH} {LOG_PATH} /var/run/nexusfwd.allow /var/run/nexusfwd.sock /var/run/nexus-pf.conf; \
          /sbin/pfctl -a nexus -F all >/dev/null 2>&1; \
          /sbin/pfctl -a nexus -f /dev/null >/dev/null 2>&1; true"
     );
@@ -126,8 +131,8 @@ fn plist_body(helper: &str) -> String {
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>/var/log/nexusfwd.log</string>
-  <key>StandardErrorPath</key><string>/var/log/nexusfwd.log</string>
+  <key>StandardOutPath</key><string>{LOG_PATH}</string>
+  <key>StandardErrorPath</key><string>{LOG_PATH}</string>
 </dict>
 </plist>
 "#
