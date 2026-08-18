@@ -1541,6 +1541,11 @@ pub fn run() {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             use tauri::Manager;
 
+            // Off-thread, before the user can reach the power button: the first
+            // exec of a freshly built Core spends ~0.9s in signature validation
+            // that is cached from then on.
+            CoreSession::warm_binary_cache();
+
             let show_i = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;

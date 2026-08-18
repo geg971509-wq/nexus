@@ -137,6 +137,36 @@ impl CoreSession {
         ensure_setuid_core(&src)
     }
 
+    /// Pay the kernel's first-exec cost for Core off the connect path.
+    ///
+    /// macOS validates a binary's signature the first time a given file is
+    /// executed and caches the verdict per file. Core is ~68 MB with about 17k
+    /// hash pages, so that first run measures ~0.9s against ~0.01s once cached —
+    /// and a rebuild produces a new file, which is why the delay reappears only
+    /// after compiling. Running it once at startup moves that off the power
+    /// button and into the seconds before the user reaches for it.
+    ///
+    /// `version` exits immediately and touches nothing: no socket, no config.
+    pub fn warm_binary_cache() {
+        std::thread::Builder::new()
+            .name("nexus-core-warm".into())
+            .spawn(|| {
+                let bin = Self::resolve_core_binary();
+                if bin.as_os_str().is_empty() || !bin.is_file() {
+                    return;
+                }
+                let mut cmd = Command::new(bin);
+                crate::winhide::apply(&mut cmd);
+                let _ = cmd
+                    .arg("version")
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            })
+            .ok();
+    }
+
     /// Roll core.log over once it gets large, keeping one generation.
     ///
     /// Core logs every outbound destination at info level and nothing ever
