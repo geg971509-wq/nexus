@@ -984,6 +984,11 @@ async fn firewall_helper_install() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 async fn firewall_helper_uninstall() -> Result<serde_json::Value, String> {
+    // Uninstall boots the daemon out and flushes the PF anchor, so doing it mid
+    // tunnel silently removes the kill switch while traffic keeps flowing: if Core
+    // then dies there is nothing left to fail closed. Refuse rather than degrade —
+    // disconnecting first is one click and leaves the user in a defined state.
+    require_tunnel_idle("Uninstalling the firewall helper")?;
     tauri::async_runtime::spawn_blocking(|| {
         firewall::uninstall_helper()?;
         Ok(firewall_status_json())
@@ -1211,6 +1216,23 @@ async fn sub_parse_share(body: String) -> Result<serde_json::Value, String> {
     .map_err(|e| format!("sub_parse_share join: {e}"))?
 }
 
+/// Err unless the tunnel is fully down, for actions that are only safe then.
+///
+/// These invariants used to live in the webview alone — the module doc for net.rs
+/// says the UI "must NOT" probe while Core runs, and app.js calls it a hard ban.
+/// That is the wrong side of the boundary: the webview renders subscription data,
+/// and a guard there protects nothing the shell can rely on.
+fn require_tunnel_idle(action: &str) -> Result<(), String> {
+    let st = tunnel_sm::state();
+    if st == tunnel_sm::State::Idle {
+        return Ok(());
+    }
+    Err(format!(
+        "{action} requires the tunnel to be fully disconnected (currently {})",
+        st.as_str()
+    ))
+}
+
 /// TCP connect RTT probe. Emits `net-probe-result` per finished target (upstream progressive).
 /// Runs off the async runtime so the webview keeps painting while probes are in flight.
 #[tauri::command]
@@ -1220,6 +1242,13 @@ async fn net_tcp_probe(
     timeout_ms: Option<u64>,
     concurrency: Option<usize>,
 ) -> Result<serde_json::Value, String> {
+    // These sockets bind the physical NIC on purpose, so they must never run
+    // beside a live tunnel. PF happens to block them today on macOS and Windows
+    // has no bound-if to leak through, but neither is this path's own doing —
+    // and on Windows the probe instead hairpins the tunnel and paints a fake-fast
+    // latency, which is exactly what net.rs's bound-if machinery exists to avoid.
+    // Connected callers have core_url_test_current, which measures via the node.
+    require_tunnel_idle("Direct TCP probe")?;
     if targets.is_empty() {
         return Err("no targets".into());
     }
@@ -1601,4 +1630,34 @@ pub fn run() {
                 _ => {}
             }
         });
+}
+
+#[cfg(test)]
+mod idle_guard_tests {
+    use super::*;
+
+    /// The direct TCP probe binds the physical NIC and the uninstall flushes PF,
+    /// so both are only safe with the tunnel fully down. Before this guard the
+    /// rule lived only in app.js.
+    #[test]
+    fn only_idle_passes() {
+        let _g = tunnel_sm::test_lock();
+        let _ = tunnel_sm::apply(tunnel_sm::Event::ResetIdle);
+        assert!(require_tunnel_idle("probe").is_ok());
+
+        for state in [
+            tunnel_sm::State::Connecting,
+            tunnel_sm::State::Connected,
+            tunnel_sm::State::Disconnecting,
+            tunnel_sm::State::Error,
+        ] {
+            tunnel_sm::set_state(state);
+            let err = require_tunnel_idle("probe").unwrap_err();
+            // The caller has to be able to tell the user which state blocked it.
+            assert!(err.contains(state.as_str()), "{state:?}: {err}");
+        }
+
+        let _ = tunnel_sm::apply(tunnel_sm::Event::ResetIdle);
+        assert!(require_tunnel_idle("probe").is_ok(), "recovers after reset");
+    }
 }

@@ -162,6 +162,15 @@ pub fn set_state(s: State) {
     *STATE.lock().unwrap_or_else(|e| e.into_inner()) = s;
 }
 
+/// Serialises every test that touches the state machine. STATE is process-global
+/// and cargo runs tests in parallel threads, so tests in other modules have to
+/// share this lock or they stomp each other — hence pub(crate), not module-local.
+#[cfg(test)]
+pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+    TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Update last_params tun_if without SM transition (Connected rebind after ifname detect).
 pub fn update_tun_if(tun_if: Option<String>) {
     if let Some(ref mut p) = *LAST_PARAMS.lock().unwrap_or_else(|e| e.into_inner()) {
@@ -175,10 +184,8 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
     // ponytail: process-global SM; serialize tests or they stomp STATE.
-    static TEST_LOCK: Mutex<()> = Mutex::new(());
-
     fn lock() -> std::sync::MutexGuard<'static, ()> {
-        TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+        super::test_lock()
     }
 
     fn peer() -> PeerEndpoint {
