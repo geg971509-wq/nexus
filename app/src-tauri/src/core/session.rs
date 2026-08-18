@@ -137,8 +137,29 @@ impl CoreSession {
         ensure_setuid_core(&src)
     }
 
+    /// Roll core.log over once it gets large, keeping one generation.
+    ///
+    /// Core logs every outbound destination at info level and nothing ever
+    /// trimmed it — 36 MB over five days here, unbounded. Rotating rather than
+    /// truncating because the previous session's log is exactly what a crash
+    /// report needs, and diagnosis is the only reason this file exists.
+    /// Runs at spawn, when no Core holds the file.
+    fn rotate_core_log(path: &Path) {
+        const MAX_LOG_BYTES: u64 = 16 * 1024 * 1024;
+        let too_big = std::fs::metadata(path)
+            .map(|m| m.len() > MAX_LOG_BYTES)
+            .unwrap_or(false);
+        if !too_big {
+            return;
+        }
+        let mut prev = path.to_path_buf().into_os_string();
+        prev.push(".1");
+        let _ = std::fs::rename(path, std::path::PathBuf::from(prev));
+    }
+
     fn core_stdio_sinks() -> (Stdio, Stdio) {
         let log_path = Self::dirs_core_log();
+        Self::rotate_core_log(&log_path);
         match std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -604,5 +625,52 @@ mod stray_tests {
     fn junk_lines_are_skipped() {
         assert!(parse_core_pids("").is_empty());
         assert!(parse_core_pids("garbage\nno-pid /bin/NexusCore\n").is_empty());
+    }
+}
+
+#[cfg(all(test, unix))]
+mod log_rotate_tests {
+    use super::*;
+
+    fn tmp(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("nexus-log-test-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// Under the ceiling the log is left alone — rotating every launch would
+    /// throw away the history a bug report needs.
+    #[test]
+    fn small_log_is_untouched() {
+        let d = tmp("small");
+        let p = d.join("core.log");
+        std::fs::write(&p, b"recent lines").unwrap();
+        CoreSession::rotate_core_log(&p);
+        assert_eq!(std::fs::read(&p).unwrap(), b"recent lines");
+        assert!(!d.join("core.log.1").exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Over the ceiling it moves aside instead of being truncated, so the
+    /// previous session survives one more launch.
+    #[test]
+    fn large_log_is_rotated_not_dropped() {
+        let d = tmp("large");
+        let p = d.join("core.log");
+        std::fs::write(&p, vec![b'x'; 17 * 1024 * 1024]).unwrap();
+        CoreSession::rotate_core_log(&p);
+        assert!(!p.exists(), "caller reopens it fresh");
+        let rolled = d.join("core.log.1");
+        assert_eq!(std::fs::metadata(&rolled).unwrap().len(), 17 * 1024 * 1024);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn missing_log_is_not_an_error() {
+        let d = tmp("missing");
+        CoreSession::rotate_core_log(&d.join("core.log"));
+        assert!(!d.join("core.log.1").exists());
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
