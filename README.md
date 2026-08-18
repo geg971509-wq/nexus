@@ -1,6 +1,13 @@
 # Nexus
 
-Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box + xray) + framed IPC. Shell: **Tauri 2 + Rust**.
+Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (**sing-box**) + framed IPC. Shell: **Tauri 2 + Rust**.
+
+> xray-core is linked into NexusCore and the Core gates it on `need_xray`, but the
+> shell never sets that flag and has no Xray config generator — so **Xray never
+> runs today**. Nodes that need it (VLESS with `type=xhttp`, an `encryption` other
+> than `none`, or `extra=`) are refused at import rather than accepted and left to
+> fail at connect. The MPL-2.0 obligation below still applies: the code ships
+> whether or not it executes.
 
 ![Nexus UI](assets/screenshot.png)
 
@@ -22,10 +29,16 @@ Dual-arch VPN / proxy client. UI: Apple-minimal HTML. Engine: Go core (sing-box 
 
 ### Data directories
 
-| OS | Path |
-|----|------|
-| macOS | `~/Library/Application Support/Nexus` |
-| Windows | `%APPDATA%\app.nexus.desktop` (Tauri) / product data under the same family |
+| OS | Data | Core log |
+|----|------|----------|
+| macOS | `~/Library/Application Support/Nexus` | `~/Library/Logs/Nexus/core.log` |
+| Windows | `%APPDATA%\app.nexus.desktop` (Tauri) / product data under the same family | `<data>\logs\core.log` |
+
+Both directories are chmodded to `0700`: Core logs every outbound destination at
+`info`, so the log and sing-box's `cache.db` beside it are a record of where the
+traffic went. `core.log` rolls to `core.log.1` past 16 MB at spawn. The macOS
+firewall daemon logs separately to `/var/log/nexusfwd.log`, created `0600` at
+install and removed on uninstall.
 
 ### Windows notes
 
@@ -102,6 +115,9 @@ cd app && npm run tauri dev
 - Catalog (groups/nodes) in store via `catalog_get` / `catalog_put`
 - Node **Traffic** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only Reset traffic zeros)
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled Connectivity (not a proxy-path test)
+- **Runtime status** shows the exit IP and country as the far end sees them, fetched *through* the tunnel — a direct lookup would report this machine and be the wrong answer stated confidently. Blank when the tunnel cannot carry it.
+- **Import** parses share links for vless / vmess / trojan / ss / socks / http(s) / anytls / tuic / hysteria / hysteria2, and Clash YAML for the same set. Entries it cannot use are reported by protocol instead of silently lowering the count — including `vless-xray` for the Xray-only VLESS above.
+- **Idle-only actions:** the direct TCP probe binds the physical NIC, and uninstalling the firewall helper flushes the PF anchor. Both are refused unless the tunnel is fully disconnected. While connected, use the per-node URL test, which measures via the node.
 - **Firewall (OS fail-closed, macOS only):** sidebar Firewall + **NexusFwD** LaunchDaemon (PF anchor `nexus`). Windows is **Unsupported** (`windows.rs` kept, not applied — not a WFP kill-switch). Domain/process blocklist removed. Orthogonal to sing-box routing/Core/Tun/proxy. Install helper before connect on mac.
 - Connection table: merge by Core id, multi-select like nodes (copy), process + PID columns
 - **i18n:** UI chrome + runtime log panel in `zh-CN` / `en` / `ru` / `zh-TW` (live language switch)
