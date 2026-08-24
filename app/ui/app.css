@@ -1628,7 +1628,7 @@
     justify-content: flex-end;
     min-width: 0;
   }
-  /* Form controls — pure DOM text (span/div, not native form paint) */
+  /* Form controls — contenteditable + native input.field share the same chrome */
   .field, .select {
     width: 100%;
     min-height: 32px;
@@ -1724,7 +1724,7 @@
     color: var(--control-muted);
     font-weight: 400;
   }
-  /* URL/path always left-aligned; long text ellipsizes — never mid-string scroll "float" */
+  /* URL/path left-aligned. Idle ellipsis; native input caret scrolls the rest. */
   .field {
     white-space: nowrap;
     overflow: hidden;
@@ -1732,6 +1732,27 @@
     text-align: left;
     direction: ltr;
   }
+  input.field {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    min-width: 0;
+  }
+  input.field::placeholder {
+    color: var(--control-muted);
+    font-weight: 400;
+  }
+  input.field:focus,
+  input.field:focus-visible {
+    outline: none;
+  }
+  .field:focus {
+    overflow-x: auto;
+    overflow-y: hidden;
+    text-overflow: clip;
+    scrollbar-width: none;
+  }
+  .field:focus::-webkit-scrollbar { display: none; }
   .field[data-type="url"] {
     text-align: left;
     direction: ltr;

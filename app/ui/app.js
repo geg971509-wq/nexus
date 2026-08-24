@@ -4071,19 +4071,21 @@
   // ——— subscription URL field (settings → 订阅) ———
   function fieldText(el) {
     if (!el) return '';
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return (el.value || '').trim();
     return (el.innerText || el.textContent || '').replace(/\u200b/g, '').trim();
   }
   function setFieldText(el, text) {
     if (!el) return;
     const t = (text || '').trim();
-    if (!t) {
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      el.value = t;
+    } else if (!t) {
       el.innerHTML = '<span class="ph">https://…/sub</span>';
       el.classList.add('placeholder');
     } else {
       el.textContent = t;
       el.classList.remove('placeholder');
     }
-    // contenteditable often scrolls caret-to-end after write → URL looks "floated" mid-string
     try { el.scrollLeft = 0; } catch (_) {}
   }
   function syncSubUrlField() {
@@ -4116,7 +4118,6 @@
     const el = document.getElementById('subUrlField');
     if (!el || typeof GROUPS === 'undefined') return;
     let url = fieldText(el);
-    // strip placeholder if still showing
     if (el.classList.contains('placeholder') || url === 'https://…/sub') url = '';
     url = url.trim();
     if (url && !/^https?:\/\//i.test(url) && !/^([a-z][a-z0-9+\-.]*):\/\//i.test(url)) {
