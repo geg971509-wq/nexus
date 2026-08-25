@@ -17,9 +17,9 @@ Full license texts:
 | Component | Role | Link model |
 |-----------|------|------------|
 | **NexusCore** (`core/server`) | Proxy engine process | Go packages are **compiled into** `NexusCore` |
-| **Nexus shell** (`app/`) | Tauri UI + IPC client | Talks to Core over framed IPC; Rust crates compile into the shell |
+| **Nexus shell** (`app/`) | Qt Quick host + Rust C ABI | Talks to Core over framed IPC; Rust crates compile into the library the Qt host links |
 
-Distributing `NexusCore` (alone or inside `Nexus.app` / Windows package) triggers
+Distributing `NexusCore` (alone or inside `Nexus.app`) triggers
 **GPLv3** obligations for that Core binary, including Corresponding Source.
 See root [`LICENSE`](LICENSE) and [`core/server/LICENSE`](core/server/LICENSE).
 
@@ -103,7 +103,7 @@ cd core/server && go list -m all
 
 ---
 
-## C. Nexus shell (Rust / Tauri)
+## C. Nexus shell (Rust + Qt)
 
 Direct runtime-oriented crates (from `app/src-tauri/Cargo.toml`) are generally
 **MIT and/or Apache-2.0** (Tauri 2, serde, prost, qrcode, socket2, etc.).
@@ -121,13 +121,19 @@ Full graph:
 cd app/src-tauri && cargo metadata --format-version 1 --locked
 ```
 
-UI is plain HTML/JS with `@tauri-apps/cli` as a **devDependency** only.
+Product GUI is Qt Quick (`app/qt`):
+
+| Component | License | Notes |
+|-----------|---------|--------|
+| Qt 6.11 (`Quick`, `QuickControls2`, `Widgets`, `Svg`, `Gui`) | LGPLv3 | Dynamically linked. https://www.qt.io/licensing |
+
+The Tauri crate remains as a compile dependency of the Rust library the Qt host links; it is not the window. Former HTML lives in `archive/webview-ui/`.
 
 ---
 
 ## D. What to ship with binaries (Plan A checklist)
 
-When you give someone `Nexus.app`, `nexus.exe`, or `NexusCore`:
+When you give someone `Nexus.app` or `NexusCore`:
 
 1. This file (`THIRD_PARTY_NOTICES.md`) or an equivalent notice.
 2. `licenses/GPL-3.0.txt` and `licenses/MPL-2.0.txt` (or URLs plus offer).

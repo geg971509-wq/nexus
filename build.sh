@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Nexus dual product build: macOS arm64 (.app) + Windows x86_64 (exe package)
-# Always full rebuild. No flags.
+# Nexus macOS product build: NexusCore + Qt Quick .app
+# Always full rebuild. No flags. Windows is not a product this round.
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,9 +9,7 @@ TAURI_DIR="$APP_DIR/src-tauri"
 CORE_SRC="$ROOT/core/server"
 BIN_DIR="$ROOT/bin"
 CORE_OUT="$BIN_DIR/NexusCore"
-CORE_WIN_OUT="$BIN_DIR/NexusCore-windows-x86_64.exe"
 BINARIES_DIR="$TAURI_DIR/binaries"
-WIN_DIST="$BIN_DIR/windows-x86_64"
 
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-always}"
@@ -36,16 +34,16 @@ target_triple() {
   os="$(uname -s)"
   case "$os" in
     Darwin) echo "${arch}-apple-darwin" ;;
-    *) die "host build.sh is macOS-only (got $os); use Windows host for native win shell" ;;
+    *) die "host build.sh is macOS-only (got $os)" ;;
   esac
 }
 
 [[ $# -eq 0 ]] || die "usage: ./build.sh  (no flags — always full release rebuild)"
 
-[[ "$(uname -s)" == "Darwin" ]] || die "macOS only host for dual product build"
+[[ "$(uname -s)" == "Darwin" ]] || die "macOS only host"
 need go
 need cargo
-need npm
+need cmake
 need rustc
 # Both sides generate from core/server/gen/libcore.proto: Go here, Rust in build.rs.
 need protoc
@@ -55,24 +53,18 @@ fi
 
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
 TRIPLE="$(target_triple)"
-log "root=$ROOT triple=$TRIPLE (full dual release rebuild)"
+log "root=$ROOT triple=$TRIPLE (mac release rebuild)"
 
-# Feature tags required in NexusCore (stubs if missing). One list — MAC/WIN/REQUIRED
-# used to be three hand-synced copies, so adding a tag in two of three went unnoticed
-# (a missed CORE_REQUIRED_TAGS entry silently drops it from verify_core_binary).
-# Windows adds with_purego: CGO-off cross-build.
-# Mirrored in .github/workflows/ci.yml (cross-build Windows Core) — keep in sync.
+# Feature tags required in NexusCore (stubs if missing).
 CORE_TAGS_BASE="with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,badlinkname,tfogo_checklinkname0"
 CORE_TAGS_MAC="${NEXUS_CORE_TAGS:-$CORE_TAGS_BASE}"
-CORE_TAGS_WIN="${NEXUS_CORE_TAGS_WIN:-$CORE_TAGS_BASE,with_purego}"
 IFS=',' read -ra CORE_REQUIRED_TAGS <<< "$CORE_TAGS_BASE"
-mkdir -p "$BIN_DIR" "$BINARIES_DIR" "$WIN_DIST"
+mkdir -p "$BIN_DIR" "$BINARIES_DIR"
 
 verify_core_binary() {
   local bin="$1"
   local label="${2:-NexusCore}"
   [[ -f "$bin" ]] || die "$label missing: $bin"
-  # Windows .exe may not be +x on macOS host
   local sz
   sz="$(stat -f%z "$bin" 2>/dev/null || stat -c%s "$bin")"
   if [[ "$sz" -lt 50000000 ]]; then
@@ -129,7 +121,6 @@ log "staging patched sing-box…"
   go mod edit -modfile=go.patched.mod \
     -replace "github.com/sagernet/sing-box=$SINGBOX_STAGE"
 )
-# Both core builds below compile against the patched copy.
 export GOFLAGS="${GOFLAGS:+$GOFLAGS }-modfile=go.patched.mod"
 ok "sing-box patched → $SINGBOX_STAGE"
 
@@ -173,168 +164,39 @@ cp -f "$CORE_OUT" "$STAGED"
 chmod +x "$STAGED"
 ok "staged $STAGED"
 
-# --- 1b) NexusCore Windows amd64 (cross from mac; CGO=0) ---
-log "building NexusCore windows/amd64 (go · tags=$CORE_TAGS_WIN)…"
-(
-  cd "$CORE_SRC"
-  VERSION_SINGBOX="$(go list -m -f '{{.Version}}' github.com/sagernet/sing-box)"
-  export CGO_ENABLED=0
-  export GOOS=windows
-  export GOARCH=amd64
-  # clear mac CGO env
-  unset CC CGO_CFLAGS CGO_LDFLAGS || true
-  # -H=windowsgui: PE subsystem GUI — no black console when GUI/Core spawn helpers.
-  # stdout/stderr still work when parent redirects (session core_stdio_sinks).
-  go build -trimpath \
-    -tags "$CORE_TAGS_WIN" \
-    -ldflags "-s -w -H=windowsgui -X 'github.com/sagernet/sing-box/constant.Version=${VERSION_SINGBOX}' -X 'internal/godebug.defaultGODEBUG=multipathtcp=0' -checklinkname=0" \
-    -o "$CORE_WIN_OUT" \
-    .
-)
-ok "NexusCore windows → $CORE_WIN_OUT"
-verify_core_binary "$CORE_WIN_OUT" "NexusCore(win)"
+# --- 2) Qt Quick host (mac .app) ---
+QT_DIR="$APP_DIR/qt"
+QT_BUILD="$QT_DIR/build"
+[[ -f "$QT_DIR/CMakeLists.txt" ]] || die "missing Qt host: $QT_DIR/CMakeLists.txt"
+[[ -f "$QT_DIR/Info.plist" ]] || die "missing $QT_DIR/Info.plist"
+log "cmake Qt host…"
+cmake -S "$QT_DIR" -B "$QT_BUILD" -DCMAKE_BUILD_TYPE=Release
+cmake --build "$QT_BUILD" --target nexus
+QT_BIN="$QT_BUILD/nexus"
+[[ -x "$QT_BIN" ]] || die "qt host missing: $QT_BIN"
+ok "qt host → $QT_BIN"
 
-# stage for tauri externalBin on windows target name
-cp -f "$CORE_WIN_OUT" "$BINARIES_DIR/NexusCore-x86_64-pc-windows-msvc.exe"
-cp -f "$CORE_WIN_OUT" "$BINARIES_DIR/NexusCore-x86_64-pc-windows-gnu.exe"
-# cronet dll for naive outbound on Windows
-if command -v curl >/dev/null 2>&1; then
-  log "fetching libcronet.dll (windows amd64)…"
-  if curl -fLso "$WIN_DIST/libcronet.dll" \
-    "https://github.com/SagerNet/cronet-go/releases/latest/download/libcronet-windows-amd64.dll"; then
-    ok "libcronet.dll → $WIN_DIST/libcronet.dll"
-  else
-    err "libcronet.dll download failed (naive outbound may need it at runtime)"
-  fi
-fi
-cp -f "$CORE_WIN_OUT" "$WIN_DIST/NexusCore.exe"
-ok "windows core package seed → $WIN_DIST"
-
-# --- 2) frontend deps ---
-log "npm install…"
-(cd "$APP_DIR" && npm install)
-
-TAURI_CLI=(npx --no-install tauri)
-if ! (cd "$APP_DIR" && npx --no-install tauri --version >/dev/null 2>&1); then
-  if command -v cargo-tauri >/dev/null 2>&1 || cargo tauri --version >/dev/null 2>&1; then
-    TAURI_CLI=(cargo tauri)
-  else
-    log "installing @tauri-apps/cli in app/…"
-    (cd "$APP_DIR" && npm install --save-dev @tauri-apps/cli@^2)
-  fi
-fi
-
-# --- 2.5) UI staging: whole ui/ tree ---
-UI_SRC="$APP_DIR/ui/index.html"
-[[ -f "$UI_SRC" ]] || die "missing UI source: $UI_SRC"
-UI_STAGE="$TAURI_DIR/ui-release-dist"
-rm -rf "$UI_STAGE"
-mkdir -p "$UI_STAGE"
-# Copy the tree, not a per-file whitelist: every new <script src>/<link> (app.css,
-# i18n.js, app.js so far) silently shipped a stale bundle until this list was edited.
-cp -R "$APP_DIR/ui/." "$UI_STAGE/"
-# AppleDouble / .DS_Store break tauri-build's UTF-8 permission scan on the Windows tree.
-find "$UI_STAGE" \( -name '._*' -o -name '.DS_Store' \) -delete
-UI_CONF_OVERRIDE="$TAURI_DIR/tauri.release-ui.json"
-cat > "$UI_CONF_OVERRIDE" <<EOF
-{
-  "build": {
-    "frontendDist": "./ui-release-dist"
-  },
-  "bundle": {
-    "targets": ["app"]
-  }
-}
-EOF
-ok "UI release staging · $UI_STAGE"
-
-# --- 3) tauri release build (mac host .app) ---
-log "tauri build (release · macOS app)…"
-(
-  cd "$APP_DIR"
-  export NEXUS_CORE_BIN="$CORE_OUT"
-  "${TAURI_CLI[@]}" build --config "$UI_CONF_OVERRIDE"
-)
-
-# --- 4) locate .app ---
-APP_CANDIDATES=(
-  "$TAURI_DIR/target/release/bundle/macos/Nexus.app"
-  "$TAURI_DIR/target/${TRIPLE}/release/bundle/macos/Nexus.app"
-)
-APP_PATH=""
-for c in "${APP_CANDIDATES[@]}"; do
-  if [[ -d "$c" ]]; then
-    APP_PATH="$c"
-    break
-  fi
-done
-if [[ -z "$APP_PATH" ]]; then
-  APP_PATH="$(find "$TAURI_DIR/target" -type d -name 'Nexus.app' 2>/dev/null | head -1 || true)"
-fi
-[[ -n "$APP_PATH" && -d "$APP_PATH" ]] || die "Nexus.app not found under $TAURI_DIR/target"
-
-MACOS_DIR="$APP_PATH/Contents/MacOS"
-if [[ -d "$MACOS_DIR" ]]; then
-  cp -f "$CORE_OUT" "$MACOS_DIR/NexusCore"
-  chmod +x "$MACOS_DIR/NexusCore"
-  ok "embedded $MACOS_DIR/NexusCore"
-fi
+log "building nexusfwd…"
+(cd "$TAURI_DIR" && cargo build --release --bin nexusfwd)
+FWD_BIN="$TAURI_DIR/target/release/nexusfwd"
+[[ -x "$FWD_BIN" ]] || die "nexusfwd missing: $FWD_BIN"
+ok "nexusfwd → $FWD_BIN"
 
 DEST_APP="$BIN_DIR/Nexus.app"
 rm -rf "$DEST_APP"
-cp -R "$APP_PATH" "$DEST_APP"
-ok "copied → $DEST_APP"
-
-html_count="$(find "$DEST_APP" -name '*.html' 2>/dev/null | wc -l | tr -d ' ')"
-[[ "$html_count" -le 1 ]] || die "release app has unexpected HTML count=$html_count"
-ok "bundle UI clean · html_count=$html_count"
-
-# --- 5) Windows shell via remote host (Tauri GUI needs native Windows toolchain) ---
-# Remote Windows build is opt-in: set NEXUS_WIN_HOST / NEXUS_WIN_USER + pass file.
-# Do not bake LAN hosts or usernames into the tree.
-WIN_HOST="${NEXUS_WIN_HOST:-}"
-WIN_USER="${NEXUS_WIN_USER:-}"
-WIN_PASS_FILE="${NEXUS_WIN_PASS_FILE:-/tmp/nexus-win-ssh.pass}"
-SSH_BASE=(sshpass -f "$WIN_PASS_FILE" ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no)
-SCP_BASE=(sshpass -f "$WIN_PASS_FILE" scp -o StrictHostKeyChecking=no -o PreferredAuthentications=password -o PubkeyAuthentication=no)
-if [[ -n "$WIN_HOST" && -n "$WIN_USER" && -f "$WIN_PASS_FILE" ]] && command -v sshpass >/dev/null 2>&1; then
-  log "Windows host $WIN_USER@$WIN_HOST — sync + remote tauri build…"
-  REMOTE_DIR="C:/Users/${WIN_USER}/NexusBuild"
-  # Pack only product sources (avoid exclude bin eating app/src-tauri/src/bin).
-  # Exclude macOS AppleDouble (._*) / .DS_Store / .omc — Windows tauri-build reads
-  # every file under permissions/ and dies on non-UTF-8 `._nexus.toml`.
-  PACK=/tmp/nexus-win-src.tgz
-  COPYFILE_DISABLE=1 tar -C "$ROOT" -czf "$PACK" \
-    --exclude='._*' --exclude='.DS_Store' --exclude='.omc' --exclude='**/.omc/**' \
-    app/package.json app/package-lock.json app/ui \
-    app/src-tauri/src app/src-tauri/Cargo.toml app/src-tauri/Cargo.lock \
-    app/src-tauri/tauri.conf.json app/src-tauri/build.rs app/src-tauri/windows \
-    app/src-tauri/capabilities app/src-tauri/permissions app/src-tauri/icons \
-    script/build_windows_remote.ps1 script/install_rust_windows.ps1
-  "${SCP_BASE[@]}" "$PACK" "${WIN_USER}@${WIN_HOST}:C:/Users/${WIN_USER}/nexus-win-src.tgz"
-  "${SSH_BASE[@]}" "${WIN_USER}@${WIN_HOST}" \
-    "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path '$REMOTE_DIR' | Out-Null; tar -xzf C:/Users/${WIN_USER}/nexus-win-src.tgz -C '$REMOTE_DIR'; Get-ChildItem -Path '$REMOTE_DIR' -Recurse -Force -Filter '._*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue; Get-ChildItem -Path '$REMOTE_DIR' -Recurse -Force -Filter '.DS_Store' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue\""
-  # ship prebuilt Core
-  "${SSH_BASE[@]}" "${WIN_USER}@${WIN_HOST}" \
-    "powershell -NoProfile -Command \"New-Item -ItemType Directory -Force -Path '$REMOTE_DIR/bin' | Out-Null\""
-  "${SCP_BASE[@]}" "$CORE_WIN_OUT" \
-    "${WIN_USER}@${WIN_HOST}:${REMOTE_DIR}/bin/NexusCore.exe"
-  if ! "${SSH_BASE[@]}" "${WIN_USER}@${WIN_HOST}" \
-    "powershell -NoProfile -ExecutionPolicy Bypass -File $REMOTE_DIR/script/build_windows_remote.ps1 -NexusRoot $REMOTE_DIR"; then
-    err "remote Windows shell build failed — Core package still at $WIN_DIST"
-  else
-    "${SCP_BASE[@]}" \
-      "${WIN_USER}@${WIN_HOST}:${REMOTE_DIR}/app/src-tauri/target/release/nexus.exe" \
-      "$WIN_DIST/nexus.exe" && ok "pulled nexus.exe"
-  fi
-else
-  log "skip remote Windows shell (need NEXUS_WIN_HOST/USER + sshpass + $WIN_PASS_FILE); Core-only package at $WIN_DIST"
-fi
+mkdir -p "$DEST_APP/Contents/MacOS" "$DEST_APP/Contents/Resources"
+cp -f "$QT_BIN" "$DEST_APP/Contents/MacOS/nexus"
+chmod +x "$DEST_APP/Contents/MacOS/nexus"
+cp -f "$CORE_OUT" "$DEST_APP/Contents/MacOS/NexusCore"
+chmod +x "$DEST_APP/Contents/MacOS/NexusCore"
+cp -f "$FWD_BIN" "$DEST_APP/Contents/MacOS/nexusfwd"
+chmod +x "$DEST_APP/Contents/MacOS/nexusfwd"
+cp -f "$QT_DIR/Info.plist" "$DEST_APP/Contents/Info.plist"
+cp -f "$TAURI_DIR/icons/icon.icns" "$DEST_APP/Contents/Resources/icon.icns"
+ok "staged $DEST_APP"
 
 echo
 ok "build complete"
 echo "  mac app:  $DEST_APP"
 echo "  mac core: $CORE_OUT"
-echo "  win core: $CORE_WIN_OUT"
-echo "  win dist: $WIN_DIST"
 echo "  run mac:  open \"$DEST_APP\""

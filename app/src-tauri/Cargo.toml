@@ -1,22 +1,13 @@
 [package]
 name = "nexus"
 version = "0.2.3"
-description = "Nexus VPN — Tauri shell (macOS + Windows)"
+description = "Nexus VPN — Rust engine + C ABI (Qt host on macOS)"
 authors = ["Nexus"]
 edition = "2021"
-default-run = "nexus"
 
 [lib]
 name = "nexus_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
-
-[[bin]]
-name = "nexus"
-path = "src/main.rs"
-
-[[bin]]
-name = "core_smoke"
-path = "src/bin/core_smoke.rs"
 
 [[bin]]
 name = "nexusfwd"
@@ -29,7 +20,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
-tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }

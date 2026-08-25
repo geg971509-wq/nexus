@@ -1,8 +1,7 @@
 //! OS packet-filter firewall (clean-room fail-closed; Mullvad-inspired semantics).
 //! macOS: NexusFwD root daemon + PF anchor `nexus`.
-//! Windows: `platform_support()` is Unsupported; `windows.rs` is unused stand-in.
+//! Non-macOS: `platform_support()` is Unsupported.
 
-mod null;
 pub mod rules;
 pub mod wire;
 
@@ -10,9 +9,6 @@ pub mod wire;
 pub mod macos;
 #[cfg(target_os = "macos")]
 pub mod macos_pf;
-
-#[cfg(target_os = "windows")]
-mod windows;
 
 pub use rules::{is_safe_ifname, ANCHOR};
 pub use wire::{PolicyDto, Request, Response};

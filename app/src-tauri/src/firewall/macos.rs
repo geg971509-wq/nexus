@@ -197,9 +197,8 @@ fn run_admin(shell: &str) -> Result<(), String> {
     }
 }
 
-/// Resolve staged NexusFwD next to app / target.
+/// Resolve staged NexusFwD next to app / cargo target.
 pub fn resolve_fwd_binary() -> PathBuf {
-    // Dev: target/debug|release/nexusfwd
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let cand = dir.join("nexusfwd");
@@ -213,6 +212,14 @@ pub fn resolve_fwd_binary() -> PathBuf {
                     return r;
                 }
             }
+        }
+    }
+    // Dev: cargo target next to this crate when the .app is not yet bundled.
+    let crate_target = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target");
+    for profile in ["release", "debug"] {
+        let cand = crate_target.join(profile).join("nexusfwd");
+        if cand.is_file() {
+            return cand;
         }
     }
     PathBuf::from("nexusfwd")

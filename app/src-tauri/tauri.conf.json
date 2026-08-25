@@ -4,7 +4,7 @@
   "version": "0.2.3",
   "identifier": "app.nexus.desktop",
   "build": {
-    "frontendDist": "../ui"
+    "frontendDist": "./ui-stub"
   },
   "app": {
     "withGlobalTauri": true,

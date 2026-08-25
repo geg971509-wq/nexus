@@ -13,10 +13,10 @@ build/
 /bin/
 *.app
 
-# staged Tauri externalBin (built by build.sh)
+# staged Core sidecar (built by build.sh; tauri-build still wants externalBin)
 app/src-tauri/binaries/
 
-# release UI staging (build.sh)
+# leftover Tauri UI staging — not used
 app/src-tauri/ui-release-dist/
 app/src-tauri/tauri.release-ui.json
 macos-standard-authorization-form.diff
