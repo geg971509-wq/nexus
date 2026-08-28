@@ -122,11 +122,8 @@ fn save_unlocked(p: &std::path::Path, st: &Store) -> Result<(), String> {
         f.sync_all().map_err(|e| e.to_string())?;
     }
     fs::rename(&tmp, p).map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(p, fs::Permissions::from_mode(0o600));
-    }
+    use std::os::unix::fs::PermissionsExt;
+    let _ = fs::set_permissions(p, fs::Permissions::from_mode(0o600));
     Ok(())
 }
 
@@ -150,7 +147,6 @@ fn lock_store_file(store_path: &std::path::Path) -> Result<StoreLock, std::io::E
     Ok(StoreLock { _file: file })
 }
 
-#[cfg(unix)]
 fn apply_exclusive_lock(file: &fs::File) -> Result<(), std::io::Error> {
     use std::os::unix::io::AsRawFd;
     let fd = file.as_raw_fd();
@@ -158,11 +154,6 @@ fn apply_exclusive_lock(file: &fs::File) -> Result<(), std::io::Error> {
     if rc != 0 {
         return Err(std::io::Error::last_os_error());
     }
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn apply_exclusive_lock(_file: &fs::File) -> Result<(), std::io::Error> {
     Ok(())
 }
 
@@ -202,8 +193,7 @@ mod tests {
     }
 }
 
-// Unlock on drop: flock unlock / handle close releases LockFileEx.
-#[cfg(unix)]
+// Unlock on drop: flock unlock and file close release the lock.
 impl Drop for StoreLock {
     fn drop(&mut self) {
         use std::os::unix::io::AsRawFd;

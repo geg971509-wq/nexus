@@ -115,7 +115,10 @@ cmake --build app/qt/build --target nexus && app/qt/build/nexus
 - **Firewall (OS fail-closed, macOS only):** sidebar Firewall + **NexusFwD** LaunchDaemon (PF anchor `nexus`). Domain/process blocklist removed. Orthogonal to sing-box routing/Core/Tun/proxy. Install helper before connect.
 - Connection table: merge by Core id, multi-select like nodes (copy), process + PID columns
 - **i18n:** UI chrome + runtime log panel in `zh-CN` / `en` / `ru` / `zh-TW` (live language switch)
-- Unwired settings (routing/DNS, inbound, mux, updater, autostart) hidden until store/generate is wired; mixed inbound is `127.0.0.1:2080`
+- Only implemented controls are shown. Subscription updates, DNS generation and
+  imported per-node mux settings are wired; advanced routing, custom inbound and
+  autostart controls are intentionally absent. The mixed inbound is fixed at
+  `127.0.0.1:2080`.
 
 ## Status
 

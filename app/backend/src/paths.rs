@@ -1,27 +1,21 @@
-//! Per-OS data / log directories for Nexus shell + Core cwd/cache.
+//! macOS data / log directories for Nexus shell + Core cwd/cache.
 
 use std::path::PathBuf;
 
 /// User data root: store.json, cache.db, privileged Core (macOS).
 pub fn data_dir() -> PathBuf {
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(home) = std::env::var_os("HOME") {
-            return PathBuf::from(home).join("Library/Application Support/Nexus");
-        }
+    if let Some(home) = std::env::var_os("HOME") {
+        return PathBuf::from(home).join("Library/Application Support/Nexus");
     }
     std::env::temp_dir().join("Nexus")
 }
 
 /// Core process log file directory.
 pub fn log_dir() -> PathBuf {
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(home) = std::env::var_os("HOME") {
-            return PathBuf::from(home).join("Library/Logs/Nexus");
-        }
-        return std::env::temp_dir().join("Nexus-logs");
+    if let Some(home) = std::env::var_os("HOME") {
+        return PathBuf::from(home).join("Library/Logs/Nexus");
     }
+    std::env::temp_dir().join("Nexus-logs")
 }
 
 /// Restrict a directory we own to its user.
@@ -32,17 +26,9 @@ pub fn log_dir() -> PathBuf {
 /// 0600 while its neighbours stayed world-readable — doing it on the directory
 /// covers those and anything added later, instead of chasing each file.
 ///
-/// No-op off Unix.
 fn restrict_to_owner(dir: &std::path::Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = dir;
-    }
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
 }
 
 pub fn ensure_data_dir() -> PathBuf {
