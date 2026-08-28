@@ -1,8 +1,10 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 
 Item {
-    id: layer
+    id: root
 
     required property var host
     width: 0
@@ -17,10 +19,10 @@ Item {
     function showQr() { qrMask.visible = true }
 
     DialogMask {
-        host: layer.host
+        host: root.host
         id: quitMask
         DialogCard {
-            host: layer.host
+            host: root.host
             cardW: 360
             implicitHeight: qCol.implicitHeight + 32
             Column {
@@ -31,36 +33,36 @@ Item {
                 anchors.margins: 18
                 spacing: 8
                 Text {
-                    text: layer.host.t("quit.title")
-                    color: layer.host.orange
-                    font.family: layer.host.fonts[0]
+                    text: root.host.t("quit.title")
+                    color: root.host.orange
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 15
                     font.weight: Font.DemiBold
                 }
                 Text {
                     width: parent.width
-                    text: layer.host.t("quit.msg")
-                    color: layer.host.secondary
+                    text: root.host.t("quit.msg")
+                    color: root.host.secondary
                     wrapMode: Text.WordWrap
-                    font.family: layer.host.fonts[0]
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 13
                 }
                 Item { width: 1; height: 6 }
                 Row {
                     anchors.right: parent.right
                     spacing: 10
-                    DialogButton { host: layer.host; text: layer.host.t("btn.cancel"); onClicked: quitMask.visible = false }
-                    DialogButton { host: layer.host; text: layer.host.t("quit.confirm"); primary: true; onClicked: layer.host.confirmQuit() }
+                    DialogButton { host: root.host; text: root.host.t("btn.cancel"); onClicked: quitMask.visible = false }
+                    DialogButton { host: root.host; text: root.host.t("quit.confirm"); primary: true; onClicked: root.host.confirmQuit() }
                 }
             }
         }
     }
 
     DialogMask {
-        host: layer.host
+        host: root.host
         id: statsMask
         DialogCard {
-            host: layer.host
+            host: root.host
             cardW: 440
             implicitHeight: stCol.implicitHeight + 32
             Column {
@@ -71,9 +73,9 @@ Item {
                 anchors.margins: 18
                 spacing: 10
                 Text {
-                    text: layer.host.t("stats.title")
-                    color: layer.host.label
-                    font.family: layer.host.fonts[0]
+                    text: root.host.t("stats.title")
+                    color: root.host.label
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 15
                     font.weight: Font.DemiBold
                 }
@@ -98,15 +100,15 @@ Item {
                             width: (stCol.width - 12) / 2
                             spacing: 2
                             Text {
-                                text: modelData.k.indexOf(".") >= 0 ? layer.host.t(modelData.k) : modelData.k
-                                color: layer.host.tertiary
-                                font.family: layer.host.fonts[0]
+                                text: modelData.k.indexOf(".") >= 0 ? root.host.t(modelData.k) : modelData.k
+                                color: root.host.tertiary
+                                font.family: root.host.fonts[0]
                                 font.pixelSize: 11
                             }
                             Text {
-                                text: String((layer.host.stats && layer.host.stats[modelData.v]) || "—")
-                                color: layer.host.label
-                                font.family: layer.host.fonts[0]
+                                text: String((root.host.stats && root.host.stats[modelData.v]) || "—")
+                                color: root.host.label
+                                font.family: root.host.fonts[0]
                                 font.pixelSize: 13
                                 wrapMode: Text.Wrap
                                 width: parent.width
@@ -117,18 +119,18 @@ Item {
                 Row {
                     anchors.right: parent.right
                     spacing: 10
-                    DialogButton { host: layer.host; text: layer.host.t("btn.refresh"); onClicked: { layer.host.fillStats(); layer.host.log("SYS", "info", layer.host.t("log.runtimeRefreshed")) } }
-                    DialogButton { host: layer.host; text: layer.host.t("btn.close"); primary: true; onClicked: statsMask.visible = false }
+                    DialogButton { host: root.host; text: root.host.t("btn.refresh"); onClicked: { root.host.fillStats(); root.host.log("SYS", "info", root.host.t("log.runtimeRefreshed")) } }
+                    DialogButton { host: root.host; text: root.host.t("btn.close"); primary: true; onClicked: statsMask.visible = false }
                 }
             }
         }
     }
 
     DialogMask {
-        host: layer.host
+        host: root.host
         id: exportMask
         DialogCard {
-            host: layer.host
+            host: root.host
             cardW: 440
             implicitHeight: Math.min(480, exCol.implicitHeight + 32)
             Column {
@@ -139,48 +141,48 @@ Item {
                 anchors.margins: 18
                 spacing: 8
                 Text {
-                    text: layer.host.t("export.title")
-                    color: layer.host.label
-                    font.family: layer.host.fonts[0]
+                    text: root.host.t("export.title")
+                    color: root.host.label
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 15
                     font.weight: Font.DemiBold
                 }
                 Text {
                     width: parent.width
-                    text: layer.host.t("export.sub")
-                    color: layer.host.secondary
-                    font.family: layer.host.fonts[0]
+                    text: root.host.t("export.sub")
+                    color: root.host.secondary
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 13
                 }
                 ScrollView {
                     width: parent.width
                     height: 220
                     TextArea {
-                        text: layer.host.exportText
+                        text: root.host.exportText
                         readOnly: true
                         wrapMode: TextEdit.Wrap
-                        color: layer.host.label
-                        font.family: layer.host.mono[0]
+                        color: root.host.label
+                        font.family: root.host.mono[0]
                         font.pixelSize: 11
                     }
                 }
                 Row {
                     anchors.right: parent.right
                     spacing: 10
-                    DialogButton { host: layer.host; text: layer.host.t("btn.close"); onClicked: exportMask.visible = false }
-                    DialogButton { host: layer.host; text: layer.host.t("btn.copyAll"); primary: true; onClicked: layer.host.copyExport() }
+                    DialogButton { host: root.host; text: root.host.t("btn.close"); onClicked: exportMask.visible = false }
+                    DialogButton { host: root.host; text: root.host.t("btn.copyAll"); primary: true; onClicked: root.host.copyExport() }
                 }
             }
         }
     }
 
     DialogMask {
-        host: layer.host
+        host: root.host
         id: askMask
         z: 420
-        dismiss: function () { layer.host.closeAsk(false) }
+        dismiss: function () { root.host.closeAsk(false) }
         DialogCard {
-            host: layer.host
+            host: root.host
             cardW: 360
             implicitHeight: askCol.implicitHeight + 32
             Column {
@@ -191,18 +193,18 @@ Item {
                 anchors.margins: 18
                 spacing: 8
                 Text {
-                    text: layer.host.askTitle
-                    color: layer.host.askDanger ? layer.host.orange : layer.host.label
-                    font.family: layer.host.fonts[0]
+                    text: root.host.askTitle
+                    color: root.host.askDanger ? root.host.orange : root.host.label
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 15
                     font.weight: Font.DemiBold
                 }
                 Text {
                     width: parent.width
-                    text: layer.host.askMsg
-                    color: layer.host.secondary
+                    text: root.host.askMsg
+                    color: root.host.secondary
                     wrapMode: Text.WordWrap
-                    font.family: layer.host.fonts[0]
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 13
                 }
                 Item { width: 1; height: 6 }
@@ -210,18 +212,18 @@ Item {
                     anchors.right: parent.right
                     spacing: 10
                     DialogButton {
-                        host: layer.host
-                        text: layer.host.t("btn.cancel")
-                        uniform: layer.host.askUniform
-                        onClicked: layer.host.closeAsk(false)
+                        host: root.host
+                        text: root.host.t("btn.cancel")
+                        uniform: root.host.askUniform
+                        onClicked: root.host.closeAsk(false)
                     }
                     DialogButton {
-                        host: layer.host
-                        text: layer.host.askOkText
-                        uniform: layer.host.askUniform
-                        primary: !layer.host.askDanger
-                        danger: layer.host.askDanger
-                        onClicked: layer.host.closeAsk(true)
+                        host: root.host
+                        text: root.host.askOkText
+                        uniform: root.host.askUniform
+                        primary: !root.host.askDanger
+                        danger: root.host.askDanger
+                        onClicked: root.host.closeAsk(true)
                     }
                 }
             }
@@ -229,10 +231,10 @@ Item {
     }
 
     DialogMask {
-        host: layer.host
+        host: root.host
         id: qrMask
         DialogCard {
-            host: layer.host
+            host: root.host
             cardW: 380
             implicitHeight: qrCol.implicitHeight + 32
             Column {
@@ -243,16 +245,16 @@ Item {
                 anchors.margins: 18
                 spacing: 8
                 Text {
-                    text: layer.host.t("qr.title")
-                    color: layer.host.label
-                    font.family: layer.host.fonts[0]
+                    text: root.host.t("qr.title")
+                    color: root.host.label
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 15
                     font.weight: Font.DemiBold
                 }
                 Text {
-                    text: layer.host.qrName
-                    color: layer.host.secondary
-                    font.family: layer.host.fonts[0]
+                    text: root.host.qrName
+                    color: root.host.secondary
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 13
                     elide: Text.ElideRight
                     width: parent.width
@@ -262,8 +264,8 @@ Item {
                     height: 228
                     Image {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        visible: layer.host.qrSvg.length > 0
-                        source: layer.host.qrSvg.length ? ("data:image/svg+xml;utf8," + encodeURIComponent(layer.host.qrSvg)) : ""
+                        visible: root.host.qrSvg.length > 0
+                        source: root.host.qrSvg.length ? ("data:image/svg+xml;utf8," + encodeURIComponent(root.host.qrSvg)) : ""
                         sourceSize.width: 220
                         sourceSize.height: 220
                         fillMode: Image.PreserveAspectFit
@@ -271,20 +273,20 @@ Item {
                         height: 220
                     }
                     Text {
-                        visible: !layer.host.qrSvg.length
+                        visible: !root.host.qrSvg.length
                         anchors.centerIn: parent
-                        text: layer.host.qrLink ? layer.host.t("js.generating") : layer.host.t("qr.empty")
-                        color: layer.host.tertiary
-                        font.family: layer.host.fonts[0]
+                        text: root.host.qrLink ? root.host.t("js.generating") : root.host.t("qr.empty")
+                        color: root.host.tertiary
+                        font.family: root.host.fonts[0]
                         font.pixelSize: 13
                     }
                 }
                 Text {
                     width: parent.width
-                    text: layer.host.qrLink || layer.host.t("qr.noShare")
-                    color: layer.host.secondary
+                    text: root.host.qrLink || root.host.t("qr.noShare")
+                    color: root.host.secondary
                     wrapMode: Text.WrapAnywhere
-                    font.family: layer.host.mono[0]
+                    font.family: root.host.mono[0]
                     font.pixelSize: 11
                     maximumLineCount: 6
                     elide: Text.ElideRight
@@ -292,11 +294,12 @@ Item {
                 Row {
                     anchors.right: parent.right
                     spacing: 10
-                    DialogButton { host: layer.host; text: layer.host.t("btn.close"); onClicked: qrMask.visible = false }
-                    DialogButton { host: layer.host; text: layer.host.t("ctx.copyLink"); primary: true; onClicked: layer.host.copyQr() }
+                    DialogButton { host: root.host; text: root.host.t("btn.close"); onClicked: qrMask.visible = false }
+                    DialogButton { host: root.host; text: root.host.t("ctx.copyLink"); primary: true; onClicked: root.host.copyQr() }
                 }
             }
         }
     }
 
 }
+

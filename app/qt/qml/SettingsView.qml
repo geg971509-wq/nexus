@@ -126,7 +126,7 @@ Item {
     }
 
     function osDark() {
-        return Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
+        return Application.styleHints.colorScheme === Qt.ColorScheme.Dark
     }
 
     function applyLocale(label) {

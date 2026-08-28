@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -799,8 +801,6 @@ Item {
 
                     Item {
                         id: powerBox
-                        width: 32
-                        height: 32
                         implicitWidth: 32
                         implicitHeight: 32
                         Layout.preferredWidth: 32

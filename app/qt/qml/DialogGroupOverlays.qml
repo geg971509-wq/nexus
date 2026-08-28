@@ -1,9 +1,11 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
 Item {
-    id: layer
+    id: root
 
     required property var host
     width: 0
@@ -29,10 +31,10 @@ Item {
     function editUrl() { return geUrl.text }
 
     DialogMask {
-        host: layer.host
+        host: root.host
         id: groupsMask
         DialogCard {
-            host: layer.host
+            host: root.host
             cardW: 500
             height: Math.min(520, Math.max(260, groupsBody.implicitHeight + 32))
             ColumnLayout {
@@ -41,18 +43,18 @@ Item {
                 anchors.margins: 16
                 spacing: 8
                 Text {
-                    text: layer.host.t("groups.title")
-                    color: layer.host.label
-                    font.family: layer.host.fonts[0]
+                    text: root.host.t("groups.title")
+                    color: root.host.label
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 15
                     font.weight: Font.DemiBold
                     Layout.fillWidth: true
                 }
                 Text {
-                    text: layer.host.t("groups.sub")
-                    color: layer.host.secondary
+                    text: root.host.t("groups.sub")
+                    color: root.host.secondary
                     wrapMode: Text.WordWrap
-                    font.family: layer.host.fonts[0]
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 12
                     Layout.fillWidth: true
                 }
@@ -73,21 +75,21 @@ Item {
                         required property int count
                         width: groupList.width
                         height: 42
-                        radius: layer.host.r
-                        color: selected ? layer.host.fill : (rowHit.containsMouse ? layer.host.fill : "transparent")
+                        radius: root.host.r
+                        color: selected ? root.host.fill : (rowHit.containsMouse ? root.host.fill : "transparent")
                         border.width: 1
-                        border.color: selected ? layer.host.blue : layer.host.menuBorder
+                        border.color: selected ? root.host.blue : root.host.menuBorder
                         activeFocusOnTab: true
                         Accessible.role: Accessible.ListItem
-                        Accessible.name: groupRow.name + ", " + groupRow.count + " " + layer.host.t("js.nodes")
+                        Accessible.name: groupRow.name + ", " + groupRow.count + " " + root.host.t("js.nodes")
                         readonly property bool selected: {
-                            var currentHome = layer.host.home
-                            var cur = (currentHome && currentHome.activeGid) || layer.host.gid()
+                            var currentHome = root.host.home
+                            var cur = (currentHome && currentHome.activeGid) || root.host.gid()
                             return cur === gid
                         }
                         function activate() {
-                            if (layer.host.home && typeof layer.host.home.switchGroup === "function")
-                                layer.host.home.switchGroup(groupRow.gid, true)
+                            if (root.host.home && typeof root.host.home.switchGroup === "function")
+                                root.host.home.switchGroup(groupRow.gid, true)
                         }
                         Keys.onReturnPressed: activate()
                         Keys.onEnterPressed: activate()
@@ -110,16 +112,16 @@ Item {
                                 Text {
                                     width: parent.width
                                     text: groupRow.name
-                                    color: layer.host.label
-                                    font.family: layer.host.fonts[0]
+                                    color: root.host.label
+                                    font.family: root.host.fonts[0]
                                     font.pixelSize: 13
                                     font.weight: groupRow.selected ? Font.DemiBold : Font.Medium
                                     elide: Text.ElideRight
                                 }
                                 Text {
-                                    text: layer.host.t("js.nodes") + " · " + groupRow.count
-                                    color: layer.host.secondary
-                                    font.family: layer.host.fonts[0]
+                                    text: root.host.t("js.nodes") + " · " + groupRow.count
+                                    color: root.host.secondary
+                                    font.family: root.host.fonts[0]
                                     font.pixelSize: 11
                                 }
                             }
@@ -127,8 +129,8 @@ Item {
                                 z: 1
                                 Layout.alignment: Qt.AlignVCenter
                                 spacing: 6
-                                DialogButton { host: layer.host; uniform: true; text: layer.host.t("ctx.edit"); onClicked: layer.host.openGroupEdit(groupRow.gid, "edit") }
-                                DialogButton { host: layer.host; uniform: true; text: layer.host.t("ctx.delete"); danger: true; onClicked: layer.host.deleteGroup(groupRow.gid) }
+                                DialogButton { host: root.host; uniform: true; text: root.host.t("ctx.edit"); onClicked: root.host.openGroupEdit(groupRow.gid, "edit") }
+                                DialogButton { host: root.host; uniform: true; text: root.host.t("ctx.delete"); danger: true; onClicked: root.host.deleteGroup(groupRow.gid) }
                             }
                         }
                     }
@@ -136,25 +138,25 @@ Item {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
-                    DialogButton { host: layer.host; uniform: true; text: layer.host.t("groups.new"); onClicked: layer.host.openGroupEdit(null, "create") }
+                    DialogButton { host: root.host; uniform: true; text: root.host.t("groups.new"); onClicked: root.host.openGroupEdit(null, "create") }
                     Item { Layout.fillWidth: true }
-                    DialogButton { host: layer.host; uniform: true;
-                        text: layer.host.t("groups.updateAll")
-                        enabled: !layer.host.subUpdating
-                        onClicked: layer.host.updateAllGroups()
+                    DialogButton { host: root.host; uniform: true;
+                        text: root.host.t("groups.updateAll")
+                        enabled: !root.host.subUpdating
+                        onClicked: root.host.updateAllGroups()
                     }
-                    DialogButton { host: layer.host; uniform: true; text: layer.host.t("groups.done"); primary: true; onClicked: groupsMask.visible = false }
+                    DialogButton { host: root.host; uniform: true; text: root.host.t("groups.done"); primary: true; onClicked: groupsMask.visible = false }
                 }
             }
         }
     }
 
     DialogMask {
-        host: layer.host
+        host: root.host
         id: groupEditMask
         z: 410
         DialogCard {
-            host: layer.host
+            host: root.host
             cardW: 420
             implicitHeight: groupEditBody.implicitHeight + 32
             ColumnLayout {
@@ -164,25 +166,25 @@ Item {
                 spacing: 8
                 Text {
                     id: geTitle
-                    color: layer.host.label
-                    font.family: layer.host.fonts[0]
+                    color: root.host.label
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 15
                     font.weight: Font.DemiBold
                     Layout.fillWidth: true
                 }
                 Text {
                     id: geSub
-                    color: layer.host.secondary
+                    color: root.host.secondary
                     wrapMode: Text.WordWrap
-                    font.family: layer.host.fonts[0]
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 12
                     Layout.fillWidth: true
                 }
                 Item { Layout.preferredHeight: 2 }
                 Text {
-                    text: layer.host.t("edit.name")
-                    color: layer.host.secondary
-                    font.family: layer.host.fonts[0]
+                    text: root.host.t("edit.name")
+                    color: root.host.secondary
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 12
                     Layout.fillWidth: true
                 }
@@ -192,26 +194,26 @@ Item {
                     Layout.preferredHeight: 32
                     leftPadding: 10
                     rightPadding: 10
-                    placeholderText: layer.host.t("edit.name")
-                    font.family: layer.host.fonts[0]
+                    placeholderText: root.host.t("edit.name")
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 13
-                    color: layer.host.label
+                    color: root.host.label
                     selectByMouse: true
-                    Accessible.name: layer.host.t("edit.name")
-                    Keys.onReturnPressed: layer.host.saveGroupEdit()
-                    Keys.onEnterPressed: layer.host.saveGroupEdit()
-                    onTextEdited: layer.host.groupEditError = ""
+                    Accessible.name: root.host.t("edit.name")
+                    Keys.onReturnPressed: root.host.saveGroupEdit()
+                    Keys.onEnterPressed: root.host.saveGroupEdit()
+                    onTextEdited: root.host.groupEditError = ""
                     background: Rectangle {
-                        radius: layer.host.r
-                        color: layer.host.menuBg
+                        radius: root.host.r
+                        color: root.host.menuBg
                         border.width: 1
-                        border.color: geName.activeFocus ? layer.host.blue : layer.host.menuBorder
+                        border.color: geName.activeFocus ? root.host.blue : root.host.menuBorder
                     }
                 }
                 Text {
-                    text: layer.host.t("label.728c7d71")
-                    color: layer.host.secondary
-                    font.family: layer.host.fonts[0]
+                    text: root.host.t("label.728c7d71")
+                    color: root.host.secondary
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 12
                     Layout.fillWidth: true
                 }
@@ -222,26 +224,26 @@ Item {
                     leftPadding: 10
                     rightPadding: 10
                     placeholderText: "https://…/sub"
-                    font.family: layer.host.fonts[0]
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 13
-                    color: layer.host.label
+                    color: root.host.label
                     selectByMouse: true
                     inputMethodHints: Qt.ImhUrlCharactersOnly
-                    Accessible.name: layer.host.t("label.728c7d71")
-                    onTextEdited: layer.host.groupEditError = ""
+                    Accessible.name: root.host.t("label.728c7d71")
+                    onTextEdited: root.host.groupEditError = ""
                     background: Rectangle {
-                        radius: layer.host.r
-                        color: layer.host.menuBg
+                        radius: root.host.r
+                        color: root.host.menuBg
                         border.width: 1
-                        border.color: geUrl.activeFocus ? layer.host.blue : layer.host.menuBorder
+                        border.color: geUrl.activeFocus ? root.host.blue : root.host.menuBorder
                     }
                 }
                 Text {
-                    visible: !!layer.host.groupEditError
-                    text: layer.host.groupEditError
-                    color: layer.host.red
+                    visible: !!root.host.groupEditError
+                    text: root.host.groupEditError
+                    color: root.host.red
                     wrapMode: Text.WordWrap
-                    font.family: layer.host.fonts[0]
+                    font.family: root.host.fonts[0]
                     font.pixelSize: 12
                     Layout.fillWidth: true
                 }
@@ -249,11 +251,12 @@ Item {
                     Layout.fillWidth: true
                     spacing: 8
                     Item { Layout.fillWidth: true }
-                    DialogButton { host: layer.host; uniform: true; text: layer.host.t("btn.cancel"); onClicked: groupEditMask.visible = false }
-                    DialogButton { host: layer.host; uniform: true; text: layer.host.t("btn.save"); primary: true; onClicked: layer.host.saveGroupEdit() }
+                    DialogButton { host: root.host; uniform: true; text: root.host.t("btn.cancel"); onClicked: groupEditMask.visible = false }
+                    DialogButton { host: root.host; uniform: true; text: root.host.t("btn.save"); primary: true; onClicked: root.host.saveGroupEdit() }
                 }
             }
         }
     }
 
 }
+
