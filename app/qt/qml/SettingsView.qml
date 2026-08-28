@@ -15,6 +15,7 @@ Item {
     readonly property color secondary: th ? th.secondary : "#6e6e73"
     readonly property color tertiary: th ? th.tertiary : "#8e8e93"
     readonly property color blue: th ? th.blue : "#007aff"
+    readonly property color red: th ? th.red : "#ff3b30"
     readonly property color surface: th ? th.surface : "#ffffff"
     readonly property color chrome: th ? th.chromeSolid : "#fafafc"
     readonly property color sep: th ? th.separator : "#1e3c3c43"
