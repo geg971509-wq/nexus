@@ -72,7 +72,16 @@ jobs:
       # qt_add_resources embeds QML but does not parse it. Lint every source so
       # syntax/type errors cannot ship as a blank window.
       - name: QML lint
-        run: qmllint -I app/qt/qml app/qt/qml/*.qml
+        run: |
+          lint_output="$(qmllint -I app/qt/qml app/qt/qml/*.qml 2>&1)" || {
+            printf '%s\n' "$lint_output"
+            exit 1
+          }
+          printf '%s\n' "$lint_output"
+          if grep -q '^Warning:' <<< "$lint_output"; then
+            echo "qmllint emitted warnings" >&2
+            exit 1
+          fi
       # Compile the actual Qt host and every embedded resource path. The Rust-only
       # check cannot catch a broken C++ bridge or missing resource file.
       - name: Qt host build
