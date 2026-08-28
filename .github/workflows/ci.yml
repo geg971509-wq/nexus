@@ -75,8 +75,12 @@ jobs:
           touch app/src-tauri/binaries/NexusCore-$(rustc -vV | sed -n 's/^host: //p')
       - run: cargo test --lib
         working-directory: app/src-tauri
-      # Compile the actual Qt host and every embedded QML/resource path. The
-      # Rust-only check cannot catch a broken C++ bridge or missing QML file.
+      # qt_add_resources embeds QML but does not parse it. Lint every source so
+      # syntax/type errors cannot ship as a blank window.
+      - name: QML lint
+        run: qmllint -I app/qt/qml app/qt/qml/*.qml
+      # Compile the actual Qt host and every embedded resource path. The Rust-only
+      # check cannot catch a broken C++ bridge or missing resource file.
       - name: Qt host build
         run: |
           cmake -S app/qt -B app/qt/build -DCMAKE_BUILD_TYPE=Release
