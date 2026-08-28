@@ -13,9 +13,8 @@ import (
 // interface can be queried at any time via DefaultInterface (and the
 // GetDefaultInterface RPC), independently of the sing-box instance lifecycle.
 //
-// On Windows it additionally drives system-DNS management through HandleSystemDNS;
-// on other platforms that callback is a no-op (see dns_manager_stub.go) while the
-// monitor itself still runs so interface detection is consistent everywhere.
+// DNS changes are handled by the macOS system layer; this monitor remains
+// responsible for consistent default-interface detection.
 var DnsManagerInstance *DnsManager
 
 type DnsManager struct {

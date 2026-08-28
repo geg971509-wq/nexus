@@ -10,16 +10,7 @@ pub fn data_dir() -> PathBuf {
             return PathBuf::from(home).join("Library/Application Support/Nexus");
         }
     }
-    #[cfg(target_os = "windows")]
-    {
-        if let Some(ad) = std::env::var_os("APPDATA") {
-            return PathBuf::from(ad).join("Nexus");
-        }
-        if let Some(home) = std::env::var_os("USERPROFILE") {
-            return PathBuf::from(home).join("AppData/Roaming/Nexus");
-        }
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(not(target_os = "macos"))]
     {
         if let Some(home) = std::env::var_os("HOME") {
             return PathBuf::from(home).join(".local/share/Nexus");
@@ -37,11 +28,7 @@ pub fn log_dir() -> PathBuf {
         }
         return std::env::temp_dir().join("Nexus-logs");
     }
-    #[cfg(target_os = "windows")]
-    {
-        return data_dir().join("logs");
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(not(target_os = "macos"))]
     {
         if let Some(home) = std::env::var_os("HOME") {
             return PathBuf::from(home).join(".local/share/Nexus/logs");
@@ -58,7 +45,7 @@ pub fn log_dir() -> PathBuf {
 /// 0600 while its neighbours stayed world-readable — doing it on the directory
 /// covers those and anything added later, instead of chasing each file.
 ///
-/// No-op off unix; Windows inherits the profile directory's ACL.
+/// No-op off Unix.
 fn restrict_to_owner(dir: &std::path::Path) {
     #[cfg(unix)]
     {

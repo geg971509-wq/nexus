@@ -20,9 +20,7 @@ type Process struct {
 	stopped     atomic.Bool
 }
 
-// running is the minimal handle Process needs to a started child. The normal
-// launch (plain exec, or unix setuid) is backed by *exec.Cmd; the elevated
-// Windows launch (CreateProcessWithTokenW) is backed by a raw process handle.
+// running is the minimal handle Process needs to a started child.
 type running interface {
 	Wait() error
 	Kill() error
@@ -41,7 +39,7 @@ func (p *Process) SetCleanupPath(path string) {
 }
 
 func (p *Process) Start() error {
-	// The Core may run elevated (setuid-root on unix, UAC-elevated on Windows),
+	// The Core may run elevated through its setuid-root installation,
 	// but the extra process is an arbitrary user-supplied binary that must not
 	// inherit those privileges. startChild drops to the unprivileged real user,
 	// or refuses to start it at all.
@@ -81,8 +79,6 @@ func newCmd(path string, args []string, noOut bool) *exec.Cmd {
 	cmd.Stdout = &pipeLogger{prefix: extraCorePrefix, noOut: noOut}
 	cmd.Stderr = &pipeLogger{prefix: extraCorePrefix, noOut: noOut}
 	cmd.Env = childEnv()
-	// Windows: hide console for CUI children (netsh/extra core). No-op on unix.
-	applyNoConsole(cmd)
 	return cmd
 }
 
@@ -112,7 +108,7 @@ func (p *Process) cleanup() {
 // CreateExtraConfig writes the extra process configuration to a fresh file and
 // returns (configPath, cleanupPath).
 //
-// Security model: the Core may be setuid-root / UAC-elevated, and the extra
+// Security model: the Core may be setuid-root, and the extra
 // process runs as the unprivileged user. The config is written so that the
 // unprivileged user cannot turn this into a privileged file operation:
 //

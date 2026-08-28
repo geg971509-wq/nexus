@@ -9,7 +9,6 @@ mod sub;
 mod net;
 mod tray_spin;
 mod tun_if;
-mod winhide;
 pub mod tunnel_sm;
 pub mod firewall;
 pub mod qt_api;
@@ -1231,28 +1230,7 @@ fn confirm_disconnect_quit() -> bool {
             .map(|s| s.success())
             .unwrap_or(false);
     }
-    #[cfg(target_os = "windows")]
-    {
-        // VBScript MsgBox: Yes=6. CREATE_NO_WINDOW so cscript itself doesn't flash a console.
-        let script = r#"
-WScript.Quit CreateObject("WScript.Shell").Popup("Tunnel still running (Tun / system proxy). Exit will stop Core and clear system proxy.", 0, "Nexus", 49)
-"#;
-        let dir = std::env::temp_dir();
-        let path = dir.join("nexus-quit-confirm.vbs");
-        if std::fs::write(&path, script).is_err() {
-            return true;
-        }
-        let mut cmd = std::process::Command::new(winhide::system32("cscript.exe"));
-        crate::winhide::apply(&mut cmd);
-        let ok = cmd
-            .args(["//Nologo", &path.to_string_lossy()])
-            .status()
-            .map(|s| s.code() == Some(6))
-            .unwrap_or(true);
-        let _ = std::fs::remove_file(&path);
-        return ok;
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(not(target_os = "macos"))]
     {
         true
     }

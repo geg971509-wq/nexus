@@ -5,11 +5,7 @@ use std::time::Duration;
 
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
-#[cfg(unix)]
 type IpcStream = std::os::unix::net::UnixStream;
-
-#[cfg(windows)]
-type IpcStream = crate::core::winpipe::PipeStream;
 
 /// Stale replies to skip before declaring the stream unreadable. A call that
 /// timed out leaves exactly one reply behind, so a small number covers the real
@@ -53,16 +49,8 @@ impl From<std::io::Error> for IpcError {
 impl LibcoreClient {
     pub fn from_stream(stream: IpcStream) -> std::io::Result<Self> {
         let default = Duration::from_secs(15);
-        #[cfg(unix)]
-        {
-            stream.set_read_timeout(Some(default))?;
-            stream.set_write_timeout(Some(default))?;
-        }
-        #[cfg(windows)]
-        {
-            stream.set_read_timeout(Some(default))?;
-            stream.set_write_timeout(Some(default))?;
-        }
+        stream.set_read_timeout(Some(default))?;
+        stream.set_write_timeout(Some(default))?;
         Ok(Self {
             stream,
             broken: false,
@@ -84,7 +72,7 @@ impl LibcoreClient {
         payload: &[u8],
         timeout: Duration,
     ) -> Result<Vec<u8>, IpcError> {
-        // Unix + Windows: apply deadline for this call, restore after.
+        // Apply a deadline for this call, then restore the previous values.
         let prev_r = self.stream.read_timeout().ok().flatten();
         let prev_w = self.stream.write_timeout().ok().flatten();
         let _ = self.stream.set_read_timeout(Some(timeout));

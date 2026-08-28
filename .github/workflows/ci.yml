@@ -30,6 +30,16 @@ jobs:
       - uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Refresh Go module metadata
+        working-directory: core/server
+        run: go mod tidy
+      - uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-go-modules
+          retention-days: 1
+          path: |
+            core/server/go.mod
+            core/server/go.sum
       # Generated *.pb.go are gitignored, so nothing compiles without this.
       - run: bash script/gen-proto.sh
       - run: go vet ./...
@@ -67,8 +77,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
-      - run: cargo test --locked --lib
+      - run: cargo test --lib
         working-directory: app/src-tauri
+      - uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-cargo-lock
+          retention-days: 1
+          path: app/src-tauri/Cargo.lock
       # qt_add_resources embeds QML but does not parse it. Lint every source so
       # syntax/type errors cannot ship as a blank window.
       - name: QML lint

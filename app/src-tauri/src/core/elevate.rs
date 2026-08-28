@@ -1,4 +1,4 @@
-//! Tun privilege: macOS setuid-root NexusCore; Windows runs Core as-is (elevate app for Tun).
+//! Tun privilege: macOS setuid-root NexusCore.
 
 use std::path::{Path, PathBuf};
 
@@ -18,7 +18,7 @@ use std::time::Duration;
 #[cfg(target_os = "macos")]
 const PRIV_CORE_DIR: &str = "/Library/PrivilegedHelperTools";
 
-/// Privileged Core path (macOS setuid copy). On Windows, unused — returns data_dir bin path.
+/// Privileged Core path (macOS setuid copy); other Unix builds use their data dir.
 pub fn privileged_core_path() -> PathBuf {
     #[cfg(target_os = "macos")]
     {
@@ -31,14 +31,7 @@ pub fn privileged_core_path() -> PathBuf {
 }
 
 fn core_bin_name() -> &'static str {
-    #[cfg(windows)]
-    {
-        "NexusCore.exe"
-    }
-    #[cfg(not(windows))]
-    {
-        "NexusCore"
-    }
+    "NexusCore"
 }
 
 #[cfg(target_os = "macos")]
@@ -59,8 +52,8 @@ fn shell_single_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
-/// macOS: copy → Application Support + chown root + chmod u+s via osascript.
-/// Windows / other: return `src` (run app elevated for Tun).
+/// macOS: copy → root-owned helper directory + chown root + chmod u+s via osascript.
+/// Other Unix builds return `src`.
 pub fn ensure_setuid_core(src: &Path) -> Result<PathBuf, String> {
     #[cfg(target_os = "macos")]
     {
@@ -135,7 +128,6 @@ pub fn ensure_setuid_core(src: &Path) -> Result<PathBuf, String> {
         if !src.is_file() {
             return Err(format!("NexusCore source missing: {}", src.display()));
         }
-        // ponytail: Tun on Windows needs an elevated process; no separate setuid copy.
         Ok(src.to_path_buf())
     }
 }

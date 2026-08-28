@@ -183,7 +183,7 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
         tun_obj.insert("address".into(), json!([TUN_V4]));
         tun_obj.insert("auto_route".into(), json!(true));
         tun_obj.insert("strict_route".into(), json!(false));
-        // SettingsRepo macOS default: gvisor (Windows may use system).
+        // SettingsRepo macOS default: gvisor.
         tun_obj.insert("stack".into(), json!("gvisor"));
         // SettingsRepo macOS default vpn_mtu = 1500 (not jumbo 9000).
         tun_obj.insert("mtu".into(), json!(1500));

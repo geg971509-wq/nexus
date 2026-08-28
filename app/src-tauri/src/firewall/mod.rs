@@ -81,18 +81,11 @@ pub fn status() -> Status {
         s.helper_running = run;
         s.helper_detail = det;
     }
-    #[cfg(target_os = "windows")]
-    {
-        // eng 4B / product 8A: OS firewall Unsupported — do not pretend helper is live.
-        s.helper_installed = false;
-        s.helper_running = false;
-        s.helper_detail = Some("unsupported".into());
-    }
     s
 }
 
 pub fn platform_support() -> PlatformSupport {
-    // 8A: product ships OS firewall only on macOS; Windows stays Unsupported.
+    // The product currently ships its OS firewall helper only on macOS.
     #[cfg(target_os = "macos")]
     {
         PlatformSupport::Active

@@ -161,33 +161,7 @@ fn apply_exclusive_lock(file: &fs::File) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-#[cfg(windows)]
-fn apply_exclusive_lock(file: &fs::File) -> Result<(), std::io::Error> {
-    use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::Foundation::HANDLE;
-    use windows_sys::Win32::Storage::FileSystem::{LockFileEx, LOCKFILE_EXCLUSIVE_LOCK};
-    use windows_sys::Win32::System::IO::OVERLAPPED;
-
-    let handle = file.as_raw_handle() as HANDLE;
-    let mut ov: OVERLAPPED = unsafe { std::mem::zeroed() };
-    // Lock one byte of the lock file (whole-file exclusive via exclusive flag).
-    let ok = unsafe {
-        LockFileEx(
-            handle,
-            LOCKFILE_EXCLUSIVE_LOCK,
-            0,
-            1,
-            0,
-            &mut ov,
-        )
-    };
-    if ok == 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    Ok(())
-}
-
-#[cfg(not(any(unix, windows)))]
+#[cfg(not(unix))]
 fn apply_exclusive_lock(_file: &fs::File) -> Result<(), std::io::Error> {
     Ok(())
 }

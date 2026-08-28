@@ -26,14 +26,8 @@ pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
         return Err("url too long".into());
     }
 
-    // Prefer curl: reliable TLS roots on macOS, follows redirects.
-    // Windows: curl.exe is a console app — CREATE_NO_WINDOW avoids black flash.
-    #[cfg(windows)]
-    let curl = crate::winhide::system32("curl.exe");
-    #[cfg(not(windows))]
-    let curl = std::path::PathBuf::from("/usr/bin/curl");
-    let mut cmd = Command::new(curl);
-    crate::winhide::apply(&mut cmd);
+    // System curl supplies the platform TLS roots and follows redirects.
+    let mut cmd = Command::new("/usr/bin/curl");
     let out = cmd
         .args([
             "-fsSL",
@@ -92,4 +86,3 @@ pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
         "url": url,
     }))
 }
-

@@ -21,14 +21,8 @@ const TRACE_URL: &str = "https://www.cloudflare.com/cdn-cgi/trace";
 /// If Core is not listening, curl fails and the caller shows nothing — there is
 /// no path here that can return this machine's own address.
 pub fn probe(mixed_port: u16) -> Result<serde_json::Value, String> {
-    #[cfg(windows)]
-    let curl = crate::winhide::system32("curl.exe");
-    #[cfg(not(windows))]
-    let curl = std::path::PathBuf::from("/usr/bin/curl");
-
     let proxy = format!("http://127.0.0.1:{mixed_port}");
-    let mut cmd = Command::new(curl);
-    crate::winhide::apply(&mut cmd);
+    let mut cmd = Command::new("/usr/bin/curl");
     let out = cmd
         .args([
             "-fsS",

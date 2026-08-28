@@ -7,5 +7,3 @@ pub mod proto_min {
     pub use super::proto_gen::*;
 }
 pub mod session;
-#[cfg(windows)]
-pub mod winpipe;

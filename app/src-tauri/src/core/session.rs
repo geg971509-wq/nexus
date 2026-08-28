@@ -13,9 +13,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 pub struct CoreSession {
-    /// Path or named-pipe id passed to Core via NEXUS_CORE_SOCKET.
-    /// Unix Drop unlinks the sock; Windows only needs it at spawn (pipe is not a file).
-    #[cfg_attr(windows, allow(dead_code))]
+    /// Unix socket path passed to Core via NEXUS_CORE_SOCKET.
     listener_path: PathBuf,
     child: Option<Child>,
     client: Option<LibcoreClient>,
@@ -39,7 +37,7 @@ impl Drop for CoreSession {
 }
 
 impl CoreSession {
-    /// IPC endpoint name for Core env. Unix = filesystem path; Windows = `\\.\pipe\…`.
+    /// IPC filesystem path passed to Core.
     pub fn socket_path() -> PathBuf {
         #[cfg(unix)]
         {
@@ -55,21 +53,10 @@ impl CoreSession {
             let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
             return dir.join(format!("nexus-core-{}.sock", std::process::id()));
         }
-        #[cfg(windows)]
-        {
-            PathBuf::from(format!(r"\\.\pipe\nexus-core-{}", std::process::id()))
-        }
     }
 
     fn core_bin_name() -> &'static str {
-        #[cfg(windows)]
-        {
-            "NexusCore.exe"
-        }
-        #[cfg(not(windows))]
-        {
-            "NexusCore"
-        }
+        "NexusCore"
     }
 
     /// Bundle / env Core (may be on nosuid volume — not for Tun on macOS).
@@ -155,9 +142,7 @@ impl CoreSession {
                 if bin.as_os_str().is_empty() || !bin.is_file() {
                     return;
                 }
-                let mut cmd = Command::new(bin);
-                crate::winhide::apply(&mut cmd);
-                let _ = cmd
+                let _ = Command::new(bin)
                     .arg("version")
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())
@@ -269,42 +254,6 @@ impl CoreSession {
                 std::thread::sleep(Duration::from_millis(40));
             }
         }
-        #[cfg(windows)]
-        {
-            // Honor `except`: never blanket /IM (would kill the live child).
-            let me = std::process::id();
-            let mut list = Command::new(crate::winhide::system32("tasklist.exe"));
-            crate::winhide::apply(&mut list);
-            let Ok(out) = list
-                .args(["/FI", "IMAGENAME eq NexusCore.exe", "/FO", "CSV", "/NH"])
-                .output()
-            else {
-                return;
-            };
-            let text = String::from_utf8_lossy(&out.stdout);
-            for line in text.lines() {
-                // "NexusCore.exe","1234","Session Name","Session#","Mem Usage"
-                let cols: Vec<&str> = line.split(',').collect();
-                if cols.len() < 2 {
-                    continue;
-                }
-                let pid_s = cols[1].trim().trim_matches('"');
-                let Ok(pid) = pid_s.parse::<u32>() else {
-                    continue;
-                };
-                if pid == me || except == Some(pid) {
-                    continue;
-                }
-                let mut kill = Command::new(crate::winhide::system32("taskkill.exe"));
-                crate::winhide::apply(&mut kill);
-                let _ = kill
-                    .args(["/F", "/PID", &pid.to_string(), "/T"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
-            }
-            std::thread::sleep(Duration::from_millis(250));
-        }
     }
 
     pub fn child_pid(&self) -> Option<u32> {
@@ -367,78 +316,6 @@ impl CoreSession {
         let client = LibcoreClient::from_stream(stream)?;
         Ok(Self {
             listener_path: path,
-            child: Some(child),
-            client: Some(client),
-        })
-    }
-
-    #[cfg(windows)]
-    pub fn start(core_bin: &Path) -> io::Result<Self> {
-        use super::winpipe;
-
-        Self::kill_stray_cores(None);
-
-        let short = format!("nexus-core-{}", std::process::id());
-        let full_pipe = format!(r"\\.\pipe\{short}");
-
-        // Accept thread first so Core's DialPipe can connect immediately after spawn.
-        let (tx, rx) = std::sync::mpsc::channel();
-        let pipe_for_accept = full_pipe.clone();
-        std::thread::spawn(move || {
-            let _ = tx.send(winpipe::accept_one(&pipe_for_accept, Duration::from_secs(20)));
-        });
-        // brief settle so CreateNamedPipe is listening before child starts
-        std::thread::sleep(Duration::from_millis(80));
-
-        let (stdout, stderr) = Self::core_stdio_sinks();
-        let core_cwd = Self::core_workdir();
-        let mut cmd = Command::new(core_bin);
-        crate::winhide::apply(&mut cmd);
-        let mut child = cmd
-            .current_dir(&core_cwd)
-            .env("NEXUS_CORE_SOCKET", &full_pipe)
-            .env("NEXUS_CORE_DEBUG", "1")
-            .stdout(stdout)
-            .stderr(stderr)
-            .spawn()?;
-
-        let deadline = Instant::now() + Duration::from_secs(20);
-        let stream = loop {
-            match rx.try_recv() {
-                Ok(Ok(s)) => break s,
-                Ok(Err(e)) => {
-                    let _ = child.kill();
-                    return Err(e);
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    if Instant::now() > deadline {
-                        let _ = child.kill();
-                        return Err(io::Error::new(
-                            io::ErrorKind::TimedOut,
-                            "core did not connect to named pipe",
-                        ));
-                    }
-                    if let Ok(Some(status)) = child.try_wait() {
-                        return Err(io::Error::new(
-                            io::ErrorKind::BrokenPipe,
-                            format!("core exited before IPC connect: {status}"),
-                        ));
-                    }
-                    std::thread::sleep(Duration::from_millis(50));
-                }
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    let _ = child.kill();
-                    return Err(io::Error::new(
-                        io::ErrorKind::BrokenPipe,
-                        "accept thread died",
-                    ));
-                }
-            }
-        };
-
-        let client = LibcoreClient::from_stream(stream)?;
-        Ok(Self {
-            listener_path: PathBuf::from(full_pipe),
             child: Some(child),
             client: Some(client),
         })
@@ -558,29 +435,10 @@ impl CoreSession {
     }
 
     pub fn core_process_alive() -> bool {
-        #[cfg(unix)]
-        {
-            // Same executable-name match as kill_stray_cores. A command line that
-            // merely mentions NexusCore used to read as a live Core here, which
-            // made session_status report an orphan Core that never existed.
-            let me = std::process::id();
-            return Self::core_pids().into_iter().any(|pid| pid != me);
-        }
-        #[cfg(windows)]
-        {
-            let mut cmd = Command::new(crate::winhide::system32("tasklist.exe"));
-            crate::winhide::apply(&mut cmd);
-            let Ok(out) = cmd
-                .args(["/FI", "IMAGENAME eq NexusCore.exe", "/NH"])
-                .output()
-            else {
-                return false;
-            };
-            let s = String::from_utf8_lossy(&out.stdout).to_ascii_lowercase();
-            return s.contains("nexuscore.exe");
-        }
-        #[allow(unreachable_code)]
-        false
+        // Same executable-name match as kill_stray_cores. A command line that
+        // merely mentions NexusCore must not look like a live Core.
+        let me = std::process::id();
+        Self::core_pids().into_iter().any(|pid| pid != me)
     }
 
     pub fn mixed_port_open(port: u16) -> bool {

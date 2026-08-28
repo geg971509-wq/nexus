@@ -21,7 +21,7 @@ import (
 // processOwnerEnricher runs after clash traffic tracking joins the conn.
 // Strategy (maximize path + pid coverage):
 //  1. Prefer ProcessInfo already filled by route find_process.
-//  2. Else look up via throng darwin/linux/windows searcher (multi dest candidates).
+//  2. Else look up via the platform process searcher (multi-destination candidates).
 //  3. If only pid is known, fill ProcessPath via processPathFromPID (root under Tun).
 //  4. Short deferred retries when PCB entry is not ready at route time.
 //
