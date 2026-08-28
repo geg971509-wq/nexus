@@ -40,7 +40,7 @@ Item {
             anchors.left: parent.left
             anchors.leftMargin: 14
             anchors.verticalCenter: parent.verticalCenter
-            text: win ? win.sbStatus : root.t("sb.stopped")
+            text: root.win ? root.win.sbStatus : root.t("sb.stopped")
             color: root.tertiary
             font.family: root.fonts[0]
             font.pixelSize: 11
@@ -50,7 +50,7 @@ Item {
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
-            text: root.t("sb.mixed") + " · " + (win ? win.mixedListen : "127.0.0.1:2080")
+            text: root.t("sb.mixed") + " · " + (root.win ? root.win.mixedListen : "127.0.0.1:2080")
             color: root.secondary
             font.family: root.mono[0]
             font.pixelSize: 11
@@ -72,7 +72,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             spacing: 14
             Text {
-                text: root.t("sb.proxy") + "  " + (win ? win.sbProxy : "—")
+                text: root.t("sb.proxy") + "  " + (root.win ? root.win.sbProxy : "—")
                 color: root.tertiary
                 font.family: root.fonts[0]
                 font.pixelSize: 11
@@ -81,7 +81,7 @@ Item {
                 MouseArea { id: pHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
             }
             Text {
-                text: root.t("sb.direct") + "  " + (win ? win.sbDirect : "—")
+                text: root.t("sb.direct") + "  " + (root.win ? root.win.sbDirect : "—")
                 color: root.tertiary
                 font.family: root.fonts[0]
                 font.pixelSize: 11

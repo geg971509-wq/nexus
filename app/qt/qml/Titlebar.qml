@@ -91,12 +91,12 @@ Item {
                             id: tabBtn
                             required property var modelData
                             required property int index
-                            readonly property string gid: String((modelData && modelData.id) || "")
-                            readonly property string gname: String((modelData && modelData.name) || gid)
+                            readonly property string gid: String((tabBtn.modelData && tabBtn.modelData.id) || "")
+                            readonly property string gname: String((tabBtn.modelData && tabBtn.modelData.name) || tabBtn.gid)
                             readonly property bool on: {
-                                var home = win ? win.home : null
-                                var cur = (home && home.activeGid) || (win && win.subTab) || "default"
-                                return cur === gid
+                                var home = root.win ? root.win.home : null
+                                var cur = (home && home.activeGid) || (root.win && root.win.subTab) || "default"
+                                return cur === tabBtn.gid
                             }
                             padding: 0
                             leftPadding: 8
@@ -110,10 +110,10 @@ Item {
                             ToolTip.visible: hovered
                             ToolTip.text: gname
                             onClicked: {
-                                if (win && win.home && typeof win.home.switchGroup === "function")
-                                    win.home.switchGroup(gid, true)
-                                else if (win)
-                                    win.subTab = gid
+                                if (root.win && root.win.home && typeof root.win.home.switchGroup === "function")
+                                    root.win.home.switchGroup(tabBtn.gid, true)
+                                else if (root.win)
+                                    root.win.subTab = tabBtn.gid
                             }
                             background: Item {
                                 Rectangle {
@@ -211,10 +211,12 @@ Item {
                                 { k: "menu.quit", tip: "title.quit", act: "quit" }
                             ]
                             delegate: Loader {
+                                id: appLoader
                                 width: 212
                                 required property var modelData
-                                sourceComponent: modelData.k === "sep" ? appSepComp : appRowComp
-                                property var itemData: modelData
+                                sourceComponent: appLoader.modelData.k === "sep" ? appSepComp : appRowComp
+                                property var itemData: appLoader.modelData
+                                onLoaded: if (appLoader.item && "itemData" in appLoader.item) appLoader.item.itemData = appLoader.itemData
                             }
                         }
                     }
@@ -294,10 +296,12 @@ Item {
                                 { k: "test.clear" }
                             ]
                             delegate: Loader {
+                                id: testLoader
                                 width: 188
                                 required property var modelData
-                                sourceComponent: modelData.k === "sep" ? sepComp : rowComp
-                                property var itemData: modelData
+                                sourceComponent: testLoader.modelData.k === "sep" ? sepComp : rowComp
+                                property var itemData: testLoader.modelData
+                                onLoaded: if (testLoader.item && "itemData" in testLoader.item) testLoader.item.itemData = testLoader.itemData
                             }
                         }
                     }
@@ -315,7 +319,7 @@ Item {
                 Accessible.name: root.t("tb.groups")
                 ToolTip.visible: hovered
                 ToolTip.text: root.t("title.manageGroups")
-                onClicked: if (win && win.dialogs) win.dialogs.openGroups()
+                onClicked: if (root.win && root.win.dialogs) root.win.dialogs.openGroups()
                 background: Rectangle {
                     radius: root.r
                     color: groupsBtn.hovered ? root.fill : root.controlBg
@@ -341,12 +345,12 @@ Item {
                 rightPadding: 8
                 implicitWidth: Math.max(24, implicitContentWidth + leftPadding + rightPadding)
                 hoverEnabled: true
-                enabled: !(win && win.dialogs && win.dialogs.subUpdating)
+                enabled: !(root.win && root.win.dialogs && root.win.dialogs.subUpdating)
                 opacity: enabled ? 1 : 0.45
                 Accessible.name: root.t("tb.refresh")
                 ToolTip.visible: hovered
                 ToolTip.text: root.t("title.refresh")
-                onClicked: if (win && win.dialogs) win.dialogs.refreshSub()
+                onClicked: if (root.win && root.win.dialogs) root.win.dialogs.refreshSub()
                 background: Rectangle {
                     radius: root.r
                     color: refreshBtn.hovered ? root.fill : root.controlBg
@@ -387,32 +391,32 @@ Item {
         id: appRowComp
         AbstractButton {
             id: appRow
-            property var itemData: parent && parent.itemData ? parent.itemData : ({ k: "", act: "" })
+            property var itemData: ({ k: "", act: "" })
             height: 28
             width: parent ? parent.width : 212
             hoverEnabled: true
-            Accessible.name: root.t(itemData.k)
+            Accessible.name: root.t(appRow.itemData.k)
             Accessible.role: Accessible.MenuItem
-            ToolTip.visible: hovered && !!itemData.tip
-            ToolTip.text: itemData.tip ? root.t(itemData.tip) : ""
+            ToolTip.visible: hovered && !!appRow.itemData.tip
+            ToolTip.text: appRow.itemData.tip ? root.t(appRow.itemData.tip) : ""
             onClicked: {
                 appMenu.close()
-                var d = win ? win.dialogs : null
+                var d = root.win ? root.win.dialogs : null
                 if (!d) return
-                if (itemData.act === "add-clip") d.importClip()
-                else if (itemData.act === "add-file") d.importFile()
-                else if (itemData.act === "scan-qr") d.importQr()
-                else if (itemData.act === "export") d.openExport()
-                else if (itemData.act === "stats") d.openStats()
-                else if (itemData.act === "hide") d.hideWin()
-                else if (itemData.act === "quit") d.requestQuit()
+                if (appRow.itemData.act === "add-clip") d.importClip()
+                else if (appRow.itemData.act === "add-file") d.importFile()
+                else if (appRow.itemData.act === "scan-qr") d.importQr()
+                else if (appRow.itemData.act === "export") d.openExport()
+                else if (appRow.itemData.act === "stats") d.openStats()
+                else if (appRow.itemData.act === "hide") d.hideWin()
+                else if (appRow.itemData.act === "quit") d.requestQuit()
             }
             background: Rectangle {
                 radius: 4
                 color: appRow.hovered ? root.fill : "transparent"
             }
             contentItem: Text {
-                text: root.t(itemData.k)
+                text: root.t(appRow.itemData.k)
                 color: root.label
                 font.family: root.fonts[0]
                 font.pixelSize: 13
@@ -443,28 +447,28 @@ Item {
         id: rowComp
         AbstractButton {
             id: row
-            property var itemData: parent && parent.itemData ? parent.itemData : ({ k: "" })
+            property var itemData: ({ k: "" })
             height: 28
             width: parent ? parent.width : 200
             hoverEnabled: true
-            Accessible.name: root.t(itemData.k)
-            ToolTip.visible: hovered && !!itemData.tip
-            ToolTip.text: itemData.tip ? root.t(itemData.tip) : ""
+            Accessible.name: root.t(row.itemData.k)
+            ToolTip.visible: hovered && !!row.itemData.tip
+            ToolTip.text: row.itemData.tip ? root.t(row.itemData.tip) : ""
             onClicked: {
                 testMenu.close()
-                var d = win ? win.dialogs : null
+                var d = root.win ? root.win.dialogs : null
                 if (!d) return
-                if (itemData.k === "test.urlSelected") d.testRun("selected")
-                else if (itemData.k === "test.urlGroup") d.testRun("group")
-                else if (itemData.k === "test.stop") d.testStop()
-                else if (itemData.k === "test.clear") d.testClear()
+                if (row.itemData.k === "test.urlSelected") d.testRun("selected")
+                else if (row.itemData.k === "test.urlGroup") d.testRun("group")
+                else if (row.itemData.k === "test.stop") d.testStop()
+                else if (row.itemData.k === "test.clear") d.testClear()
             }
             background: Rectangle {
                 radius: 4
                 color: row.hovered ? root.fill : "transparent"
             }
             contentItem: Text {
-                text: root.t(itemData.k)
+                text: root.t(row.itemData.k)
                 color: root.label
                 font.family: root.fonts[0]
                 font.pixelSize: 13

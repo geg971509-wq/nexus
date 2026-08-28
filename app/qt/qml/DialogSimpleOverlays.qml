@@ -96,17 +96,20 @@ Item {
                             { k: "stats.nextSub", v: "next" }
                         ]
                         delegate: Column {
+                            id: statCell
                             required property var modelData
                             width: (stCol.width - 12) / 2
                             spacing: 2
                             Text {
-                                text: modelData.k.indexOf(".") >= 0 ? root.host.t(modelData.k) : modelData.k
+                                text: statCell.modelData.k.indexOf(".") >= 0
+                                      ? root.host.t(statCell.modelData.k)
+                                      : statCell.modelData.k
                                 color: root.host.tertiary
                                 font.family: root.host.fonts[0]
                                 font.pixelSize: 11
                             }
                             Text {
-                                text: String((root.host.stats && root.host.stats[modelData.v]) || "—")
+                                text: String((root.host.stats && root.host.stats[statCell.modelData.v]) || "—")
                                 color: root.host.label
                                 font.family: root.host.fonts[0]
                                 font.pixelSize: 13
@@ -302,4 +305,3 @@ Item {
     }
 
 }
-

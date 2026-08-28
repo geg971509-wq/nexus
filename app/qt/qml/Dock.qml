@@ -63,9 +63,12 @@ Item {
     onFilterLvlChanged: rebuildLogView()
 
     function copyText(s) {
+        // nexus is an intentionally injected C++ context property.
+        // qmllint disable unqualified
         if (typeof nexus === "undefined" || !nexus || typeof nexus.setClipboardText !== "function")
             return false
         nexus.setClipboardText(String(s || ""))
+        // qmllint enable unqualified
         return true
     }
 
@@ -381,14 +384,15 @@ Item {
                     ]
                     delegate: AbstractButton {
                         id: tab
+                        required property var modelData
                         height: root.collapsedH
                         hoverEnabled: true
-                        Accessible.name: root.t(modelData.key)
+                        Accessible.name: root.t(tab.modelData.key)
                         Accessible.role: Accessible.PageTab
-                        onClicked: root.setPanel(modelData.id)
-                        property bool on: root.panel === modelData.id
+                        onClicked: root.setPanel(tab.modelData.id)
+                        property bool on: root.panel === tab.modelData.id
                         contentItem: Text {
-                            text: root.t(modelData.key)
+                            text: root.t(tab.modelData.key)
                             color: tab.on ? root.label : (tab.hovered ? root.secondary : root.tertiary)
                             font.family: root.fonts[0]
                             font.pixelSize: 12
@@ -534,13 +538,15 @@ Item {
                             { id: "warn", label: "WARN" }
                         ]
                         delegate: AbstractButton {
+                            id: filterButton
+                            required property var modelData
                             height: 22
                             hoverEnabled: true
-                            onClicked: root.filterLvl = modelData.id
-                            property bool on: root.filterLvl === modelData.id
+                            onClicked: root.filterLvl = filterButton.modelData.id
+                            property bool on: root.filterLvl === filterButton.modelData.id
                             contentItem: Text {
-                                text: modelData.label
-                                color: parent.on ? root.blue : root.secondary
+                                text: filterButton.modelData.label
+                                color: filterButton.on ? root.blue : root.secondary
                                 font.family: root.fonts[0]
                                 font.pixelSize: 11
                                 font.weight: Font.Medium
@@ -550,7 +556,7 @@ Item {
                             }
                             background: Rectangle {
                                 radius: 5
-                                color: parent.on ? root.blueSoft : (parent.hovered ? root.fill : "transparent")
+                                color: filterButton.on ? root.blueSoft : (filterButton.hovered ? root.fill : "transparent")
                             }
                         }
                     }
@@ -623,18 +629,19 @@ Item {
                             { key: "flow", w: 130, k: "th.flow" }
                         ]
                         delegate: AbstractButton {
+                            id: connHeader
                             required property var modelData
-                            width: modelData.w === 0
+                            width: connHeader.modelData.w === 0
                                    ? Math.max(70, (connList.width - 80 - 56 - 72 - 60 - 130) / 2)
-                                   : modelData.w
+                                   : connHeader.modelData.w
                             height: 24
                             hoverEnabled: true
                             Accessible.role: Accessible.ColumnHeader
-                            Accessible.name: modelData.k === "PID" ? "PID" : root.t(modelData.k)
-                            onClicked: root.clickConnSort(modelData.key)
+                            Accessible.name: connHeader.modelData.k === "PID" ? "PID" : root.t(connHeader.modelData.k)
+                            onClicked: root.clickConnSort(connHeader.modelData.key)
                             contentItem: Text {
-                                text: (modelData.k === "PID" ? "PID" : root.t(modelData.k)) + root.connHdrMark(modelData.key)
-                                color: root.connSortKey === modelData.key ? root.label : (parent.hovered ? root.secondary : root.tertiary)
+                                text: (connHeader.modelData.k === "PID" ? "PID" : root.t(connHeader.modelData.k)) + root.connHdrMark(connHeader.modelData.key)
+                                color: root.connSortKey === connHeader.modelData.key ? root.label : (connHeader.hovered ? root.secondary : root.tertiary)
                                 font.family: root.fonts[0]
                                 font.pixelSize: 11
                                 font.weight: Font.DemiBold
@@ -646,29 +653,38 @@ Item {
                     }
                 }
                 delegate: Item {
+                    id: connRow
+                    required property int index
+                    required property string time
+                    required property string app
+                    required property string pid
+                    required property string dest
+                    required property string proto
+                    required property string outbound
+                    required property string flow
                     width: connList.width
                     height: 22
-                    property bool on: root.connSel === index
+                    property bool on: root.connSel === connRow.index
                     Rectangle {
                         anchors.fill: parent
-                        color: parent.on ? root.blueSoft : "transparent"
+                        color: connRow.on ? root.blueSoft : "transparent"
                     }
                     Row {
                         anchors.fill: parent
-                        Text { width: 80; text: model.time; color: root.quaternary; font.family: root.mono[0]; font.pixelSize: 12; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
-                        Text { width: Math.max(70, (connList.width - 80 - 56 - 72 - 60 - 130) / 2); text: model.app; color: root.label; font.family: root.fonts[0]; font.pixelSize: 12; font.weight: Font.Medium; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
-                        Text { width: 56; text: model.pid; color: root.quaternary; font.family: root.mono[0]; font.pixelSize: 12; leftPadding: 8; horizontalAlignment: Text.AlignRight; rightPadding: 8; verticalAlignment: Text.AlignVCenter; height: 22 }
-                        Text { width: Math.max(70, (connList.width - 80 - 56 - 72 - 60 - 130) / 2); text: model.dest; color: root.secondary; font.family: root.mono[0]; font.pixelSize: 12; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
-                        Text { width: 72; text: model.proto; color: root.secondary; font.family: root.mono[0]; font.pixelSize: 12; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
-                        Text { width: 60; text: model.outbound; color: root.blue; font.family: root.fonts[0]; font.pixelSize: 11; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
-                        Text { width: 130; text: model.flow; color: root.secondary; font.family: root.mono[0]; font.pixelSize: 12; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
+                        Text { width: 80; text: connRow.time; color: root.quaternary; font.family: root.mono[0]; font.pixelSize: 12; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
+                        Text { width: Math.max(70, (connList.width - 80 - 56 - 72 - 60 - 130) / 2); text: connRow.app; color: root.label; font.family: root.fonts[0]; font.pixelSize: 12; font.weight: Font.Medium; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
+                        Text { width: 56; text: connRow.pid; color: root.quaternary; font.family: root.mono[0]; font.pixelSize: 12; leftPadding: 8; horizontalAlignment: Text.AlignRight; rightPadding: 8; verticalAlignment: Text.AlignVCenter; height: 22 }
+                        Text { width: Math.max(70, (connList.width - 80 - 56 - 72 - 60 - 130) / 2); text: connRow.dest; color: root.secondary; font.family: root.mono[0]; font.pixelSize: 12; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
+                        Text { width: 72; text: connRow.proto; color: root.secondary; font.family: root.mono[0]; font.pixelSize: 12; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
+                        Text { width: 60; text: connRow.outbound; color: root.blue; font.family: root.fonts[0]; font.pixelSize: 11; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
+                        Text { width: 130; text: connRow.flow; color: root.secondary; font.family: root.mono[0]; font.pixelSize: 12; leftPadding: 8; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; height: 22 }
                     }
                     MouseArea {
                         anchors.fill: parent
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: function (mouse) {
-                            root.connSel = index
-                            root.connSelDest = String(model.dest || "")
+                            root.connSel = connRow.index
+                            root.connSelDest = String(connRow.dest || "")
                             if (mouse.button === Qt.RightButton)
                                 root.popupAt(connCtx, this, mouse.x, mouse.y)
                         }
@@ -685,6 +701,7 @@ Item {
     }
 
     component DockItem: AbstractButton {
+        id: dockItem
         property var act: function () {}
         width: parent ? parent.width : 180
         height: 28
@@ -692,20 +709,20 @@ Item {
         onClicked: {
             logCtx.close()
             connCtx.close()
-            act()
+            dockItem.act()
         }
         background: Rectangle {
             radius: 4
-            color: parent.hovered && parent.enabled ? root.fill : "transparent"
+            color: dockItem.hovered && dockItem.enabled ? root.fill : "transparent"
         }
         contentItem: Text {
-            text: parent.text
-            color: parent.enabled ? root.label : root.tertiary
+            text: dockItem.text
+            color: dockItem.enabled ? root.label : root.tertiary
             font.family: root.fonts[0]
             font.pixelSize: 13
             verticalAlignment: Text.AlignVCenter
             leftPadding: 8
-            opacity: parent.enabled ? 1 : 0.45
+            opacity: dockItem.enabled ? 1 : 0.45
         }
     }
 

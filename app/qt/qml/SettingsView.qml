@@ -79,7 +79,10 @@ Item {
     }
 
     function api() {
+        // nexus is an intentionally injected C++ context property.
+        // qmllint disable unqualified
         return (typeof nexus === "undefined") ? null : nexus
+        // qmllint enable unqualified
     }
 
     function parseReply(raw) {

@@ -397,15 +397,17 @@ Item {
                         { k: "th.flow", key: "flow", w: root.flowW }
                     ]
                     delegate: AbstractButton {
-                        width: modelData.w === 0 ? root.nameW : modelData.w
+                        id: headerButton
+                        required property var modelData
+                        width: headerButton.modelData.w === 0 ? root.nameW : headerButton.modelData.w
                         height: 32
                         hoverEnabled: true
                         Accessible.role: Accessible.ColumnHeader
-                        Accessible.name: modelData.k === "#" ? "#" : root.t(modelData.k)
-                        onClicked: root.clickSort(modelData.key)
+                        Accessible.name: headerButton.modelData.k === "#" ? "#" : root.t(headerButton.modelData.k)
+                        onClicked: root.clickSort(headerButton.modelData.key)
                         contentItem: Text {
-                            text: (modelData.k === "#" ? "#" : root.t(modelData.k)) + (root.sortKey === modelData.key ? (root.sortDir === 1 ? " ↑" : " ↓") : "")
-                            color: root.sortKey === modelData.key ? root.label : (parent.hovered ? root.secondary : root.tertiary)
+                            text: (headerButton.modelData.k === "#" ? "#" : root.t(headerButton.modelData.k)) + (root.sortKey === headerButton.modelData.key ? (root.sortDir === 1 ? " ↑" : " ↓") : "")
+                            color: root.sortKey === headerButton.modelData.key ? root.label : (headerButton.hovered ? root.secondary : root.tertiary)
                             font.family: root.fonts[0]
                             font.pixelSize: 11
                             font.weight: Font.DemiBold
@@ -430,13 +432,22 @@ Item {
 
                 delegate: Rectangle {
                     id: row
+                    required property var idx
+                    required property string type
+                    required property string addr
+                    required property string name
+                    required property var lat
+                    required property string latKind
+                    required property bool hasFlow
+                    required property string flowUp
+                    required property string flowDown
                     width: list.width
                     height: 34
-                    property bool live: root.connected && root.connectedName.length && model.name === root.connectedName
+                    property bool live: root.connected && root.connectedName.length && row.name === root.connectedName
                     property bool on: {
                         var _n = root.selectedNames
                         var _s = root.selectedName
-                        return root.isSelected(model.name)
+                        return root.isSelected(row.name)
                     }
                     color: live
                            ? (area.containsMouse ? root.rowConnectedHover : (on ? root.rowConnectedSel : root.rowConnected))
@@ -449,7 +460,7 @@ Item {
                         Text {
                             width: root.idxW
                             height: parent.height
-                            text: model.idx
+                            text: row.idx
                             color: root.quaternary
                             font.family: root.fonts[0]
                             font.pixelSize: 12
@@ -460,7 +471,7 @@ Item {
                             width: root.typeW
                             height: parent.height
                             Rectangle {
-                                visible: model.type.length > 0
+                                visible: row.type.length > 0
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.left: parent.left
                                 anchors.leftMargin: 14
@@ -473,7 +484,7 @@ Item {
                                 Text {
                                     id: pillTxt
                                     anchors.centerIn: parent
-                                    text: model.type
+                                    text: row.type
                                     color: root.blue
                                     font.family: root.fonts[0]
                                     font.pixelSize: 10
@@ -484,7 +495,7 @@ Item {
                         Text {
                             width: root.addrW
                             height: parent.height
-                            text: model.addr
+                            text: row.addr
                             color: root.secondary
                             font.family: root.mono[0]
                             font.pixelSize: 12
@@ -495,7 +506,7 @@ Item {
                         Text {
                             width: root.nameW
                             height: parent.height
-                            text: model.name
+                            text: row.name
                             color: row.live ? root.green : root.label
                             font.family: root.fonts[0]
                             font.pixelSize: 13
@@ -507,8 +518,8 @@ Item {
                         Text {
                             width: root.latW
                             height: parent.height
-                            text: model.lat
-                            color: root.latColor(model.latKind)
+                            text: row.lat
+                            color: root.latColor(row.latKind)
                             font.family: root.mono[0]
                             font.pixelSize: 12
                             font.weight: Font.DemiBold
@@ -521,7 +532,7 @@ Item {
                             leftPadding: 14
                             spacing: 0
                             Text {
-                                visible: !model.hasFlow
+                                visible: !row.hasFlow
                                 text: "—"
                                 color: root.quaternary
                                 font.family: root.mono[0]
@@ -529,8 +540,8 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Text {
-                                visible: model.hasFlow
-                                text: model.flowUp
+                                visible: row.hasFlow
+                                text: row.flowUp
                                 color: "#0a84ff"
                                 font.family: root.mono[0]
                                 font.pixelSize: 12
@@ -538,7 +549,7 @@ Item {
                                 elide: Text.ElideRight
                             }
                             Text {
-                                visible: model.hasFlow && model.flowDown.length
+                                visible: row.hasFlow && row.flowDown.length
                                 text: " · "
                                 color: root.secondary
                                 font.family: root.mono[0]
@@ -546,9 +557,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Text {
-                                visible: model.hasFlow && model.flowDown.length
-                                text: model.flowDown
-                                color: th && th.purple ? th.purple : "#af52de"
+                                visible: row.hasFlow && row.flowDown.length
+                                text: row.flowDown
+                                color: root.th && root.th.purple ? root.th.purple : "#af52de"
                                 font.family: root.mono[0]
                                 font.pixelSize: 12
                                 anchors.verticalCenter: parent.verticalCenter
@@ -564,17 +575,17 @@ Item {
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: function (mouse) {
                             if (mouse.button === Qt.RightButton) {
-                                if (!root.isSelected(model.name))
-                                    root.pickRow(model.name, 0)
+                                if (!root.isSelected(row.name))
+                                    root.pickRow(row.name, 0)
                                 var g = mapToGlobal(mouse.x, mouse.y)
                                 root.nodeContext(g.x, g.y)
                             } else {
-                                root.pickRow(model.name, mouse.modifiers)
+                                root.pickRow(row.name, mouse.modifiers)
                             }
                         }
                         onDoubleClicked: function (mouse) {
                             if (mouse.button === Qt.LeftButton)
-                                root.nodeEdit(model.name)
+                                root.nodeEdit(row.name)
                         }
                     }
                 }

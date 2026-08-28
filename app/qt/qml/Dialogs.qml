@@ -42,7 +42,10 @@ Item {
     function t(k, v) { return i18 ? i18.t(k, v) : k }
 
     function api() {
+        // nexus is an intentionally injected C++ context property.
+        // qmllint disable unqualified
         return (typeof nexus === "undefined") ? null : nexus
+        // qmllint enable unqualified
     }
 
     function parseReply(raw) {
@@ -338,7 +341,7 @@ Item {
     function showExportDialog() { simpleOverlays.showExport() }
 
     Connections {
-        target: (typeof nexus === "undefined") ? null : nexus
+        target: root.api()
         function onQuitRequested() {
             root.requestQuit()
         }
@@ -351,25 +354,25 @@ Item {
             if (name === "net-probe-result") {
                 if (!r || r.id == null) return
                 var fail = !r.ok || r.ms == null || r.ms < 0
-                if (home && home.table && home.table.setLat) {
+                if (root.home && root.home.table && root.home.table.setLat) {
                     if (fail)
-                        home.table.setLat(r.id, -1)
+                        root.home.table.setLat(r.id, -1)
                     else
-                        home.table.setLat(r.id, r.ms)
+                        root.home.table.setLat(r.id, r.ms)
                 }
-                if (testing) {
+                if (root.testing) {
                     if (fail) {
-                        testFail += 1
-                        if (r.error && r.error !== "aborted" && r.error !== "test aborted" && testFail <= 5)
-                            log("TEST", "warn", "[" + r.id + "] " + r.error)
+                        root.testFail += 1
+                        if (r.error && r.error !== "aborted" && r.error !== "test aborted" && root.testFail <= 5)
+                            root.log("TEST", "warn", "[" + r.id + "] " + r.error)
                     } else {
-                        testOk += 1
+                        root.testOk += 1
                     }
-                    testGot += 1
-                    if (testGot === testExpect || (testGot > 0 && testGot % 25 === 0))
-                        log("TEST", "info", testLabel + " " + testGot + "/" + testExpect + " · ok " + testOk + " · fail " + testFail)
-                    if (testGot >= testExpect)
-                        finishTest()
+                    root.testGot += 1
+                    if (root.testGot === root.testExpect || (root.testGot > 0 && root.testGot % 25 === 0))
+                        root.log("TEST", "info", root.testLabel + " " + root.testGot + "/" + root.testExpect + " · ok " + root.testOk + " · fail " + root.testFail)
+                    if (root.testGot >= root.testExpect)
+                        root.finishTest()
                 }
                 return
             }
@@ -379,11 +382,11 @@ Item {
                     root.applyResolved(r.id, r.ips[0])
                 else
                     root.log("SYS", "warn", root.t("log.exitIpFail", { id: r.id, error: r.error || root.t("log.noAddr") }))
-                if (resolveExpect > 0) {
-                    resolveGot += 1
-                    if (resolveGot >= resolveExpect) {
-                        resolveExpect = 0
-                        resolveGot = 0
+                if (root.resolveExpect > 0) {
+                    root.resolveGot += 1
+                    if (root.resolveGot >= root.resolveExpect) {
+                        root.resolveExpect = 0
+                        root.resolveGot = 0
                     }
                 }
                 return

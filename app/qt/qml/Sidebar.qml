@@ -48,8 +48,8 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.leftMargin: collapsed ? 6 : 8
-        anchors.rightMargin: collapsed ? 6 : 8
+        anchors.leftMargin: root.collapsed ? 6 : 8
+        anchors.rightMargin: root.collapsed ? 6 : 8
         anchors.topMargin: 2
         spacing: 2
 
@@ -58,10 +58,10 @@ Item {
             width: nav.width
             height: 24
             hoverEnabled: true
-            Accessible.name: root.t(collapsed ? "nav.expandTitle" : "nav.collapseTitle")
+            Accessible.name: root.t(root.collapsed ? "nav.expandTitle" : "nav.collapseTitle")
             ToolTip.visible: hovered
             ToolTip.text: root.t("title.collapse")
-            onClicked: if (win) win.sidebarCollapsed = !win.sidebarCollapsed
+            onClicked: if (root.win) root.win.sidebarCollapsed = !root.win.sidebarCollapsed
             background: Rectangle {
                 radius: 4
                 color: collapse.hovered ? root.hover : "transparent"
@@ -97,17 +97,18 @@ Item {
             ]
             delegate: AbstractButton {
                 id: item
+                required property var modelData
                 width: nav.width
                 height: root.itemH
                 padding: 0
                 hoverEnabled: true
-                Accessible.name: root.t(modelData.key)
+                Accessible.name: root.t(item.modelData.key)
                 Accessible.role: Accessible.MenuItem
                 ToolTip.visible: hovered
-                ToolTip.text: root.t(modelData.tip)
+                ToolTip.text: root.t(item.modelData.tip)
                 ToolTip.delay: 500
-                onClicked: if (win) win.currentView = modelData.id
-                property bool on: win && win.currentView === modelData.id
+                onClicked: if (root.win) root.win.currentView = item.modelData.id
+                property bool on: root.win && root.win.currentView === item.modelData.id
                 background: Rectangle {
                     radius: root.r
                     color: item.on ? root.blue : (item.hovered ? root.hover : "transparent")
@@ -121,15 +122,15 @@ Item {
                             id: ico
                             width: 16
                             height: 16
-                            property string kind: modelData.icon
-                            property string iconMode: th ? th.iconStyle : "Monochrome"
+                            property string kind: item.modelData.icon
+                            property string iconMode: root.th ? root.th.iconStyle : "Monochrome"
                             property color stroke: {
                                 if (item.on) return "#ffffff"
                                 if (iconMode === "Colorful") {
                                     if (kind === "home") return root.blue
-                                    if (kind === "fw") return (th ? th.purple : "#af52de")
-                                    if (kind === "sub") return (th ? th.green : "#34c759")
-                                    return (th ? th.orange : "#ff9f0a")
+                                    if (kind === "fw") return (root.th ? root.th.purple : "#af52de")
+                                    if (kind === "sub") return (root.th ? root.th.green : "#34c759")
+                                    return (root.th ? root.th.orange : "#ff9f0a")
                                 }
                                 return root.secondary
                             }
@@ -181,7 +182,7 @@ Item {
                         }
                         Text {
                             visible: !root.collapsed
-                            text: root.t(modelData.key)
+                            text: root.t(item.modelData.key)
                             color: item.on ? "#ffffff" : root.label
                             font.family: root.fonts[0]
                             font.pixelSize: 13
@@ -211,9 +212,9 @@ Item {
             startX = m.x
         }
         onPositionChanged: function(m) {
-            if (!pressed || !win) return
+            if (!pressed || !root.win) return
             var w = Math.round(startW + (m.x - startX))
-            win.sidebarWidth = Math.max(150, Math.min(200, w))
+            root.win.sidebarWidth = Math.max(150, Math.min(200, w))
         }
     }
 

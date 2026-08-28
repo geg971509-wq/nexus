@@ -91,7 +91,10 @@ ApplicationWindow {
     function bootIdentity() {
         mixedPort = 2080
         mixedListen = "127.0.0.1:2080"
+        // nexus is an intentionally injected C++ context property.
+        // qmllint disable unqualified
         var api = (typeof nexus === "undefined") ? null : nexus
+        // qmllint enable unqualified
         if (!api || typeof api.invoke !== "function")
             return
         try {

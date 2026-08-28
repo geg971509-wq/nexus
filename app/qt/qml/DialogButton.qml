@@ -19,21 +19,21 @@ AbstractButton {
     Accessible.name: text
 
     background: Rectangle {
-        radius: button.uniform ? host.r : 8
+        radius: button.uniform ? button.host.r : 8
         color: button.danger
-            ? (button.hovered || button.down ? Qt.darker(host.red, 1.08) : host.red)
+            ? (button.hovered || button.down ? Qt.darker(button.host.red, 1.08) : button.host.red)
             : (button.primary
-               ? (button.hovered || button.down ? Qt.darker(host.blue, 1.08) : host.blue)
-               : (button.hovered || button.down ? host.fill : host.menuBg))
+               ? (button.hovered || button.down ? Qt.darker(button.host.blue, 1.08) : button.host.blue)
+               : (button.hovered || button.down ? button.host.fill : button.host.menuBg))
         border.width: button.uniform ? 1 : 0
-        border.color: button.activeFocus ? host.blue : host.menuBorder
+        border.color: button.activeFocus ? button.host.blue : button.host.menuBorder
     }
 
     contentItem: Text {
         id: label
         text: button.text
-        color: button.primary || button.danger ? "#ffffff" : host.label
-        font.family: host.fonts[0]
+        color: button.primary || button.danger ? "#ffffff" : button.host.label
+        font.family: button.host.fonts[0]
         font.pixelSize: button.uniform ? 12 : 13
         font.weight: button.uniform ? Font.Medium
                                     : (button.primary || button.danger ? Font.DemiBold : Font.Medium)

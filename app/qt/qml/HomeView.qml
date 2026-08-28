@@ -58,9 +58,12 @@ Item {
     function t(k, v) { return i18 ? i18.t(k, v) : k }
 
     function api() {
+        // nexus is an intentionally injected C++ context property.
+        // qmllint disable unqualified
         if (typeof nexus === "undefined" || !nexus) return null
         if (typeof nexus.invoke !== "function") return null
         return nexus
+        // qmllint enable unqualified
     }
 
     function parseReply(raw) {
@@ -735,7 +738,7 @@ Item {
     }
 
     Connections {
-        target: (typeof nexus === "undefined") ? null : nexus
+        target: root.api()
         function onEvent(name, json) {
             if (name === "connect-result") {
                 root.onConnectResult(json)

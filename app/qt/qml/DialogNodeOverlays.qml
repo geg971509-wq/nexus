@@ -54,7 +54,7 @@ Item {
             anchors.right: parent.right
             anchors.margins: 6
             height: 1
-            color: th ? th.separator : "#1e3c3c43"
+            color: root.th ? root.th.separator : "#1e3c3c43"
         }
     }
 
@@ -413,4 +413,3 @@ Item {
     }
 
 }
-

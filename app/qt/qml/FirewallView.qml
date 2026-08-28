@@ -65,7 +65,10 @@ Item {
     function t(k, v) { return i18 ? i18.t(k, v) : k }
 
     function api() {
+        // nexus is an intentionally injected C++ context property.
+        // qmllint disable unqualified
         return (typeof nexus === "undefined") ? null : nexus
+        // qmllint enable unqualified
     }
 
     function empty(v) { return v === undefined || v === null || v === "" }
