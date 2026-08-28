@@ -68,6 +68,11 @@ QtObject {
             }
         }
         var url = host.groupEditUrl().trim()
+        if (url && (!/^https?:\/\/\S+$/i.test(url) || url.length > 4096)) {
+            groupEditError = t("error.subUrlHttp")
+            host.focusGroupEditUrl()
+            return
+        }
         var created = creatingGroup
         if (created) {
             var nid = "g" + Date.now().toString(36)

@@ -10,7 +10,26 @@ const MAX_BODY_BYTES: u64 = 8 * 1024 * 1024;
 
 fn is_http_url(url: &str) -> bool {
     let u = url.trim();
-    u.starts_with("http://") || u.starts_with("https://")
+    let Some((scheme, rest)) = u.split_once("://") else {
+        return false;
+    };
+    !rest.is_empty()
+        && !u.chars().any(char::is_whitespace)
+        && (scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_http_url;
+
+    #[test]
+    fn subscription_url_is_http_only_and_has_no_whitespace() {
+        assert!(is_http_url("https://example.com/sub"));
+        assert!(is_http_url("HTTP://example.com/sub"));
+        assert!(!is_http_url("ftp://example.com/sub"));
+        assert!(!is_http_url("https://"));
+        assert!(!is_http_url("https://example.com/a b"));
+    }
 }
 
 /// Fetch subscription body. Returns `{ ok, body, status, error, bytes }`.

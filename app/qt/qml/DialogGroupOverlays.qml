@@ -27,6 +27,7 @@ Item {
     function showEdit() { groupEditMask.visible = true; focusName() }
     function hideEdit() { groupEditMask.visible = false }
     function focusName() { geName.forceActiveFocus(); geName.selectAll() }
+    function focusUrl() { geUrl.forceActiveFocus(); geUrl.selectAll() }
     function editName() { return geName.text }
     function editUrl() { return geUrl.text }
 
@@ -259,4 +260,3 @@ Item {
     }
 
 }
-

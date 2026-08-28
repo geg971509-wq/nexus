@@ -325,6 +325,7 @@ Item {
     }
     function hideGroupEditDialog() { groupOverlays.hideEdit() }
     function focusGroupEditName() { groupOverlays.focusName() }
+    function focusGroupEditUrl() { groupOverlays.focusUrl() }
     function groupEditName() { return groupOverlays.editName() }
     function groupEditUrl() { return groupOverlays.editUrl() }
 

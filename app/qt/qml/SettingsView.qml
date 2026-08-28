@@ -60,6 +60,7 @@ Item {
     property bool applying: false
     readonly property bool subBusy: !!(win && win.dialogs && win.dialogs.subUpdating)
     property string subUrl: ""
+    property string subUrlError: ""
     property string groupName: "Default"
     property string groupId: "default"
     property var catalog: null
@@ -288,8 +289,11 @@ Item {
         if (subBusy) return
         var url = (urlField.text || "").trim()
         if (url === "https://…/sub") url = ""
-        if (url && !/^https?:\/\//i.test(url) && !/^([a-z][a-z0-9+\-.]*):\/\//i.test(url)) {
+        subUrlError = ""
+        if (url && (!/^https?:\/\/\S+$/i.test(url) || url.length > 4096)) {
+            subUrlError = t("error.subUrlHttp")
             urlField.forceActiveFocus()
+            urlField.selectAll()
             return
         }
         var r0 = invoke("catalog_get", {})
@@ -539,7 +543,8 @@ Item {
                             }
                             SetRow {
                                 labelKey: "label.728c7d71"
-                                hintText: root.t("hint.subUrlNamed", { name: root.groupName })
+                                hintText: root.subUrlError || root.t("hint.subUrlNamed", { name: root.groupName })
+                                hintError: !!root.subUrlError
                                 last: true
                                 wide: true
                                 Row {
@@ -565,11 +570,12 @@ Item {
                                             leftPadding: 11
                                             rightPadding: 11
                                             verticalAlignment: Text.AlignVCenter
+                                            onTextEdited: root.subUrlError = ""
                                             background: Rectangle {
                                                 radius: 8
                                                 color: root.controlBg
                                                 border.width: 1
-                                                border.color: urlField.activeFocus ? root.blue : (urlHover.hovered ? root.controlBorderHover : root.controlBorder)
+                                                border.color: root.subUrlError ? root.red : (urlField.activeFocus ? root.blue : (urlHover.hovered ? root.controlBorderHover : root.controlBorder))
                                             }
                                             Keys.onReturnPressed: root.applySub()
                                             Keys.onEnterPressed: root.applySub()
@@ -582,7 +588,7 @@ Item {
                                             radius: 8
                                             color: root.controlBg
                                             border.width: 1
-                                            border.color: urlHover.hovered ? root.controlBorderHover : root.controlBorder
+                                            border.color: root.subUrlError ? root.red : (urlHover.hovered ? root.controlBorderHover : root.controlBorder)
                                             HoverHandler { id: urlHover }
                                             Text {
                                                 anchors.left: parent.left
@@ -715,6 +721,7 @@ Item {
         property string labelKey: ""
         property string hintKey: ""
         property string hintText: ""
+        property bool hintError: false
         property bool last: false
         property bool wide: false
         default property alias extras: rightCol.data
@@ -774,7 +781,7 @@ Item {
                     visible: (row.hintText || row.hintKey).length > 0
                     width: parent.width
                     text: row.hintText.length ? row.hintText : root.t(row.hintKey)
-                    color: root.tertiary
+                    color: row.hintError ? root.red : root.tertiary
                     font.family: root.fonts[0]
                     font.pixelSize: 11
                     wrapMode: Text.Wrap
