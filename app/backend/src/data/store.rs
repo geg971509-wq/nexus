@@ -30,6 +30,19 @@ fn default_true() -> bool {
     true
 }
 
+/// Real empty catalog for first launch. The UI must never invent placeholder
+/// groups that are not present in this source of truth.
+pub fn default_catalog() -> serde_json::Value {
+    serde_json::json!({
+        "v": 1,
+        "active": "default",
+        "groups": [{ "id": "default", "name": "Default", "url": "", "count": 0 }],
+        "profiles": {
+            "default": { "label": "Default", "nodes": [] }
+        }
+    })
+}
+
 impl Store {
     /// Validated bootstrap resolvers. Non-IP entries are dropped: these are
     /// interpolated into PF rule text, where a hostname is both a syntax error
@@ -190,6 +203,16 @@ mod tests {
         assert!(p.exists(), "valid store must not be quarantined");
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn first_launch_catalog_is_one_real_empty_default_group() {
+        let c = default_catalog();
+        assert_eq!(c["v"], 1);
+        assert_eq!(c["active"], "default");
+        assert_eq!(c["groups"].as_array().map(Vec::len), Some(1));
+        assert_eq!(c["groups"][0]["id"], "default");
+        assert_eq!(c["profiles"]["default"]["nodes"].as_array().map(Vec::len), Some(0));
     }
 }
 

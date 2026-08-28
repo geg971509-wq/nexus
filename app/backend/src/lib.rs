@@ -330,7 +330,21 @@ async fn catalog_get() -> Result<serde_json::Value, String> {
     runtime::spawn_blocking(|| {
         use data::store::Store;
         let st = Store::load();
-        Ok(st.catalog.unwrap_or(serde_json::Value::Null))
+        if let Some(catalog) = st.catalog {
+            return Ok(catalog);
+        }
+        // First launch / pre-catalog migration: persist one real empty group.
+        // Store::update rechecks under the exclusive lock so it cannot overwrite
+        // a catalog another caller created after the read above.
+        Store::update(|locked| {
+            if locked.catalog.is_none() {
+                locked.catalog = Some(data::store::default_catalog());
+            }
+            locked
+                .catalog
+                .clone()
+                .ok_or_else(|| "catalog initialization failed".to_string())
+        })
     })
     .await
     .map_err(|e| format!("catalog_get join: {e}"))?

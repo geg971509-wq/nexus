@@ -32,10 +32,7 @@ Item {
         var data = catalog
         if (data && data.groups && data.groups.length)
             return data.groups
-        return [
-            { id: "default", name: "Default" },
-            { id: "backup", name: t("tb.backup") }
-        ]
+        return []
     }
 
     function t(k) { return i18 ? i18.t(k) : k }
