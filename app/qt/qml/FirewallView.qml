@@ -133,11 +133,10 @@ Item {
         stateText = empty(st.tunnel_state) ? "—" : String(st.tunnel_state)
         stateTone = empty(st.tunnel_state) ? "neutral" : sTone
 
-        var support = st.support === "active" ? t("fw.active")
-                    : (st.support === "unsupported" ? t("fw.unsupported") : st.support)
+        var support = st.support === "active" ? t("fw.active") : st.support
         supportText = empty(support) ? "—" : String(support)
         supportTone = empty(support) ? "muted"
-                    : (st.support === "active" ? "ok" : (st.support === "unsupported" ? "warn" : ""))
+                    : (st.support === "active" ? "ok" : "warn")
 
         var mismatch = !!st.policy_mismatch
         var pol = mismatch

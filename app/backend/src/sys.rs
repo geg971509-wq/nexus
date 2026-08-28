@@ -296,12 +296,6 @@ pub fn set_system_dns_bootstrap(enabled: bool, servers: &[String]) -> Result<Str
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn set_system_dns_bootstrap(enabled: bool, servers: &[String]) -> Result<String, String> {
-    let _ = (enabled, servers);
-    Ok("system dns: no-op".into())
-}
-
 #[cfg(test)]
 mod tests {
     use super::dns_servers_for_os;
@@ -325,11 +319,4 @@ mod tests {
         let v = dns_servers_for_os(&["dns.google".into(), "9.9.9.9".into()]);
         assert_eq!(v, vec!["9.9.9.9".to_string()]);
     }
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
-    Err(format!(
-        "system proxy not implemented on this OS (enabled={enabled} port={port})"
-    ))
 }

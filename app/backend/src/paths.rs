@@ -10,12 +10,6 @@ pub fn data_dir() -> PathBuf {
             return PathBuf::from(home).join("Library/Application Support/Nexus");
         }
     }
-    #[cfg(not(target_os = "macos"))]
-    {
-        if let Some(home) = std::env::var_os("HOME") {
-            return PathBuf::from(home).join(".local/share/Nexus");
-        }
-    }
     std::env::temp_dir().join("Nexus")
 }
 
@@ -25,13 +19,6 @@ pub fn log_dir() -> PathBuf {
     {
         if let Some(home) = std::env::var_os("HOME") {
             return PathBuf::from(home).join("Library/Logs/Nexus");
-        }
-        return std::env::temp_dir().join("Nexus-logs");
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        if let Some(home) = std::env::var_os("HOME") {
-            return PathBuf::from(home).join(".local/share/Nexus/logs");
         }
         return std::env::temp_dir().join("Nexus-logs");
     }

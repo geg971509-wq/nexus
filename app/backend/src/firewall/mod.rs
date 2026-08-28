@@ -1,13 +1,10 @@
 //! OS packet-filter firewall (clean-room fail-closed; Mullvad-inspired semantics).
 //! macOS: NexusFwD root daemon + PF anchor `nexus`.
-//! Non-macOS: `platform_support()` is Unsupported.
 
 pub mod rules;
 pub mod wire;
 
-#[cfg(target_os = "macos")]
 pub mod macos;
-#[cfg(target_os = "macos")]
 pub mod macos_pf;
 
 pub use rules::{is_safe_ifname, ANCHOR};
@@ -17,12 +14,6 @@ use crate::defaults::MIXED_PORT;
 use crate::tunnel_sm::{ConnectParams, PeerEndpoint, State as SmState};
 use std::net::IpAddr;
 use std::sync::Mutex;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlatformSupport {
-    Active,
-    Unsupported,
-}
 
 #[derive(Debug, Clone)]
 pub enum Policy {
@@ -50,7 +41,6 @@ pub enum Policy {
 
 #[derive(Debug, Clone)]
 pub struct Status {
-    pub support: PlatformSupport,
     pub last_policy: String,
     pub last_error: Option<String>,
     pub peer: Option<String>,
@@ -61,7 +51,6 @@ pub struct Status {
 }
 
 static LAST: Mutex<Status> = Mutex::new(Status {
-    support: PlatformSupport::Unsupported,
     last_policy: String::new(),
     last_error: None,
     peer: None,
@@ -73,27 +62,11 @@ static LAST: Mutex<Status> = Mutex::new(Status {
 
 pub fn status() -> Status {
     let mut s = LAST.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    s.support = platform_support();
-    #[cfg(target_os = "macos")]
-    {
-        let (inst, run, det) = macos::helper_status();
-        s.helper_installed = inst;
-        s.helper_running = run;
-        s.helper_detail = det;
-    }
+    let (inst, run, det) = macos::helper_status();
+    s.helper_installed = inst;
+    s.helper_running = run;
+    s.helper_detail = det;
     s
-}
-
-pub fn platform_support() -> PlatformSupport {
-    // The product currently ships its OS firewall helper only on macOS.
-    #[cfg(target_os = "macos")]
-    {
-        PlatformSupport::Active
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        PlatformSupport::Unsupported
-    }
 }
 
 pub fn policy_from_sm(state: SmState, params: Option<&ConnectParams>) -> Policy {
@@ -155,25 +128,10 @@ pub fn apply(policy: Policy) -> Result<(), String> {
     let peer_s = policy_peer_str(&policy);
     let tun_s = policy_tun_str(&policy);
 
-    // Annotated: on non-macOS both arms are Ok(()), so E is otherwise unpinned
-    // until the tail return — and `e.clone()` below needs it earlier.
-    let result: Result<(), String> = match platform_support() {
-        PlatformSupport::Unsupported => Ok(()),
-        PlatformSupport::Active => {
-            #[cfg(target_os = "macos")]
-            {
-                macos::apply_policy(&policy)
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                Ok(())
-            }
-        }
-    };
+    let result = macos::apply_policy(&policy);
 
     // eng 3A: applied/last_policy only on successful apply; failures only last_error.
     let mut g = LAST.lock().unwrap_or_else(|e| e.into_inner());
-    g.support = platform_support();
     match &result {
         Ok(()) => {
             g.last_policy = name;
@@ -199,57 +157,36 @@ pub fn reset_best_effort() {
     let _ = apply(Policy::Reset);
 }
 
-/// mac: install LaunchDaemon once. Other OS: Ok.
+/// Install the macOS LaunchDaemon once.
 pub fn install_helper() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        let bin = macos::resolve_fwd_binary();
-        macos::install_helper(&bin)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(())
-    }
+    let bin = macos::resolve_fwd_binary();
+    macos::install_helper(&bin)
 }
 
 pub fn uninstall_helper() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        macos::uninstall_helper()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(())
-    }
+    macos::uninstall_helper()
 }
 
 /// L3: mac must have helper before connect.
 /// Missing daemon or stale binary (7A) → one-shot install (admin sheet) then recheck.
 pub fn require_ready_for_connect() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        let bin = macos::resolve_fwd_binary();
-        if !bin.is_file() {
-            return Err(format!(
-                "NexusFwD missing at {} — rebuild/bundle nexusfwd",
-                bin.display()
-            ));
-        }
-        // 7A: staged vs installed size/mtime mismatch → reinstall (admin OK).
-        if macos::helper_binary_stale(&bin) {
-            macos::install_helper(&bin)?;
-            return macos::ensure_helper_ready();
-        }
-        if macos::ensure_helper_ready().is_ok() {
-            return Ok(());
-        }
+    let bin = macos::resolve_fwd_binary();
+    if !bin.is_file() {
+        return Err(format!(
+            "NexusFwD missing at {} — rebuild/bundle nexusfwd",
+            bin.display()
+        ));
+    }
+    // 7A: staged vs installed size/mtime mismatch → reinstall (admin OK).
+    if macos::helper_binary_stale(&bin) {
         macos::install_helper(&bin)?;
-        macos::ensure_helper_ready()
+        return macos::ensure_helper_ready();
     }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(())
+    if macos::ensure_helper_ready().is_ok() {
+        return Ok(());
     }
+    macos::install_helper(&bin)?;
+    macos::ensure_helper_ready()
 }
 
 fn policy_name(p: &Policy) -> String {
@@ -373,8 +310,8 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_apply_ok() {
-        // Reset may fail without helper on mac; ignore error for unit smoke.
+    fn apply_smoke() {
+        // Reset may fail without an installed helper; this exercises policy plumbing.
         let _ = apply(Policy::Reset);
     }
 }

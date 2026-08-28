@@ -23,7 +23,8 @@ macOS VPN / proxy client. GUI: Qt Quick (`app/qt`). Engine: Go core (**sing-box*
 |--------|------|-----------------|------|
 | macOS 13+ | arm64 | self-contained `.app` | `NexusCore` (CGO) |
 
-Windows is not a product this round. Old HTML GUI and Windows pack scripts live under [`archive/`](archive/).
+Nexus does not ship non-macOS targets. Historical HTML GUI and platform pack
+scripts live under [`archive/`](archive/) and are excluded from the product build.
 
 ### Data directories
 

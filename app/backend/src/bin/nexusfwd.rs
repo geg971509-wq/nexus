@@ -1,12 +1,6 @@
 //! NexusFwD — root LaunchDaemon: PF apply over unix socket.
 //! Socket: /var/run/nexusfwd.sock mode 0666 + mandatory getpeereid allowlist (L1).
 
-#[cfg(not(target_os = "macos"))]
-fn main() {
-    eprintln!("nexusfwd is macOS-only");
-    std::process::exit(1);
-}
-
 #[cfg(target_os = "macos")]
 fn main() {
     if let Err(e) = run() {

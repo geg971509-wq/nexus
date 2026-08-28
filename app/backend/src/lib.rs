@@ -1,3 +1,6 @@
+#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+compile_error!("Nexus backend supports Apple Silicon macOS only");
+
 pub mod core;
 mod data;
 mod defaults;
@@ -506,13 +509,6 @@ pub(crate) fn connect_selected_sync(
     } else {
         None
     };
-    #[cfg(not(target_os = "macos"))]
-    let planned_tun_if: Option<String> = if use_tun {
-        Some("nexus-tun".into())
-    } else {
-        None
-    };
-
     let json = serde_json::to_string(&cfg).map_err(|e| e.to_string())?;
 
     // Tun: setuid Core before LoadConfig (upstream profile_start elevation).
@@ -567,9 +563,6 @@ pub(crate) fn connect_selected_sync(
     } else {
         Vec::new()
     };
-    #[cfg(not(target_os = "macos"))]
-    let utun_before: Vec<String> = Vec::new();
-
     // 1A: take session out of SESSION so Start (≤60s) does not block poll/disconnect.
     // Setup under lock; mint connect gen so mid-Start disconnect invalidates put_session_back.
     let (mut session, connect_gen) = {
@@ -691,7 +684,7 @@ pub(crate) fn connect_selected_sync(
     };
     let mut params_connected = connect_params.clone();
     params_connected.tun_if = tun_if.clone();
-    // Connected only if fail-closed policy applies (or platform Unsupported).
+    // Connected only if the fail-closed policy applies.
     // 1A/6A: SM Connected only via MarkConnected after firewall OK (no set_state).
     if let Err(e) = firewall::apply(firewall::policy_from_sm(
         tunnel_sm::State::Connected,
@@ -839,26 +832,18 @@ fn spawn_tun_if_rebind(gen: u64, params: tunnel_sm::ConnectParams, before: Vec<S
                 fail_closed_from_rebind(&params, "firewall tun rebind: ifname timeout".into());
             }
         }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = (gen, params, before);
-        }
     });
 }
 
 
 fn firewall_status_json() -> serde_json::Value {
     let st = firewall::status();
-    let support = match st.support {
-        firewall::PlatformSupport::Active => "active",
-        firewall::PlatformSupport::Unsupported => "unsupported",
-    };
     // 6A: desired (SM) vs applied (last successful apply) + mismatch.
     let desired = firewall::desired_policy_name();
     let applied = st.last_policy.clone();
     let mismatch = !desired.is_empty() && !applied.is_empty() && desired != applied;
     serde_json::json!({
-        "support": support,
+        "support": "active",
         "last_policy": st.last_policy,
         "desired_policy": desired,
         "applied_policy": applied,
@@ -1229,10 +1214,6 @@ fn confirm_disconnect_quit() -> bool {
             .status()
             .map(|s| s.success())
             .unwrap_or(false);
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        true
     }
 }
 

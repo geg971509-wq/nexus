@@ -198,11 +198,7 @@ pub fn generate_config(input: &GenerateInput<'_>) -> Value {
                     .collect(),
             ),
         );
-        // macOS: omit interface_name (auto utunN). Elsewhere: named device ok.
-        #[cfg(not(target_os = "macos"))]
-        {
-            tun_obj.insert("interface_name".into(), json!("nexus-tun"));
-        }
+        // Omit interface_name so sing-box selects the next macOS utun device.
         inbounds.push(Value::Object(tun_obj));
     }
 
@@ -466,10 +462,6 @@ mod tests {
                 tun.get("interface_name").is_none(),
                 "macOS must omit interface_name so sing-box picks utunN; got {tun}"
             );
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            assert_eq!(tun["interface_name"], "nexus-tun");
         }
     }
 

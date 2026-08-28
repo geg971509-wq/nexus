@@ -1,3 +1,5 @@
+//go:build darwin && arm64
+
 package main
 
 import (
@@ -172,7 +174,7 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 	// After clash tracker: one exact process lookup per routed connection.
 	boxInstance.Router().AppendTracker(processOwnerEnricher{})
 
-	if runtime.GOOS == "darwin" && in.GetTunIpv4Cidr() != "" {
+	if in.GetTunIpv4Cidr() != "" {
 		tunCIDR := in.GetTunIpv4Cidr()
 		tunPrefix, parseErr := netip.ParsePrefix(tunCIDR)
 		if parseErr != nil || !tunPrefix.Addr().Is4() {

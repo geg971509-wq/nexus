@@ -18,15 +18,11 @@ use std::time::Duration;
 #[cfg(target_os = "macos")]
 const PRIV_CORE_DIR: &str = "/Library/PrivilegedHelperTools";
 
-/// Privileged Core path (macOS setuid copy); other Unix builds use their data dir.
+/// Privileged Core path for the macOS setuid copy.
 pub fn privileged_core_path() -> PathBuf {
     #[cfg(target_os = "macos")]
     {
         PathBuf::from(PRIV_CORE_DIR).join("app.nexus.NexusCore")
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        crate::paths::data_dir().join("bin").join(core_bin_name())
     }
 }
 
@@ -42,18 +38,12 @@ pub fn path_has_setuid(path: &Path) -> bool {
     meta.permissions().mode() & 0o4000 != 0
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn path_has_setuid(_path: &Path) -> bool {
-    false
-}
-
 #[cfg(target_os = "macos")]
 fn shell_single_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
 /// macOS: copy → root-owned helper directory + chown root + chmod u+s via osascript.
-/// Other Unix builds return `src`.
 pub fn ensure_setuid_core(src: &Path) -> Result<PathBuf, String> {
     #[cfg(target_os = "macos")]
     {
@@ -123,13 +113,6 @@ pub fn ensure_setuid_core(src: &Path) -> Result<PathBuf, String> {
         }
         return Ok(dest);
     }
-    #[cfg(not(target_os = "macos"))]
-    {
-        if !src.is_file() {
-            return Err(format!("NexusCore source missing: {}", src.display()));
-        }
-        Ok(src.to_path_buf())
-    }
 }
 
 #[cfg(test)]
@@ -155,12 +138,4 @@ mod tests {
         assert!(!home.is_empty() && !s.starts_with(&home), "{s}");
     }
 
-    #[test]
-    #[cfg(not(target_os = "macos"))]
-    fn privileged_path_under_data_dir() {
-        let p = privileged_core_path();
-        let s = p.to_string_lossy();
-        assert!(s.contains("Nexus"), "{s}");
-        assert!(s.contains("bin"), "{s}");
-    }
 }

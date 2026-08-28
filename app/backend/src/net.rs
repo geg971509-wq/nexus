@@ -203,11 +203,6 @@ fn physical_ifindex() -> Option<u32> {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-fn physical_ifindex() -> Option<u32> {
-    None
-}
-
 #[cfg(target_os = "macos")]
 fn set_bound_if(sock: &Socket, ifindex: u32, v6: bool) -> std::io::Result<()> {
     use std::os::unix::io::AsRawFd;
@@ -232,11 +227,6 @@ fn set_bound_if(sock: &Socket, ifindex: u32, v6: bool) -> std::io::Result<()> {
     } else {
         Ok(())
     }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn set_bound_if(_sock: &Socket, _ifindex: u32, _v6: bool) -> std::io::Result<()> {
-    Ok(())
 }
 
 fn tcp_connect_ms(

@@ -11,11 +11,6 @@ pub(crate) fn detect_tun_ifname(before: &[String]) -> Option<String> {
     {
         detect_nexus_tun_ifname(20, before) // ~1s; late via spawn_tun_if_rebind
     }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = before;
-        Some("nexus-tun".into())
-    }
 }
 
 /// Poll for Core's tun after Start (iface appears slightly after LoadConfig).
