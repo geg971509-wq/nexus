@@ -4,10 +4,8 @@
 # clone must be able to produce them or GPLv3 Corresponding Source cannot
 # rebuild Core.
 #
-# The wire is our own framed IPC (dispatch.go), but the grpc stubs are still
-# required: server.go embeds gen.UnimplementedLibcoreServiceServer to supply
-# default methods for RPCs implemented on one OS only (e.g. SetSystemDNS is
-# Windows-only, yet dispatch.go calls it unconditionally).
+# The wire is our own framed IPC (dispatch.go), but the generated message types
+# and service interface are still required by server.go and the dispatcher.
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"

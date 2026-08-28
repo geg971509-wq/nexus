@@ -1,4 +1,4 @@
-//! JSON C ABI for the Qt host. Command names match the handlers in lib.rs.
+//! JSON C ABI and command dispatcher for the Qt host.
 
 use serde::Serialize;
 use serde_json::{json, Value};
