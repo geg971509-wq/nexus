@@ -104,13 +104,13 @@ cd core/server && go list -m all
 
 ## C. Nexus shell (Rust + Qt)
 
-Direct runtime-oriented crates (from `app/src-tauri/Cargo.toml`) are generally
+Direct runtime-oriented crates (from `app/backend/Cargo.toml`) are generally
 **MIT and/or Apache-2.0** (Tokio, serde, prost, qrcode, socket2, etc.).
 
 Full graph:
 
 ```bash
-cd app/src-tauri && cargo metadata --format-version 1 --locked
+cd app/backend && cargo metadata --format-version 1 --locked
 ```
 
 Product GUI is Qt Quick (`app/qt`):

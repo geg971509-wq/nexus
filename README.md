@@ -40,10 +40,11 @@ install and removed on uninstall.
 ## Layout
 
 - `app/qt/` — Qt Quick GUI (C++ host + QML)
-- `app/src-tauri/` — Rust engine + JSON C ABI (`nexus_invoke`) the Qt host links
-- `app/src-tauri/src/core/` — framed IPC + session spawn
-- `app/src-tauri/src/data/` — JSON store + pure generate
-- `app/src-tauri/src/sys.rs` — system proxy (macOS networksetup)
+- `app/backend/` — Rust backend + JSON C ABI (`nexus_invoke`) linked by the Qt host
+- `app/backend/src/core/` — framed IPC + Core session lifecycle
+- `app/backend/src/data/` — JSON store + pure configuration generation
+- `app/backend/src/sys.rs` — macOS system proxy integration
+- `app/assets/icons/` — application and tray icon assets
 - `core/server/` — Go core (`module NexusCore`, **GPLv3** combined work)
 - `licenses/` — full GPLv3 / MPL-2.0 texts
 - `THIRD_PARTY_NOTICES.md` — third-party inventory

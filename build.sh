@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Nexus macOS product build: NexusCore + Qt Quick .app
-# Always full rebuild. No flags. Windows is not a product this round.
+# Always full rebuild. No flags. The product target is Apple Silicon macOS.
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$ROOT/app"
-RUST_DIR="$APP_DIR/src-tauri"
+BACKEND_DIR="$APP_DIR/backend"
+ICON_DIR="$APP_DIR/assets/icons"
 CORE_SRC="$ROOT/core/server"
 BIN_DIR="$ROOT/bin"
 CORE_OUT="$BIN_DIR/NexusCore"
@@ -193,8 +194,8 @@ QT_BIN="$QT_BUILD/nexus"
 ok "qt host → $QT_BIN"
 
 log "building nexusfwd…"
-(cd "$RUST_DIR" && cargo build --locked --release --bin nexusfwd)
-FWD_BIN="$RUST_DIR/target/release/nexusfwd"
+(cd "$BACKEND_DIR" && cargo build --locked --release --bin nexusfwd)
+FWD_BIN="$BACKEND_DIR/target/release/nexusfwd"
 [[ -x "$FWD_BIN" ]] || die "nexusfwd missing: $FWD_BIN"
 ok "nexusfwd → $FWD_BIN"
 
@@ -210,7 +211,7 @@ chmod +x "$DEST_APP/Contents/MacOS/nexusfwd"
 cp -f "$QT_DIR/Info.plist" "$DEST_APP/Contents/Info.plist"
 plutil -replace LSMinimumSystemVersion -string "$MACOSX_DEPLOYMENT_TARGET" \
   "$DEST_APP/Contents/Info.plist"
-cp -f "$RUST_DIR/icons/icon.icns" "$DEST_APP/Contents/Resources/icon.icns"
+cp -f "$ICON_DIR/icon.icns" "$DEST_APP/Contents/Resources/icon.icns"
 
 # Include the notices a recipient needs with the exact binary they received.
 NOTICE_DIR="$DEST_APP/Contents/Resources/licenses"

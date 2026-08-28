@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-CARGO_TOML="$ROOT/app/src-tauri/Cargo.toml"
+CARGO_TOML="$ROOT/app/backend/Cargo.toml"
 INFO_PLIST="$ROOT/app/qt/Info.plist"
 README="$ROOT/README.md"
 

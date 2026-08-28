@@ -66,9 +66,9 @@ jobs:
           cache: 'true'
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: app/src-tauri
+          workspaces: app/backend
       - run: cargo test --locked --lib
-        working-directory: app/src-tauri
+        working-directory: app/backend
       # qt_add_resources embeds QML but does not parse it. Lint every source so
       # syntax/type errors cannot ship as a blank window.
       - name: QML lint
@@ -90,7 +90,7 @@ jobs:
           cmake --build app/qt/build --target nexus --parallel 2
       # Fail the release gate on known vulnerabilities in the locked Cargo graph.
       - name: cargo audit
-        working-directory: app/src-tauri
+        working-directory: app/backend
         run: |
           cargo install cargo-audit --locked
           cargo audit
