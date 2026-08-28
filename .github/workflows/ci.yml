@@ -67,14 +67,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
-      # tauri-build hard-fails on a missing externalBin, and the real sidecar is
-      # gitignored (~70MB). CI type-checks the shell; it does not bundle an app.
-      - name: stub sidecar
-        run: |
-          mkdir -p app/src-tauri/binaries
-          touch app/src-tauri/binaries/NexusCore-$(rustc -vV | sed -n 's/^host: //p')
       - run: cargo test --lib
         working-directory: app/src-tauri
+      # Temporary handoff for the first dependency refresh after removing Tauri.
+      # Delete this step once the regenerated lockfile is committed.
+      - name: Export regenerated Cargo.lock
+        working-directory: app/src-tauri
+        run: |
+          echo NEXUS_CARGO_LOCK_BEGIN
+          gzip -c Cargo.lock | base64
+          echo NEXUS_CARGO_LOCK_END
       # qt_add_resources embeds QML but does not parse it. Lint every source so
       # syntax/type errors cannot ship as a blank window.
       - name: QML lint
@@ -85,9 +87,7 @@ jobs:
         run: |
           cmake -S app/qt -B app/qt/build -DCMAKE_BUILD_TYPE=Release
           cmake --build app/qt/build --target nexus --parallel 2
-      # Fails on RUSTSEC vulnerabilities only. The unmaintained/unsound warnings it
-      # prints today are all in Tauri's Linux GTK stack, which this macOS product
-      # never compiles — so they stay visible without gating the build.
+      # Fail the release gate on known vulnerabilities in the locked Cargo graph.
       - name: cargo audit
         working-directory: app/src-tauri
         run: |

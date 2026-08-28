@@ -24,8 +24,8 @@ list(PREPEND CMAKE_PREFIX_PATH /opt/homebrew /opt/homebrew/opt/qtbase /opt/homeb
 
 find_package(Qt6 6.11 REQUIRED COMPONENTS Quick Widgets Svg Gui QuickControls2)
 
-set(NEXUS_TAURI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src-tauri")
-set(NEXUS_CARGO_TARGET_DIR "${NEXUS_TAURI_DIR}/target")
+set(NEXUS_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src-tauri")
+set(NEXUS_CARGO_TARGET_DIR "${NEXUS_ENGINE_DIR}/target")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(NEXUS_CARGO_PROFILE "")
     set(NEXUS_LIB_DIR "${NEXUS_CARGO_TARGET_DIR}/debug")
@@ -36,19 +36,19 @@ endif()
 set(NEXUS_LIB "${NEXUS_LIB_DIR}/libnexus_lib.a")
 
 file(GLOB_RECURSE NEXUS_ENGINE_SOURCES CONFIGURE_DEPENDS
-    "${NEXUS_TAURI_DIR}/src/*.rs"
+    "${NEXUS_ENGINE_DIR}/src/*.rs"
 )
 list(APPEND NEXUS_ENGINE_SOURCES
-    "${NEXUS_TAURI_DIR}/Cargo.toml"
-    "${NEXUS_TAURI_DIR}/Cargo.lock"
-    "${NEXUS_TAURI_DIR}/build.rs"
+    "${NEXUS_ENGINE_DIR}/Cargo.toml"
+    "${NEXUS_ENGINE_DIR}/Cargo.lock"
+    "${NEXUS_ENGINE_DIR}/build.rs"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../core/server/gen/libcore.proto"
 )
 
 add_custom_command(
     OUTPUT "${NEXUS_LIB}"
-    COMMAND cargo build --lib ${NEXUS_CARGO_PROFILE} --manifest-path "${NEXUS_TAURI_DIR}/Cargo.toml"
-    WORKING_DIRECTORY "${NEXUS_TAURI_DIR}"
+    COMMAND cargo build --locked --lib ${NEXUS_CARGO_PROFILE} --manifest-path "${NEXUS_ENGINE_DIR}/Cargo.toml"
+    WORKING_DIRECTORY "${NEXUS_ENGINE_DIR}"
     DEPENDS ${NEXUS_ENGINE_SOURCES}
     COMMENT "Building nexus_lib"
     VERBATIM
@@ -78,11 +78,11 @@ qt_add_resources(nexus "nexus_qml"
 )
 
 file(GLOB NEXUS_TRAY_FILES CONFIGURE_DEPENDS
-    "${NEXUS_TAURI_DIR}/icons/tray/frame_*.png"
+    "${NEXUS_ENGINE_DIR}/icons/tray/frame_*.png"
 )
 qt_add_resources(nexus "nexus_tray"
     PREFIX "/nexus/tray"
-    BASE "${NEXUS_TAURI_DIR}/icons/tray"
+    BASE "${NEXUS_ENGINE_DIR}/icons/tray"
     FILES ${NEXUS_TRAY_FILES}
 )
 if(APPLE)
@@ -124,7 +124,6 @@ if(APPLE)
         "-framework SystemConfiguration"
         "-framework UniformTypeIdentifiers"
         "-framework UserNotifications"
-        "-framework WebKit"
         objc
         z
         iconv

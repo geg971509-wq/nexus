@@ -590,7 +590,7 @@ impl CoreSession {
     }
 }
 
-/// Process-wide optional session for Tauri commands.
+/// Process-wide optional Core session shared by the C ABI commands.
 pub static SESSION: Mutex<Option<CoreSession>> = Mutex::new(None);
 
 /// Pick out PIDs whose executable basename is a Core, from `ps -axo pid=,comm=`.

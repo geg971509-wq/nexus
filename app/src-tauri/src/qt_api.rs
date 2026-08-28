@@ -79,7 +79,7 @@ where
     F: std::future::Future<Output = Result<T, String>>,
     T: Serialize,
 {
-    result_json(tauri::async_runtime::block_on(f))
+    result_json(crate::runtime::block_on(f))
 }
 
 fn obj(json: &str) -> Value {

@@ -3,6 +3,7 @@ mod data;
 mod defaults;
 mod exit_ip;
 mod paths;
+mod runtime;
 mod sys;
 mod sub;
 mod net;
@@ -35,7 +36,6 @@ fn clear_dns_bootstrap_if_set() {
     }
 }
 
-#[tauri::command]
 fn app_identity() -> serde_json::Value {
     serde_json::json!({
         "name": APP_NAME,
@@ -150,7 +150,6 @@ fn apply_post_start_side_effects(
 }
 
 /// Share-link → SVG QR (offline; for the share-QR dialog).
-#[tauri::command]
 fn qr_svg(text: String) -> Result<serde_json::Value, String> {
     let t = text.trim();
     if t.is_empty() {
@@ -205,9 +204,8 @@ fn reinstall_poll_session(mut session: CoreSession, gen: u64) {
 /// Boot / power sync: store chips + live Core (SESSION QueryState, or orphan process).
 /// 4A: never treat mixed-port alone as live (unrelated listener on 2080).
 /// 2A: Connected/Connecting + Core dead → CoreLost → firewall Blocked (keep peer).
-#[tauri::command]
 async fn session_status() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+    runtime::spawn_blocking(|| {
         use data::store::Store;
         let st = Store::load();
         let mut rpc_running = false;
@@ -269,9 +267,8 @@ async fn session_status() -> Result<serde_json::Value, String> {
     .map_err(|e| format!("session_status join: {e}"))?
 }
 
-#[tauri::command]
 async fn store_snapshot() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+    runtime::spawn_blocking(|| {
         use data::store::Store;
         let st = Store::load();
         // read-only — never upsert Direct demo (UI catalog is truth)
@@ -296,12 +293,11 @@ fn persist_hide_tray(hide: bool) -> Result<String, String> {
 }
 
 /// Export config for selected node — same input shape as connect_selected.
-#[tauri::command]
 async fn generate_preview(
     link: Option<String>,
     outbound: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    runtime::spawn_blocking(move || {
         use data::generate::generate_with_outbound;
         use data::share_link::parse_to_outbound;
         use data::store::Store;
@@ -328,9 +324,8 @@ async fn generate_preview(
 }
 
 /// UI catalog blob (groups + nodes). Replaces localStorage nexus.catalog.v1 as source of truth.
-#[tauri::command]
 async fn catalog_get() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+    runtime::spawn_blocking(|| {
         use data::store::Store;
         let st = Store::load();
         Ok(st.catalog.unwrap_or(serde_json::Value::Null))
@@ -339,9 +334,8 @@ async fn catalog_get() -> Result<serde_json::Value, String> {
     .map_err(|e| format!("catalog_get join: {e}"))?
 }
 
-#[tauri::command]
 async fn catalog_put(blob: serde_json::Value) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    runtime::spawn_blocking(move || {
         use data::store::Store;
         if !blob.is_object() {
             return Err("catalog blob must be object".into());
@@ -880,14 +874,12 @@ fn firewall_status_json() -> serde_json::Value {
     })
 }
 
-#[tauri::command]
 async fn firewall_status() -> Result<serde_json::Value, String> {
     Ok(firewall_status_json())
 }
 
-#[tauri::command]
 async fn firewall_helper_install() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+    runtime::spawn_blocking(|| {
         firewall::install_helper()?;
         Ok(firewall_status_json())
     })
@@ -895,14 +887,13 @@ async fn firewall_helper_install() -> Result<serde_json::Value, String> {
     .map_err(|e| format!("join: {e}"))?
 }
 
-#[tauri::command]
 async fn firewall_helper_uninstall() -> Result<serde_json::Value, String> {
     // Uninstall boots the daemon out and flushes the PF anchor, so doing it mid
     // tunnel silently removes the kill switch while traffic keeps flowing: if Core
     // then dies there is nothing left to fail closed. Refuse rather than degrade —
     // disconnecting first is one click and leaves the user in a defined state.
     require_tunnel_idle("Uninstalling the firewall helper")?;
-    tauri::async_runtime::spawn_blocking(|| {
+    runtime::spawn_blocking(|| {
         firewall::uninstall_helper()?;
         Ok(firewall_status_json())
     })
@@ -912,9 +903,8 @@ async fn firewall_helper_uninstall() -> Result<serde_json::Value, String> {
 
 /// Live connections from Core TrafficManager (needs experimental.clash_api).
 /// 6A: take/put + gen so poll does not hold SESSION across Core RPC.
-#[tauri::command]
 async fn query_connections() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+    runtime::spawn_blocking(|| {
         use core::session::SESSION;
         let (mut session, gen) = {
             let mut g = SESSION.lock().map_err(|e| e.to_string())?;
@@ -957,9 +947,8 @@ async fn query_connections() -> Result<serde_json::Value, String> {
 
 /// Cumulative proxy outbound traffic (Core QueryStats / TrafficManager).
 /// 6A: take/put + gen so poll does not hold SESSION across Core RPC.
-#[tauri::command]
 async fn query_stats() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+    runtime::spawn_blocking(|| {
         use core::session::SESSION;
         let (mut session, gen) = {
             let mut g = SESSION.lock().map_err(|e| e.to_string())?;
@@ -1058,9 +1047,8 @@ pub(crate) fn disconnect_selected_sync() -> Result<serde_json::Value, String> {
 /// Exit IP + country as seen from the far end, fetched through the mixed inbound.
 /// Errors when the tunnel cannot carry it — the UI then shows nothing rather than
 /// this machine's own address.
-#[tauri::command]
 async fn exit_ip_probe() -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(|| exit_ip::probe(MIXED_PORT))
+    runtime::spawn_blocking(|| exit_ip::probe(MIXED_PORT))
         .await
         .map_err(|e| format!("exit_ip join: {e}"))?
 }
@@ -1071,9 +1059,8 @@ pub(crate) fn sub_fetch_sync(url: String) -> Result<serde_json::Value, String> {
 }
 
 /// Throne RawUpdater::updateClash — YAML proxies → catalog nodes with outbound JSON.
-#[tauri::command]
 async fn sub_parse_clash(body: String) -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    runtime::spawn_blocking(move || {
         let (nodes, skipped) = data::clash::parse_clash_yaml(&body)?;
         let arr: Vec<serde_json::Value> = nodes
             .into_iter()
@@ -1095,9 +1082,8 @@ async fn sub_parse_clash(body: String) -> Result<serde_json::Value, String> {
 }
 
 /// Free-list / share URI body → catalog nodes with full outbound (vless/vmess/trojan/ss/…).
-#[tauri::command]
 async fn sub_parse_share(body: String) -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    runtime::spawn_blocking(move || {
         let (nodes, skipped) = data::share_link::parse_share_body(&body);
         let arr: Vec<serde_json::Value> = nodes
             .into_iter()
@@ -1134,7 +1120,6 @@ fn require_tunnel_idle(action: &str) -> Result<(), String> {
 }
 
 /// Abort in-flight TCP probes (upstream stopSpeedtest).
-#[tauri::command]
 fn net_tcp_probe_stop() -> Result<(), String> {
     net::abort_probes();
     Ok(())
@@ -1142,14 +1127,13 @@ fn net_tcp_probe_stop() -> Result<(), String> {
 
 /// Core TestCurrent: URL test via live box proxy/default outbound only.
 /// take/reinstall session so poll/disconnect is not blocked for the whole Test.
-#[tauri::command]
 async fn core_url_test_current(
     url: Option<String>,
     timeout_ms: Option<i32>,
 ) -> Result<serde_json::Value, String> {
     let url = url.unwrap_or_default();
     let timeout_ms = timeout_ms.unwrap_or(3000);
-    tauri::async_runtime::spawn_blocking(move || {
+    runtime::spawn_blocking(move || {
         let (taken, gen) = match SESSION.lock() {
             Ok(mut g) => {
                 let gen = current_connect_gen();
@@ -1180,9 +1164,8 @@ async fn core_url_test_current(
 }
 
 /// Cancel in-flight Core URL test (StopTest).
-#[tauri::command]
 async fn core_url_test_stop() -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(|| {
+    runtime::spawn_blocking(|| {
         let (taken, gen) = match SESSION.lock() {
             Ok(mut g) => {
                 let gen = current_connect_gen();
@@ -1237,7 +1220,7 @@ fn tunnel_is_live() -> bool {
     CoreSession::core_process_alive() && CoreSession::mixed_port_open(MIXED_PORT)
 }
 
-/// Native warning before full teardown (tray / Cmd+Q when webview dialog unavailable).
+/// Native warning before full teardown (tray / Cmd+Q when the Qt dialog is unavailable).
 fn confirm_disconnect_quit() -> bool {
     #[cfg(target_os = "macos")]
     {

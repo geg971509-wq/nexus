@@ -105,14 +105,7 @@ cd core/server && go list -m all
 ## C. Nexus shell (Rust + Qt)
 
 Direct runtime-oriented crates (from `app/src-tauri/Cargo.toml`) are generally
-**MIT and/or Apache-2.0** (Tauri 2, serde, prost, qrcode, socket2, etc.).
-
-Copyleft among the wider Cargo graph (usually weak / file-level):
-
-| Crate | License |
-|-------|---------|
-| `cssparser`, `selectors`, `cssparser-macros`, `dtoa-short`, `option-ext` | MPL-2.0 |
-| `r-efi` (and similar dual-licensed) | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
+**MIT and/or Apache-2.0** (Tokio, serde, prost, qrcode, socket2, etc.).
 
 Full graph:
 
@@ -127,7 +120,8 @@ Product GUI is Qt Quick (`app/qt`):
 | Qt 6.11 (`Quick`, `QuickControls2`, `Widgets`, `Svg`, `Gui`) | LGPLv3 | Dynamically linked. https://www.qt.io/licensing |
 | `quirc` | ISC-style | QR image decoder; source is vendored under `app/qt/third_party/quirc` |
 
-The Tauri crate remains as a compile dependency of the Rust library the Qt host links; it is not the window. Former HTML lives in `archive/webview-ui/`.
+The Rust engine links directly into the Qt host through its C ABI. Tokio supplies
+the engine's multithreaded task runtime; there is no embedded web runtime.
 
 ### quirc license
 

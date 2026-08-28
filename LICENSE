@@ -26,7 +26,7 @@ any patches applied to dependencies).
 
 2) Nexus shell and original product code
 ----------------------------------------
-Directories: `app/` (Tauri shell, UI), product scripts, and other original
+Directories: `app/` (Qt shell, Rust engine, UI), product scripts, and other original
 Nexus code **not** listed as third-party.
 
 Copyright (c) 2026 Nexus authors. All rights reserved.

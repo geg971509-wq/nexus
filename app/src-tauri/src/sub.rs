@@ -42,7 +42,7 @@ pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
             "--connect-timeout",
             "12",
             // Without a ceiling a hostile URL just streams for --max-time: curl's
-            // stdout, the lossy-UTF8 copy, the IPC JSON and the webview's parse all
+            // stdout, the lossy-UTF8 copy, the IPC JSON and the UI parser all
             // grow unbounded. Aborts mid-transfer, so Content-Length lies don't help.
             // Real subscriptions are KBs; the Go core bounds its own input at 16 MiB.
             "--max-filesize",

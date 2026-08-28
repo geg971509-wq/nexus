@@ -5,11 +5,10 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$ROOT/app"
-TAURI_DIR="$APP_DIR/src-tauri"
+RUST_DIR="$APP_DIR/src-tauri"
 CORE_SRC="$ROOT/core/server"
 BIN_DIR="$ROOT/bin"
 CORE_OUT="$BIN_DIR/NexusCore"
-BINARIES_DIR="$TAURI_DIR/binaries"
 
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-always}"
@@ -84,7 +83,7 @@ log "root=$ROOT triple=$TRIPLE (mac release rebuild)"
 CORE_TAGS_BASE="with_clash_api,with_gvisor,with_quic,with_wireguard,with_utls,with_dhcp,with_tailscale,with_naive_outbound,badlinkname,tfogo_checklinkname0"
 CORE_TAGS_MAC="${NEXUS_CORE_TAGS:-$CORE_TAGS_BASE}"
 IFS=',' read -ra CORE_REQUIRED_TAGS <<< "$CORE_TAGS_BASE"
-mkdir -p "$BIN_DIR" "$BINARIES_DIR"
+mkdir -p "$BIN_DIR"
 
 verify_core_binary() {
   local bin="$1"
@@ -179,11 +178,6 @@ ok "NexusCore → $CORE_OUT"
 verify_core_binary "$CORE_OUT" "NexusCore(mac)"
 chmod +x "$CORE_OUT"
 
-STAGED="$BINARIES_DIR/NexusCore-${TRIPLE}"
-cp -f "$CORE_OUT" "$STAGED"
-chmod +x "$STAGED"
-ok "staged $STAGED"
-
 # --- 2) Qt Quick host (mac .app) ---
 QT_DIR="$APP_DIR/qt"
 QT_BUILD="$QT_DIR/build"
@@ -199,8 +193,8 @@ QT_BIN="$QT_BUILD/nexus"
 ok "qt host → $QT_BIN"
 
 log "building nexusfwd…"
-(cd "$TAURI_DIR" && cargo build --release --bin nexusfwd)
-FWD_BIN="$TAURI_DIR/target/release/nexusfwd"
+(cd "$RUST_DIR" && cargo build --locked --release --bin nexusfwd)
+FWD_BIN="$RUST_DIR/target/release/nexusfwd"
 [[ -x "$FWD_BIN" ]] || die "nexusfwd missing: $FWD_BIN"
 ok "nexusfwd → $FWD_BIN"
 
@@ -216,7 +210,7 @@ chmod +x "$DEST_APP/Contents/MacOS/nexusfwd"
 cp -f "$QT_DIR/Info.plist" "$DEST_APP/Contents/Info.plist"
 plutil -replace LSMinimumSystemVersion -string "$MACOSX_DEPLOYMENT_TARGET" \
   "$DEST_APP/Contents/Info.plist"
-cp -f "$TAURI_DIR/icons/icon.icns" "$DEST_APP/Contents/Resources/icon.icns"
+cp -f "$RUST_DIR/icons/icon.icns" "$DEST_APP/Contents/Resources/icon.icns"
 
 # Include the notices a recipient needs with the exact binary they received.
 NOTICE_DIR="$DEST_APP/Contents/Resources/licenses"
