@@ -9,6 +9,7 @@ AbstractButton {
     required property var host
     property bool primary: false
     property bool danger: false
+    // Equal width is a layout concern; it must not create a second visual style.
     property bool uniform: false
 
     height: 30
@@ -19,13 +20,13 @@ AbstractButton {
     Accessible.name: text
 
     background: Rectangle {
-        radius: button.uniform ? button.host.r : 8
+        radius: button.host.rLg
         color: button.danger
             ? (button.hovered || button.down ? Qt.darker(button.host.red, 1.08) : button.host.red)
             : (button.primary
                ? (button.hovered || button.down ? Qt.darker(button.host.blue, 1.08) : button.host.blue)
                : (button.hovered || button.down ? button.host.fill : button.host.menuBg))
-        border.width: button.uniform ? 1 : 0
+        border.width: button.activeFocus ? 1 : 0
         border.color: button.activeFocus ? button.host.blue : button.host.menuBorder
     }
 
@@ -34,9 +35,8 @@ AbstractButton {
         text: button.text
         color: button.primary || button.danger ? "#ffffff" : button.host.label
         font.family: button.host.fonts[0]
-        font.pixelSize: button.uniform ? 12 : 13
-        font.weight: button.uniform ? Font.Medium
-                                    : (button.primary || button.danger ? Font.DemiBold : Font.Medium)
+        font.pixelSize: 13
+        font.weight: button.primary || button.danger ? Font.DemiBold : Font.Medium
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }
