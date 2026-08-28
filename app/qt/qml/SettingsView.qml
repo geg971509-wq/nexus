@@ -43,7 +43,7 @@ Item {
     readonly property var langOpts: ["简体中文", "English", "Русский", "繁體中文"]
     readonly property var fontOpts: ["系统默认", "SF Pro", "PingFang SC"]
     readonly property var themeOpts: ["System", "浅色", "深色"]
-    readonly property var iconOpts: ["Monochrome", "Colorful", "Auto"]
+    readonly property var iconOpts: ["Monochrome", "Colorful"]
     readonly property var langMap: ({ "简体中文": "zh-CN", "English": "en", "Русский": "ru", "繁體中文": "zh-TW" })
 
     property string draftLang: "简体中文"
