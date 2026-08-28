@@ -47,23 +47,11 @@ pub(crate) fn tunnel_is_live() -> bool {
     CoreSession::core_process_alive() && CoreSession::mixed_port_open(MIXED_PORT)
 }
 
-/// Native warning before full teardown (tray / Cmd+Q when the Qt dialog is unavailable).
-fn confirm_disconnect_quit() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        let script = r#"display dialog "Tunnel still running (Tun / system proxy). Exit will stop Core, clear system proxy, and tear down the tunnel." with title "Nexus" buttons {"Cancel", "Disconnect and Quit"} default button "Disconnect and Quit" cancel button "Cancel" with icon caution"#;
-        return std::process::Command::new("/usr/bin/osascript")
-            .args(["-e", script])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-    }
-}
-
-/// force=true: UI already warned → teardown. force=false: warn if live.
+/// force=true: UI already warned → teardown. force=false: refuse while live so
+/// the Qt host can route every entry point through the localized QML dialog.
 /// Returns true when the host should exit. Qt path uses this without AppHandle.
 pub(crate) fn prepare_quit(force: bool) -> bool {
-    if !force && tunnel_is_live() && !confirm_disconnect_quit() {
+    if !force && tunnel_is_live() {
         return false;
     }
     teardown_session();

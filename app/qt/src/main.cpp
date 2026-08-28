@@ -61,6 +61,12 @@ public:
             const QString raw = g_bridge->invoke(QStringLiteral("app_quit"), QStringLiteral("{}"));
             const QJsonObject o = QJsonDocument::fromJson(raw.toUtf8()).object();
             if (!o.value(QLatin1String("quit")).toBool()) {
+                if (m_mainWindow) {
+                    m_mainWindow->show();
+                    m_mainWindow->raise();
+                    m_mainWindow->requestActivate();
+                }
+                g_bridge->requestQuitConfirmation();
                 return true;
             }
             m_allowQuit = true;
