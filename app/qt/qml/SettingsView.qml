@@ -125,6 +125,8 @@ Item {
         if (canonical === "System") return t("opt.theme.system")
         if (canonical === "浅色") return t("opt.theme.light")
         if (canonical === "深色") return t("opt.theme.dark")
+        if (canonical === "Monochrome") return t("opt.icon.monochrome")
+        if (canonical === "Colorful") return t("opt.icon.colorful")
         return canonical
     }
 
@@ -462,6 +464,7 @@ Item {
                                     width: parent.width
                                     value: root.draftIcon
                                     options: root.iconOpts
+                                    localize: true
                                     onPicked: function (v) { root.onIconPicked(v) }
                                 }
                             }
