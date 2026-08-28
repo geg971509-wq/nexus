@@ -35,7 +35,7 @@ Item {
 
     BackendClient {
         id: backend
-        bridge: host.apiObject()
+        bridge: flow.host.apiObject()
     }
 
     function t(k, v) { return i18 ? i18.t(k, v) : k }
