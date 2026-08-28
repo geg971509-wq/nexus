@@ -67,16 +67,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
-      - run: cargo test --lib
+      - run: cargo test --locked --lib
         working-directory: app/src-tauri
-      # Temporary handoff for the first dependency refresh after removing Tauri.
-      # Delete this step once the regenerated lockfile is committed.
-      - name: Export regenerated Cargo.lock
-        working-directory: app/src-tauri
-        run: |
-          echo NEXUS_CARGO_LOCK_BEGIN
-          gzip -c Cargo.lock | base64
-          echo NEXUS_CARGO_LOCK_END
       # qt_add_resources embeds QML but does not parse it. Lint every source so
       # syntax/type errors cannot ship as a blank window.
       - name: QML lint
