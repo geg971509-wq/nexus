@@ -2,7 +2,6 @@
 
 use crate::{
     core::session::{CoreSession, SESSION},
-    data,
     defaults::MIXED_PORT,
     diagnostics::firewall_status_json,
     firewall, runtime,

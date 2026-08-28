@@ -13,7 +13,7 @@ use crate::{
 /// Single quit/teardown path: stop Core + always best-effort clear OS proxy at MIXED_PORT.
 /// Used by app_quit, tray quit, and Exit (after confirm). Idempotent.
 /// 3A: quit → Reset (session kill-switch ends with app; not post-quit lockdown).
-fn teardown_session() {
+pub(crate) fn teardown_session() {
     let _ = bump_connect_gen();
     tray_spin::set_spinning(false);
     let _ = tunnel_sm::apply(tunnel_sm::Event::ResetIdle);
@@ -34,7 +34,7 @@ fn teardown_session() {
 
 /// Same live rule as session_status (4A/5A): never treat mixed-port alone as live.
 /// RPC running, or (Core process ∧ mixed open). Unrelated :2080 listener is not a tunnel.
-fn tunnel_is_live() -> bool {
+pub(crate) fn tunnel_is_live() -> bool {
     if let Ok(mut g) = SESSION.lock() {
         if let Some(s) = g.as_mut() {
             if let Ok((running, _)) = s.query_state() {
