@@ -3,32 +3,30 @@
 
 #include <QAction>
 #include <QCoreApplication>
-#include <QDir>
-#include <QFile>
 #include <QMenu>
 #include <QSystemTrayIcon>
 #include <QTimer>
 #include <QWindow>
 
-#ifndef NEXUS_TRAY_DIR
-#define NEXUS_TRAY_DIR ""
-#endif
-
 Tray::Tray(QWindow *window, NexusBridge *bridge, QObject *parent)
     : QObject(parent)
     , m_window(window)
     , m_bridge(bridge) {
-    Q_UNUSED(m_bridge);
     loadFrames();
     m_icon = new QSystemTrayIcon(this);
     m_icon->setToolTip(QStringLiteral("Nexus"));
     applyFrame(0);
 
     m_menu = new QMenu();
-    auto *showAct = m_menu->addAction(QStringLiteral("Show Window"));
-    auto *quitAct = m_menu->addAction(QStringLiteral("Quit"));
-    connect(showAct, &QAction::triggered, this, &Tray::showWindow);
-    connect(quitAct, &QAction::triggered, this, &Tray::quitApp);
+    m_showAction = m_menu->addAction(QStringLiteral("Show Window"));
+    m_quitAction = m_menu->addAction(QStringLiteral("Quit"));
+    connect(m_showAction, &QAction::triggered, this, &Tray::showWindow);
+    connect(m_quitAction, &QAction::triggered, this, &Tray::quitApp);
+    if (m_bridge) {
+        connect(m_bridge, &NexusBridge::trayLabelsChanged,
+                this, &Tray::setLabels);
+        setLabels(m_bridge->trayShowWindowLabel(), m_bridge->trayQuitLabel());
+    }
     m_icon->setContextMenu(m_menu);
     m_icon->setVisible(true);
 
@@ -50,16 +48,22 @@ Tray::Tray(QWindow *window, NexusBridge *bridge, QObject *parent)
     });
 }
 
+Tray::~Tray() {
+    if (m_icon)
+        m_icon->setContextMenu(nullptr);
+    delete m_menu;
+}
+
 void Tray::loadFrames() {
-    const QDir dir(QString::fromUtf8(NEXUS_TRAY_DIR));
     m_frames.clear();
     for (int i = 0; i < 12; ++i) {
-        const QString name = QStringLiteral("frame_%1.png").arg(i, 2, 10, QChar('0'));
-        const QString path = dir.filePath(name);
-        if (!QFile::exists(path)) {
+        const QString path = QStringLiteral(":/nexus/tray/frame_%1.png")
+                                 .arg(i, 2, 10, QChar('0'));
+        const QIcon frame(path);
+        if (frame.isNull()) {
             continue;
         }
-        m_frames.push_back(QIcon(path));
+        m_frames.push_back(frame);
     }
 }
 
@@ -72,6 +76,13 @@ void Tray::applyFrame(int index) {
     }
     const int i = index % m_frames.size();
     m_icon->setIcon(m_frames.at(i));
+}
+
+void Tray::setLabels(const QString &showWindow, const QString &quit) {
+    if (m_showAction)
+        m_showAction->setText(showWindow);
+    if (m_quitAction)
+        m_quitAction->setText(quit);
 }
 
 void Tray::setVisible(bool visible) {
@@ -103,5 +114,10 @@ void Tray::showWindow() {
 }
 
 void Tray::quitApp() {
+    showWindow();
+    if (m_bridge) {
+        m_bridge->requestQuitConfirmation();
+        return;
+    }
     QCoreApplication::quit();
 }

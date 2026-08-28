@@ -22,8 +22,6 @@ Notes
 -----
 - Upstream engines such as sing-box are themselves GPLv3; linking them into
   NexusCore makes the Core binary a GPLv3 covered work for distribution.
-- xray-core and some related libraries are under MPL-2.0; file-level MPL terms
-  continue to apply to those covered source files (`../../licenses/MPL-2.0.txt`).
 - Corresponding Source for a released NexusCore build includes this tree,
   module versions (`go.mod` / `go.sum`), `../../build.sh` (or the commands used
   to produce that binary), and any dependency patches applied at build time.

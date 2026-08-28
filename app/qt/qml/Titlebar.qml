@@ -156,6 +156,70 @@ Item {
             spacing: 6
 
             AbstractButton {
+                id: appBtn
+                width: 24
+                height: 24
+                padding: 0
+                hoverEnabled: true
+                Accessible.name: root.t("title.appMenu")
+                Accessible.role: Accessible.ButtonMenu
+                ToolTip.visible: hovered
+                ToolTip.text: root.t("title.appMenu")
+                onClicked: appMenu.visible ? appMenu.close() : appMenu.open()
+                background: Rectangle {
+                    radius: root.r
+                    color: appBtn.hovered || appMenu.visible ? root.fill : root.controlBg
+                    border.width: 1
+                    border.color: root.sep
+                }
+                contentItem: Text {
+                    text: "•••"
+                    color: root.secondary
+                    font.family: root.fonts[0]
+                    font.pixelSize: 11
+                    font.weight: Font.Medium
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                Popup {
+                    id: appMenu
+                    y: parent.height + 4
+                    x: parent.width - 220
+                    width: 220
+                    padding: 4
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                    background: Rectangle {
+                        radius: 6
+                        color: root.menuBg
+                        border.color: root.menuBorder
+                        border.width: 1
+                    }
+                    contentItem: Column {
+                        spacing: 0
+                        Repeater {
+                            model: [
+                                { k: "menu.addClip", tip: "title.addClip", act: "add-clip" },
+                                { k: "menu.addFile", tip: "title.addFile", act: "add-file" },
+                                { k: "menu.scanQr", tip: "title.scanQr", act: "scan-qr" },
+                                { k: "sep" },
+                                { k: "menu.export", tip: "title.export", act: "export" },
+                                { k: "menu.stats", tip: "title.stats", act: "stats" },
+                                { k: "sep" },
+                                { k: "menu.hide", tip: "title.hide", act: "hide" },
+                                { k: "menu.quit", tip: "title.quit", act: "quit" }
+                            ]
+                            delegate: Loader {
+                                width: 212
+                                required property var modelData
+                                sourceComponent: modelData.k === "sep" ? appSepComp : appRowComp
+                                property var itemData: modelData
+                            }
+                        }
+                    }
+                }
+            }
+
+            AbstractButton {
                 id: testBtn
                 height: 24
                 padding: 0
@@ -301,6 +365,62 @@ Item {
         }
     }
 
+    Component {
+        id: appSepComp
+        Rectangle {
+            width: parent ? parent.width : 212
+            height: 9
+            color: "transparent"
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: 6
+                height: 1
+                color: root.sep
+            }
+        }
+    }
+    Component {
+        id: appRowComp
+        AbstractButton {
+            id: appRow
+            property var itemData: parent && parent.itemData ? parent.itemData : ({ k: "", act: "" })
+            height: 28
+            width: parent ? parent.width : 212
+            hoverEnabled: true
+            Accessible.name: root.t(itemData.k)
+            Accessible.role: Accessible.MenuItem
+            ToolTip.visible: hovered && !!itemData.tip
+            ToolTip.text: itemData.tip ? root.t(itemData.tip) : ""
+            onClicked: {
+                appMenu.close()
+                var d = win ? win.dialogs : null
+                if (!d) return
+                if (itemData.act === "add-clip") d.importClip()
+                else if (itemData.act === "add-file") d.importFile()
+                else if (itemData.act === "scan-qr") d.importQr()
+                else if (itemData.act === "export") d.openExport()
+                else if (itemData.act === "stats") d.openStats()
+                else if (itemData.act === "hide") d.hideWin()
+                else if (itemData.act === "quit") d.requestQuit()
+            }
+            background: Rectangle {
+                radius: 4
+                color: appRow.hovered ? root.fill : "transparent"
+            }
+            contentItem: Text {
+                text: root.t(itemData.k)
+                color: root.label
+                font.family: root.fonts[0]
+                font.pixelSize: 13
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: 8
+                rightPadding: 8
+                elide: Text.ElideRight
+            }
+        }
+    }
     Component {
         id: sepComp
         Rectangle {

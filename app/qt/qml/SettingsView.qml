@@ -132,6 +132,9 @@ Item {
     function applyLocale(label) {
         if (!i18) return
         i18.lang = langMap[label] || "zh-CN"
+        var a = api()
+        if (a && typeof a.setTrayLabels === "function")
+            a.setTrayLabels(i18.t("tray.showWindow"), i18.t("menu.quit"))
     }
 
     function applyFont(label) {

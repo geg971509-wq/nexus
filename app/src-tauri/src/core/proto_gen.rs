@@ -1,5 +1,5 @@
 //! Thin wrappers over prost types generated from core/server/gen/libcore.proto (5A).
-//! Same field numbers as Go; encode path always materializes bools Core may deref.
+//! Same field numbers as Go; encode path materializes bools Core may dereference.
 
 #![allow(clippy::all)]
 
@@ -41,15 +41,13 @@ pub fn encode_load_config_core_json(json: &str) -> Vec<u8> {
     encode_string_field1(json)
 }
 
-/// LoadConfigReq: Core Start/CheckConfig may deref *NeedExtraProcess / *NeedXray —
-/// always encode false bools (matches historical hand codec).
+/// LoadConfigReq: Core Start may dereference NeedExtraProcess, so encode it.
 pub fn encode_load_config_req(core_json: &str, profile_id: Option<i32>) -> Vec<u8> {
     let msg = LoadConfigReq {
         core_config: Some(core_json.to_string()),
         disable_stats: Some(false),
         need_extra_process: Some(false),
         extra_no_out: Some(false),
-        need_xray: Some(false),
         profile_id: Some(profile_id.unwrap_or(-1)),
         ..Default::default()
     };
@@ -154,9 +152,8 @@ pub fn encode_test_req_current(url: &str, timeout_ms: i32, max_concurrency: i32)
         } else {
             1
         }),
-        // materialize bools Core may deref
+        // Materialize bools Core may dereference.
         use_default_outbound: Some(false),
-        need_xray: Some(false),
         ..Default::default()
     };
     msg.encode_to_vec()
@@ -188,16 +185,10 @@ mod tests {
             enc.windows(2).any(|w| w == [0x18, 0x00]),
             "need_extra_process=false missing: {enc:?}"
         );
-        // field 9 need_xray key = (9<<3)|0 = 0x48
-        assert!(
-            enc.windows(2).any(|w| w == [0x48, 0x00]),
-            "need_xray=false missing: {enc:?}"
-        );
         let msg = LoadConfigReq::decode(enc.as_slice()).unwrap();
         assert_eq!(msg.core_config.as_deref(), Some("{}"));
         assert_eq!(msg.profile_id, Some(7));
         assert_eq!(msg.need_extra_process, Some(false));
-        assert_eq!(msg.need_xray, Some(false));
     }
 
     #[test]
@@ -271,7 +262,6 @@ mod tests {
         assert_eq!(msg.url.as_deref(), Some(DEFAULT_URL_TEST));
         assert_eq!(msg.test_timeout_ms, Some(3000));
         assert_eq!(msg.max_concurrency, Some(1));
-        assert_eq!(msg.need_xray, Some(false));
     }
 
     #[test]

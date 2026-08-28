@@ -15,26 +15,18 @@ import (
 
 	"NexusCore/gen"
 	"NexusCore/internal/boxbox"
-	"NexusCore/internal/boxdns"
 	"NexusCore/internal/boxmain"
 	"NexusCore/internal/process"
 	"NexusCore/internal/sys"
 	"NexusCore/internal/wg"
-	"NexusCore/internal/xray"
 	"NexusCore/test_utils"
 
 	"github.com/google/shlex"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/experimental/clashapi"
 	"github.com/sagernet/sing-box/experimental/clashapi/trafficontrol"
-	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/control"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/service"
-	"github.com/xtls/xray-core/core"
-	// Package path is still `throne` in the throneproj/xray-core fork (not product branding).
-	xthrone "github.com/xtls/xray-core/throne"
-	xinternet "github.com/xtls/xray-core/transport/internet"
 )
 
 var (
@@ -68,7 +60,7 @@ func pinBox() (*boxbox.Box, func()) {
 	}
 }
 
-// cleanupAll tears down box + extra + xray + DNS. Idempotent; call only while
+// cleanupAll tears down box + extra process + DNS. Idempotent; call only while
 // holding lifeMu write lock (or from a path that already owns exclusive lifecycle).
 func cleanupAll() {
 	// Wait for TestCurrent/SpeedTest pins so Close does not race traffic/test paths.
@@ -96,30 +88,11 @@ func cleanupAll() {
 		extraProcess.Stop()
 		extraProcess = nil
 	}
-	closeXray()
 	activeProfileID.Store(-1)
 }
 
 func init() {
 	activeProfileID.Store(-1)
-}
-
-// Xray core. Exactly one of these is set while a profile runs: xrayInstance for
-// an eagerly started sidecar, xrayGate when the profile asked for it to stay
-// cold until something dials it (see xray.Gate).
-var xrayInstance *core.Instance
-var xrayGate *xray.Gate
-
-// liveXrayInstance is whichever Xray instance is up right now, or nil. A gated
-// sidecar has none between activations.
-func liveXrayInstance() *core.Instance {
-	if xrayInstance != nil {
-		return xrayInstance
-	}
-	if xrayGate != nil {
-		return xrayGate.Instance()
-	}
-	return nil
 }
 
 type server struct {
@@ -129,89 +102,6 @@ type server struct {
 // To returns a pointer to the given value.
 func To[T any](v T) *T {
 	return &v
-}
-
-// defaultInterfaceFinder reports the physical default-route interface name via
-// the always-on, cross-platform boxdns monitor, or "" when unavailable. It is
-// passed to the live Xray instance so egress dials bind to that interface
-// (replacing the config-baked sockopt.interface + loopback bridge). It shares
-// the same source as the GetDefaultInterface RPC, so both stay consistent.
-func defaultInterfaceFinder() string {
-	ifc := boxdns.DefaultInterface()
-	if ifc == nil {
-		return ""
-	}
-	return ifc.Name
-}
-
-// init keeps the live Xray instance's egress bound to the current default-route
-// interface. upstream's always-on boxdns monitor fires this callback whenever the
-// default interface changes (e.g. a network switch), and we push the new name
-// onto whichever Xray instance is currently live, so new dials follow the move —
-// the runtime counterpart to the initial SetEgressInterface at Start. Test and
-// validation instances are short-lived and set their interface once at creation,
-// so they are intentionally not tracked here.
-func init() {
-	m := boxdns.DnsManagerInstance
-	if m == nil || m.Monitor == nil {
-		return
-	}
-	m.Monitor.RegisterCallback(func(ifc *control.Interface, _ int) {
-		inst := liveXrayInstance()
-		if inst == nil {
-			return
-		}
-		name := ""
-		if ifc != nil {
-			name = ifc.Name
-		}
-		inst.SetEgressInterface(name)
-	})
-}
-
-// startXrayFullConfigs brings up one Xray instance per opaque full config, each
-// bound to the physical egress interface (same as the single-xray test path).
-// The tests fold many xray-full profiles into one sing-box box whose socks
-// outbounds point at these instances (see TestReq.xray_full_configs), so they run
-// together for the duration of the batch. On any failure the instances already
-// started are torn down; on success the caller owns them and must close them via
-// closeXrayInstances.
-func startXrayFullConfigs(configs []string) ([]*core.Instance, error) {
-	instances := make([]*core.Instance, 0, len(configs))
-	for _, cfg := range configs {
-		inst, err := xray.CreateXrayInstance(cfg)
-		if err != nil {
-			closeXrayInstances(instances)
-			return nil, err
-		}
-		inst.SetEgressInterface(defaultInterfaceFinder())
-		if err := inst.Start(); err != nil {
-			_ = inst.Close()
-			closeXrayInstances(instances)
-			return nil, err
-		}
-		instances = append(instances, inst)
-	}
-	return instances, nil
-}
-
-// closeXray tears down whichever live sidecar the profile brought up, gated or
-// eager, and leaves both slots empty.
-func closeXray() {
-	if xrayGate != nil {
-		xrayGate.Close()
-		xrayGate = nil
-	}
-	if xrayInstance != nil {
-		xrayInstance.Close()
-		xrayInstance = nil
-	}
-}
-
-func closeXrayInstances(instances []*core.Instance) {
-	for _, inst := range instances {
-		_ = inst.Close()
-	}
 }
 
 func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.ErrorResp, _ error) {
@@ -227,7 +117,7 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 		if err != nil {
 			out.Error = To(err.Error())
 			if !skipCleanup {
-				// Single cleanup for every partial Start failure (extra/xray/box/DNS).
+				// Single cleanup for every partial Start failure (extra/box/DNS).
 				cleanupAll()
 			}
 		}
@@ -235,9 +125,6 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 
 	if debug {
 		log.Println("Start:", *in.CoreConfig)
-		if in.XrayConfig != nil {
-			log.Println("Start Xray:", *in.XrayConfig)
-		}
 	}
 
 	if boxInstance != nil {
@@ -278,55 +165,6 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 		}
 	}
 
-	if *in.NeedXray {
-		// Wire egress on the instance after creation, before Start: a dynamic
-		// interface finder for auto interface binding, and (when an address is
-		// provided) a upstream-dns resolver that resolves outbound server domains
-		// through sing-box's loopback DNS. Test/validation instances get only the
-		// interface finder (so their egress still leaves the physical NIC instead
-		// of looping through an active TUN) and never the DNS resolver, so their
-		// outbound domains fall back to default resolution.
-		dnsAddr := in.GetXrayOutboundDnsAddress()
-		dnsStrategy := in.GetXrayOutboundDnsStrategy()
-		prepareXray := func(instance *core.Instance) error {
-			instance.SetEgressInterface(defaultInterfaceFinder())
-			if dnsAddr == "" {
-				return nil
-			}
-			resolver, e := xthrone.NewResolver(dnsAddr)
-			if e != nil {
-				return E.Cause(e, "failed to create Xray outbound DNS resolver")
-			}
-			instance.SetOutboundDNS(resolver, xinternet.ParseDomainStrategy(dnsStrategy))
-			return nil
-		}
-
-		if in.GetXrayLazyStart() {
-			xrayGate, err = xray.StartGate(*in.XrayConfig,
-				time.Duration(in.GetXrayIdleSeconds())*time.Second, prepareXray)
-			if err != nil {
-				xrayGate = nil
-				return
-			}
-		} else {
-			xrayInstance, err = xray.CreateXrayInstance(*in.XrayConfig)
-			if err != nil {
-				return
-			}
-			if err = prepareXray(xrayInstance); err != nil {
-				xrayInstance.Close()
-				xrayInstance = nil
-				return
-			}
-			err = xrayInstance.Start()
-			if err != nil {
-				xrayInstance.Close()
-				xrayInstance = nil
-				return
-			}
-		}
-	}
-
 	boxInstance, instanceCancel, err = boxmain.Create([]byte(*in.CoreConfig))
 	if err != nil {
 		return
@@ -362,7 +200,7 @@ func (s *server) Start(ctx context.Context, in *gen.LoadConfigReq) (out *gen.Err
 func (s *server) Stop(ctx context.Context, in *gen.EmptyReq) (out *gen.ErrorResp, _ error) {
 	lifeMu.Lock()
 	defer lifeMu.Unlock()
-	// Always cleanupAll — also clears orphan extra/xray when box is already nil.
+	// Always cleanupAll — also clears an orphan extra process when box is nil.
 	cleanupAll()
 	return &gen.ErrorResp{}, nil
 }
@@ -389,14 +227,6 @@ func (s *server) CheckConfig(ctx context.Context, in *gen.LoadConfigReq) (out *g
 			out.Error = To(fmt.Sprintf("CheckConfig panic: %v", r))
 		}
 	}()
-	if in.GetNeedXray() {
-		// Xray-format configs can't be validated by sing-box; hand them to the
-		// Xray core instead.
-		if err := xray.CheckXrayConfig(in.GetXrayConfig()); err != nil {
-			out.Error = To(err.Error())
-		}
-		return
-	}
 	err := boxmain.Check([]byte(*in.CoreConfig))
 	if err != nil {
 		out.Error = To(err.Error())
@@ -406,7 +236,6 @@ func (s *server) CheckConfig(ctx context.Context, in *gen.LoadConfigReq) (out *g
 
 func (s *server) Test(ctx context.Context, in *gen.TestReq) (*gen.TestResp, error) {
 	var testInstance *boxbox.Box
-	var xrayTestIntance *core.Instance
 	var cancel context.CancelFunc
 	var err error
 	twice := true
@@ -423,27 +252,6 @@ func (s *server) Test(ctx context.Context, in *gen.TestReq) (*gen.TestResp, erro
 		defer release()
 		twice = false
 	} else {
-		if *in.NeedXray {
-			xrayTestIntance, err = xray.CreateXrayInstance(*in.XrayConfig)
-			if err != nil {
-				return nil, err
-			}
-			// Interface finder only (no DNS): keep test egress on the physical
-			// NIC so it doesn't loop through an active TUN. See Start().
-			xrayTestIntance.SetEgressInterface(defaultInterfaceFinder())
-			err = xrayTestIntance.Start()
-			if err != nil {
-				return nil, err
-			}
-			defer func() {
-				common.Must(xrayTestIntance.Close())
-			}() // crash in case it does not close properly
-		}
-		fullXray, ferr := startXrayFullConfigs(in.XrayFullConfigs)
-		if ferr != nil {
-			return nil, ferr
-		}
-		defer closeXrayInstances(fullXray)
 		testInstance, cancel, err = boxmain.Create([]byte(*in.Config))
 		if err != nil {
 			return nil, err
@@ -514,30 +322,8 @@ func (s *server) QueryURLTest(ctx context.Context, in *gen.EmptyReq) (out *gen.Q
 
 func (s *server) IPTest(ctx context.Context, in *gen.IPTestRequest) (*gen.IPTestResp, error) {
 	var testInstance *boxbox.Box
-	var xrayTestInstance *core.Instance
 	var cancel context.CancelFunc
 	var err error
-	if *in.NeedXray {
-		xrayTestInstance, err = xray.CreateXrayInstance(*in.XrayConfig)
-		if err != nil {
-			return nil, err
-		}
-		// Interface finder only (no DNS): keep test egress on the physical
-		// NIC so it doesn't loop through an active TUN. See Start().
-		xrayTestInstance.SetEgressInterface(defaultInterfaceFinder())
-		err = xrayTestInstance.Start()
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			common.Must(xrayTestInstance.Close())
-		}()
-	}
-	fullXray, ferr := startXrayFullConfigs(in.XrayFullConfigs)
-	if ferr != nil {
-		return nil, ferr
-	}
-	defer closeXrayInstances(fullXray)
 	testInstance, cancel, err = boxmain.Create([]byte(*in.Config))
 	if err != nil {
 		return nil, err
@@ -740,7 +526,6 @@ func (s *server) SpeedTest(ctx context.Context, in *gen.SpeedTestRequest) (*gen.
 		return nil, errors.New("cannot run empty test")
 	}
 	var testInstance *boxbox.Box
-	var xrayTestIntance *core.Instance
 	var cancel context.CancelFunc
 	outboundTags := in.OutboundTags
 	var err error
@@ -755,25 +540,6 @@ func (s *server) SpeedTest(ctx context.Context, in *gen.SpeedTestRequest) (*gen.
 		}
 		defer release()
 	} else {
-		if *in.NeedXray {
-			xrayTestIntance, err = xray.CreateXrayInstance(*in.XrayConfig)
-			if err != nil {
-				return nil, err
-			}
-			// Interface finder only (no DNS): keep test egress on the physical
-			// NIC so it doesn't loop through an active TUN. See Start().
-			xrayTestIntance.SetEgressInterface(defaultInterfaceFinder())
-			err = xrayTestIntance.Start()
-			if err != nil {
-				return nil, err
-			}
-			defer xrayTestIntance.Close()
-		}
-		fullXray, ferr := startXrayFullConfigs(in.XrayFullConfigs)
-		if ferr != nil {
-			return nil, ferr
-		}
-		defer closeXrayInstances(fullXray)
 		testInstance, cancel, err = boxmain.Create([]byte(*in.Config))
 		if err != nil {
 			return nil, err

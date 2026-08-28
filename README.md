@@ -2,12 +2,9 @@
 
 macOS VPN / proxy client. GUI: Qt Quick (`app/qt`). Engine: Go core (**sing-box**) + framed IPC.
 
-> xray-core is linked into NexusCore and the Core gates it on `need_xray`, but the
-> shell never sets that flag and has no Xray config generator — so **Xray never
-> runs today**. Nodes that need it (VLESS with `type=xhttp`, an `encryption` other
-> than `none`, or `extra=`) are refused at import rather than accepted and left to
-> fail at connect. The MPL-2.0 obligation below still applies: the code ships
-> whether or not it executes.
+> Nexus ships sing-box only. It does not bundle Xray Core. VLESS inputs that need
+> Xray (`type=xhttp`, an `encryption` other than `none`, or `extra=`) are reported
+> as unsupported during import instead of being accepted and failing at connect.
 
 ![Nexus UI](assets/screenshot.png)
 
@@ -24,7 +21,7 @@ macOS VPN / proxy client. GUI: Qt Quick (`app/qt`). Engine: Go core (**sing-box*
 
 | Target | Arch | Shell / install | Core |
 |--------|------|-----------------|------|
-| macOS | arm64 | `.app` (unsigned internal) | `NexusCore` (CGO) |
+| macOS 13+ | arm64 | self-contained `.app` | `NexusCore` (CGO) |
 
 Windows is not a product this round. Old HTML GUI and Windows pack scripts live under [`archive/`](archive/).
 
@@ -63,9 +60,9 @@ install and removed on uninstall.
 | **Shell / original product code** (`app/`, …) | Nexus original terms in root [`LICENSE`](LICENSE), with carve-outs for GPL/MPL rights |
 | **Third-party** | [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) |
 
-Distributing an app that embeds NexusCore requires GPLv3 compliance for Core
-(Corresponding Source for that build). MPL-2.0 applies to xray-core covered files.
-This is an engineering layout, not legal advice.
+Distributing an app that embeds NexusCore requires GPLv3 compliance for Core,
+including Corresponding Source for that build. Other third-party terms are
+listed in `THIRD_PARTY_NOTICES.md`. This is an engineering layout, not legal advice.
 
 ## Build
 
@@ -77,9 +74,23 @@ This is an engineering layout, not legal advice.
 
 Produces `bin/NexusCore` and `bin/Nexus.app` (Qt host).
 
-Requires: macOS, Xcode CLT, `go`, `cargo`/`rustc`, `cmake`, Homebrew Qt 6.11.
+Requires: macOS 13 or newer, Xcode CLT, `go`, `cargo`/`rustc`, `cmake`, `protoc`, and Qt 6.11.
+Homebrew Qt is detected automatically; set `NEXUS_QT_HOME` for another Qt prefix.
 
-QML is loaded from source (`NEXUS_QML_DIR`). This path produces an **unsigned** local/internal build (no Apple notarization). Fine for your machines. Gatekeeper will warn on other hosts until you sign with your own credentials (not wired in `build.sh`). Do not run `macdeployqt`; the `.app` is for this Mac.
+The build embeds Nexus QML and tray assets, deploys the required Qt frameworks
+and plugins, includes license notices, and verifies the resulting app bundle.
+Without credentials it is ad-hoc signed for local testing. For a distributable
+Developer ID build:
+
+```bash
+NEXUS_SIGN_IDENTITY="Developer ID Application: Example (TEAMID)" \
+NEXUS_NOTARY_PROFILE="nexus-notary" \
+./build.sh
+```
+
+`NEXUS_NOTARY_PROFILE` names credentials previously stored with
+`xcrun notarytool store-credentials`. When supplied, the build submits, waits,
+staples, and verifies the notarization ticket.
 
 ## Dev
 
@@ -97,7 +108,7 @@ cmake --build app/qt/build --target nexus && app/qt/build/nexus
 - Node **Traffic** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only Reset traffic zeros)
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled Connectivity (not a proxy-path test)
 - **Runtime status** shows the exit IP and country as the far end sees them, fetched *through* the tunnel — a direct lookup would report this machine and be the wrong answer stated confidently. Blank when the tunnel cannot carry it.
-- **Import** parses share links for vless / vmess / trojan / ss / socks / http(s) / anytls / tuic / hysteria / hysteria2, and Clash YAML for the same set. Entries it cannot use are reported by protocol instead of silently lowering the count — including `vless-xray` for the Xray-only VLESS above.
+- **Import** parses share links for vless / vmess / trojan / ss / socks / http(s) / anytls / tuic / hysteria / hysteria2, and Clash YAML for the same set. Entries it cannot use are reported by protocol instead of silently lowering the count — including `vless-xray` for VLESS features not supported by the bundled sing-box engine.
 - **Idle-only actions:** the direct TCP probe binds the physical NIC, and uninstalling the firewall helper flushes the PF anchor. Both are refused unless the tunnel is fully disconnected. While connected, use the per-node URL test, which measures via the node.
 - **Firewall (OS fail-closed, macOS only):** sidebar Firewall + **NexusFwD** LaunchDaemon (PF anchor `nexus`). Domain/process blocklist removed. Orthogonal to sing-box routing/Core/Tun/proxy. Install helper before connect.
 - Connection table: merge by Core id, multi-select like nodes (copy), process + PID columns
@@ -106,4 +117,6 @@ cmake --build app/qt/build --target nexus && app/qt/build/nexus
 
 ## Status
 
-Operational for **macOS arm64** internal use. Not a notarized App Store / public-download build.
+Operational for **macOS arm64**. The build can produce an ad-hoc local artifact
+or a Developer ID signed and notarized distribution artifact when credentials
+are supplied.

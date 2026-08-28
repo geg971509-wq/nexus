@@ -15,9 +15,6 @@ import (
 	"NexusCore/ipc"
 	"NexusCore/test_utils"
 
-	"github.com/xtls/xray-core/core"
-
-	_ "NexusCore/internal/distro/all"
 	C "github.com/sagernet/sing-box/constant"
 )
 
@@ -70,7 +67,6 @@ func main() {
 		}
 	}()
 	fmt.Println("sing-box:", C.Version)
-	fmt.Println("Xray-core:", core.Version())
 	fmt.Println()
 	runtimeDebug.SetMemoryLimit(2 * 1024 * 1024 * 1024) // 2GB
 	go func() {

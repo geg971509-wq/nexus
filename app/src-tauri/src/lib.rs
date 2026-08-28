@@ -1200,17 +1200,6 @@ async fn core_url_test_stop() -> Result<(), String> {
     .map_err(|e| format!("url test stop join: {e}"))?
 }
 
-/// DNS resolve host → IPs (single; kept for misc use).
-#[tauri::command]
-async fn net_resolve_host(host: String) -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let ips = net::resolve_host(&host)?;
-        Ok(serde_json::json!({ "host": host, "ips": ips }))
-    })
-    .await
-    .map_err(|e| format!("resolve join: {e}"))?
-}
-
 /// Single quit/teardown path: stop Core + always best-effort clear OS proxy at MIXED_PORT.
 /// Used by app_quit, tray quit, and Exit (after confirm). Idempotent.
 /// 3A: quit → Reset (session kill-switch ends with app; not post-quit lockdown).

@@ -2,6 +2,7 @@
 
 #include <QIcon>
 #include <QObject>
+#include <QString>
 #include <QVector>
 
 class QAction;
@@ -15,6 +16,7 @@ class Tray : public QObject {
     Q_OBJECT
 public:
     explicit Tray(QWindow *window, NexusBridge *bridge, QObject *parent = nullptr);
+    ~Tray() override;
     void setVisible(bool visible);
     void setSpinning(bool on);
     void showWindow();
@@ -22,12 +24,15 @@ public:
 private:
     void loadFrames();
     void applyFrame(int index);
+    void setLabels(const QString &showWindow, const QString &quit);
     void quitApp();
 
     QWindow *m_window;
     NexusBridge *m_bridge;
     QSystemTrayIcon *m_icon = nullptr;
     QMenu *m_menu = nullptr;
+    QAction *m_showAction = nullptr;
+    QAction *m_quitAction = nullptr;
     QTimer *m_timer = nullptr;
     QVector<QIcon> m_frames;
     int m_index = 0;

@@ -1,11 +1,19 @@
 cmake_minimum_required(VERSION 3.21)
-project(nexus-qt LANGUAGES CXX)
+if(CMAKE_HOST_APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version")
+endif()
+project(nexus-qt LANGUAGES C CXX)
 if(APPLE)
+    if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "13.0")
+        message(FATAL_ERROR "Qt 6.11 requires CMAKE_OSX_DEPLOYMENT_TARGET 13.0 or newer")
+    endif()
     enable_language(OBJCXX)
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(NOT CMAKE_BUILD_TYPE)
@@ -51,7 +59,31 @@ add_executable(nexus
     src/main.cpp
     src/bridge.cpp
     src/host.cpp
+    src/qr_decoder.cpp
     src/tray.cpp
+    third_party/quirc/decode.c
+    third_party/quirc/identify.c
+    third_party/quirc/quirc.c
+    third_party/quirc/version_db.c
+)
+
+file(GLOB NEXUS_QML_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/qml/*.qml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/qml/qmldir"
+)
+qt_add_resources(nexus "nexus_qml"
+    PREFIX "/nexus"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}"
+    FILES ${NEXUS_QML_FILES}
+)
+
+file(GLOB NEXUS_TRAY_FILES CONFIGURE_DEPENDS
+    "${NEXUS_TAURI_DIR}/icons/tray/frame_*.png"
+)
+qt_add_resources(nexus "nexus_tray"
+    PREFIX "/nexus/tray"
+    BASE "${NEXUS_TAURI_DIR}/icons/tray"
+    FILES ${NEXUS_TRAY_FILES}
 )
 if(APPLE)
     target_sources(nexus PRIVATE src/macos.mm)
@@ -59,12 +91,7 @@ if(APPLE)
 endif()
 add_dependencies(nexus nexus_lib_a)
 
-target_include_directories(nexus PRIVATE src)
-target_compile_definitions(nexus PRIVATE
-    NEXUS_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
-    NEXUS_TRAY_DIR="${NEXUS_TAURI_DIR}/icons/tray"
-)
-
+target_include_directories(nexus PRIVATE src third_party)
 target_link_libraries(nexus PRIVATE
     Qt6::Quick
     Qt6::QuickControls2

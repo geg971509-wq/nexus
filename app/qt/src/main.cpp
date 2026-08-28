@@ -13,10 +13,6 @@
 #include <QWindow>
 #include <cstdio>
 
-#ifndef NEXUS_QML_DIR
-#define NEXUS_QML_DIR ""
-#endif
-
 static Tray *g_tray = nullptr;
 static NexusBridge *g_bridge = nullptr;
 
@@ -51,7 +47,16 @@ static void on_spinning(bool spinning) {
 class NexusApp : public QApplication {
 public:
     using QApplication::QApplication;
+    void setMainWindow(QWindow *window) { m_mainWindow = window; }
+
     bool event(QEvent *e) override {
+        if (e->type() == QEvent::ApplicationStateChange
+            && applicationState() == Qt::ApplicationActive && m_mainWindow
+            && !m_mainWindow->isVisible()) {
+            m_mainWindow->show();
+            m_mainWindow->raise();
+            m_mainWindow->requestActivate();
+        }
         if (e->type() == QEvent::Quit && g_bridge && !m_allowQuit) {
             const QString raw = g_bridge->invoke(QStringLiteral("app_quit"), QStringLiteral("{}"));
             const QJsonObject o = QJsonDocument::fromJson(raw.toUtf8()).object();
@@ -64,6 +69,7 @@ public:
     }
 
 private:
+    QWindow *m_mainWindow = nullptr;
     bool m_allowQuit = false;
 };
 
@@ -82,7 +88,6 @@ int main(int argc, char *argv[]) {
     NexusBridge bridge;
     g_bridge = &bridge;
     QQmlApplicationEngine engine;
-    engine.addImportPath(QString::fromUtf8(NEXUS_QML_DIR));
     engine.rootContext()->setContextProperty(QStringLiteral("nexus"), &bridge);
 
     QObject::connect(&engine, &QQmlApplicationEngine::warnings,
@@ -92,15 +97,16 @@ int main(int argc, char *argv[]) {
                          }
                      });
 
-    const QString qml = QString::fromUtf8(NEXUS_QML_DIR) + QStringLiteral("/Main.qml");
-    engine.load(QUrl::fromLocalFile(qml));
+    const QUrl qml(QStringLiteral("qrc:/nexus/qml/Main.qml"));
+    engine.load(qml);
     if (engine.rootObjects().isEmpty()) {
-        fprintf(stderr, "qml: failed to load %s\n", qPrintable(qml));
+        fprintf(stderr, "qml: failed to load %s\n", qPrintable(qml.toString()));
         g_bridge = nullptr;
         return 1;
     }
 
     QWindow *win = qobject_cast<QWindow *>(engine.rootObjects().first());
+    app.setMainWindow(win);
     Host host(win);
     Tray tray(win, &bridge);
     g_tray = &tray;

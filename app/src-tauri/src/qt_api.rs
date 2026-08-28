@@ -305,10 +305,6 @@ pub(crate) fn dispatch(cmd: &str, json: &str) -> String {
             get_i32(&v, "timeout_ms", "timeoutMs"),
         )),
         "core_url_test_stop" => await_json(crate::core_url_test_stop()),
-        "net_resolve_host" => {
-            let host = get_str(&v, "host", "host").unwrap_or_default();
-            await_json(crate::net_resolve_host(host))
-        }
         "net_resolve_hosts" => qt_net_resolve_hosts(&v),
         "app_quit" => {
             let force = get_bool(&v, "force", "force").unwrap_or(false);

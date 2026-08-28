@@ -62,7 +62,6 @@ func TestCoreKeepsListenerAcrossGUIReconnect(t *testing.T) {
 	start := &gen.LoadConfigReq{
 		CoreConfig:       &config,
 		NeedExtraProcess: boolPtr(false),
-		NeedXray:         boolPtr(false),
 		ProfileId:        int32Ptr(42),
 	}
 	startPayload := callCore(t, firstConn, 1, "Start", start)

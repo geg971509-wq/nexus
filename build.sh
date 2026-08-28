@@ -14,6 +14,17 @@ BINARIES_DIR="$TAURI_DIR/binaries"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-always}"
 
+# Homebrew does not link Qt into PATH by default. Allow CI and non-Homebrew
+# installations to override the prefix without editing this script.
+if [[ -n "${NEXUS_QT_HOME:-}" ]]; then
+  QT_HOME="$NEXUS_QT_HOME"
+elif command -v brew >/dev/null 2>&1; then
+  QT_HOME="$(brew --prefix qt)"
+else
+  QT_HOME="/opt/homebrew/opt/qt"
+fi
+export PATH="$QT_HOME/bin:$PATH"
+
 log()  { printf '\033[36m[INFO]\033[0m %s\n' "$*"; }
 ok()   { printf '\033[32m[OK]\033[0m %s\n' "$*"; }
 err()  { printf '\033[31m[ERR]\033[0m %s\n' "$*" >&2; }
@@ -28,8 +39,7 @@ target_triple() {
   arch="$(uname -m)"
   case "$arch" in
     arm64|aarch64) arch="aarch64" ;;
-    x86_64) arch="x86_64" ;;
-    *) die "unsupported arch: $arch" ;;
+    *) die "Nexus release builds support Apple Silicon only (got: $arch)" ;;
   esac
   os="$(uname -s)"
   case "$os" in
@@ -41,17 +51,32 @@ target_triple() {
 [[ $# -eq 0 ]] || die "usage: ./build.sh  (no flags — always full release rebuild)"
 
 [[ "$(uname -s)" == "Darwin" ]] || die "macOS only host"
+bash "$ROOT/script/check-release-metadata.sh" \
+  || die "release metadata is inconsistent"
 need go
 need cargo
 need cmake
+need python3
 need rustc
+need macdeployqt
+need codesign
+need ditto
+need otool
+need plutil
+need spctl
+need xcrun
 # Both sides generate from core/server/gen/libcore.proto: Go here, Rust in build.rs.
 need protoc
 if ! xcode-select -p >/dev/null 2>&1; then
   die "Xcode CLT not configured (xcode-select -p)"
 fi
 
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.0}"
+DEPLOYMENT_MAJOR="${MACOSX_DEPLOYMENT_TARGET%%.*}"
+[[ "$DEPLOYMENT_MAJOR" =~ ^[0-9]+$ ]] \
+  || die "invalid MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
+(( DEPLOYMENT_MAJOR >= 13 )) \
+  || die "Qt 6.11 requires macOS 13+ (got MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET)"
 TRIPLE="$(target_triple)"
 log "root=$ROOT triple=$TRIPLE (mac release rebuild)"
 
@@ -67,14 +92,10 @@ verify_core_binary() {
   [[ -f "$bin" ]] || die "$label missing: $bin"
   local sz
   sz="$(stat -f%z "$bin" 2>/dev/null || stat -c%s "$bin")"
-  if [[ "$sz" -lt 50000000 ]]; then
-    die "$label too small (${sz} bytes) — sing-box feature tags likely missing."
-  fi
   local meta
   meta="$(go version -m "$bin" 2>/dev/null || true)"
   [[ -n "$meta" ]] || die "go version -m failed on $bin (not a Go binary?)"
   echo "$meta" | grep -q 'github.com/sagernet/sing-box' || die "$label missing module: sing-box"
-  echo "$meta" | grep -q 'github.com/xtls/xray-core' || die "$label missing module: xray-core"
   echo "$meta" | grep -q 'github.com/sagernet/sing-tun' || die "$label missing module: sing-tun"
   echo "$meta" | grep -qE 'gvisor|github.com/sagernet/gvisor' || die "$label missing gvisor (with_gvisor tag?)"
   local tagline
@@ -84,7 +105,7 @@ verify_core_binary() {
   for t in "${CORE_REQUIRED_TAGS[@]}"; do
     echo "$tagline" | grep -q "$t" || die "$label missing required -tag: $t (got: $tagline)"
   done
-  ok "$label verified · $(numfmt --to=iec "$sz" 2>/dev/null || echo "${sz}B") · tags+sing-box+xray+sing-tun"
+  ok "$label verified · $(numfmt --to=iec "$sz" 2>/dev/null || echo "${sz}B") · tags+sing-box+sing-tun"
 }
 
 [[ -d "$CORE_SRC" ]] || die "core source missing: $CORE_SRC"
@@ -134,7 +155,6 @@ log "building NexusCore macOS (go · tags=$CORE_TAGS_MAC)…"
   VERSION_SINGBOX="$(go list -m -f '{{.Version}}' github.com/sagernet/sing-box)"
   [[ -n "$VERSION_SINGBOX" ]] || die "could not resolve github.com/sagernet/sing-box version from go.mod"
   log "sing-box: $(go list -m -f '{{.Path}} {{.Version}}{{if .Replace}} => {{.Replace.Path}} {{.Replace.Version}}{{end}}' github.com/sagernet/sing-box)"
-  log "xray-core: $(go list -m -f '{{.Path}} {{.Version}}{{if .Replace}} => {{.Replace.Path}} {{.Replace.Version}}{{end}}' github.com/xtls/xray-core)"
   log "sing-tun:  $(go list -m -f '{{.Path}} {{.Version}}{{if .Replace}} => {{.Replace.Path}}{{end}}' github.com/sagernet/sing-tun)"
   log "wireguard: $(go list -m -f '{{.Path}}{{if .Replace}} => {{.Replace.Path}} {{.Replace.Version}}{{end}}' github.com/sagernet/wireguard-go 2>/dev/null || echo 'via sing-box')"
 
@@ -170,7 +190,9 @@ QT_BUILD="$QT_DIR/build"
 [[ -f "$QT_DIR/CMakeLists.txt" ]] || die "missing Qt host: $QT_DIR/CMakeLists.txt"
 [[ -f "$QT_DIR/Info.plist" ]] || die "missing $QT_DIR/Info.plist"
 log "cmake Qt host…"
-cmake -S "$QT_DIR" -B "$QT_BUILD" -DCMAKE_BUILD_TYPE=Release
+cmake -S "$QT_DIR" -B "$QT_BUILD" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET"
 cmake --build "$QT_BUILD" --target nexus
 QT_BIN="$QT_BUILD/nexus"
 [[ -x "$QT_BIN" ]] || die "qt host missing: $QT_BIN"
@@ -192,8 +214,60 @@ chmod +x "$DEST_APP/Contents/MacOS/NexusCore"
 cp -f "$FWD_BIN" "$DEST_APP/Contents/MacOS/nexusfwd"
 chmod +x "$DEST_APP/Contents/MacOS/nexusfwd"
 cp -f "$QT_DIR/Info.plist" "$DEST_APP/Contents/Info.plist"
+plutil -replace LSMinimumSystemVersion -string "$MACOSX_DEPLOYMENT_TARGET" \
+  "$DEST_APP/Contents/Info.plist"
 cp -f "$TAURI_DIR/icons/icon.icns" "$DEST_APP/Contents/Resources/icon.icns"
-ok "staged $DEST_APP"
+
+# Include the notices a recipient needs with the exact binary they received.
+NOTICE_DIR="$DEST_APP/Contents/Resources/licenses"
+mkdir -p "$NOTICE_DIR"
+cp -f "$ROOT/LICENSE" "$NOTICE_DIR/NEXUS-LICENSE.txt"
+cp -f "$ROOT/THIRD_PARTY_NOTICES.md" "$NOTICE_DIR/THIRD_PARTY_NOTICES.md"
+cp -f "$ROOT/licenses/GPL-3.0.txt" "$NOTICE_DIR/GPL-3.0.txt"
+cp -f "$ROOT/licenses/MPL-2.0.txt" "$NOTICE_DIR/MPL-2.0.txt"
+
+# Copy Qt frameworks, QML runtime modules and plugins, then rewrite install names.
+# Product QML and tray frames are compiled into the host as qrc resources.
+macdeployqt "$DEST_APP" \
+  -qmldir="$QT_DIR/qml" \
+  -always-overwrite \
+  -verbose=1
+
+plutil -lint "$DEST_APP/Contents/Info.plist" >/dev/null
+if otool -L "$DEST_APP/Contents/MacOS/nexus" | grep -Eq '/opt/homebrew|/usr/local/opt'; then
+  die "Qt deployment left build-machine Homebrew paths in the app"
+fi
+
+# A Developer ID identity creates a distributable hardened-runtime build.
+# Without one, ad-hoc signing still produces a coherent local test artifact.
+SIGN_IDENTITY="${NEXUS_SIGN_IDENTITY:--}"
+NOTARY_PROFILE="${NEXUS_NOTARY_PROFILE:-}"
+if [[ -n "$NOTARY_PROFILE" && "$SIGN_IDENTITY" == "-" ]]; then
+  die "NEXUS_NOTARY_PROFILE requires NEXUS_SIGN_IDENTITY (Developer ID Application)"
+fi
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+  codesign --force --deep --sign - "$DEST_APP"
+  ok "ad-hoc signed (local testing; set NEXUS_SIGN_IDENTITY for distribution)"
+else
+  codesign --force --deep --options runtime --timestamp \
+    --sign "$SIGN_IDENTITY" "$DEST_APP"
+  ok "signed with Developer ID: $SIGN_IDENTITY"
+fi
+codesign --verify --deep --strict --verbose=2 "$DEST_APP"
+
+if [[ -n "$NOTARY_PROFILE" ]]; then
+  NOTARY_ZIP="$BIN_DIR/Nexus-notarize.zip"
+  rm -f "$NOTARY_ZIP"
+  ditto -c -k --keepParent "$DEST_APP" "$NOTARY_ZIP"
+  xcrun notarytool submit "$NOTARY_ZIP" \
+    --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$DEST_APP"
+  xcrun stapler validate "$DEST_APP"
+  spctl --assess --type execute --verbose=4 "$DEST_APP"
+  ok "notarized and stapled"
+fi
+
+ok "staged self-contained $DEST_APP"
 
 echo
 ok "build complete"

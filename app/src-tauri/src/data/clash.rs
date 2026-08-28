@@ -37,8 +37,8 @@ pub fn parse_clash_yaml(body: &str) -> Result<(Vec<ClashNode>, Vec<String>), Str
             break;
         }
         // See share_link: Xray-only VLESS parses but cannot run on sing-box.
-        if s(p, "type") == "vless" && crate::data::xray::needs_xray_clash(p) {
-            note(crate::data::xray::XRAY_VLESS_LABEL.to_string());
+        if s(p, "type") == "vless" && crate::data::vless_compat::is_unsupported_clash(p) {
+            note(crate::data::vless_compat::UNSUPPORTED_VLESS_LABEL.to_string());
             continue;
         }
         match proxy_to_node(p) {

@@ -1,4 +1,4 @@
-//! Which VLESS inputs need the Xray engine instead of sing-box.
+//! Detect VLESS inputs unsupported by the bundled sing-box-only engine.
 //!
 //! Port of Throne `Configs::useXrayVless` (`src/configs/common/utils.cpp`) and the
 //! `vlessFromClash` arm of its protocol dispatch (`src/configs/sub/GroupUpdater.cpp`).
@@ -7,18 +7,16 @@
 //! hold under upstream's default are ported — a node is Xray-only when sing-box
 //! genuinely cannot carry it.
 //!
-//! Detection is separate from generation on purpose: NexusCore already links the
-//! Xray engine and gates it on `LoadConfigReq.need_xray`, but the shell has no
-//! Xray config generator yet, so today these nodes are refused at import with a
-//! named reason rather than accepted and left to fail at connect.
+//! Nexus intentionally does not bundle Xray Core, so these nodes are refused at
+//! import with a named reason rather than left to fail at connect.
 
 use serde_json::Value;
 
 /// Label used when such a node is turned away, so the import log can name it.
-pub const XRAY_VLESS_LABEL: &str = "vless-xray";
+pub const UNSUPPORTED_VLESS_LABEL: &str = "vless-xray";
 
 /// `useXrayVless` for a share URI. Only meaningful for `vless://` links.
-pub fn needs_xray_link(link: &str) -> bool {
+pub fn is_unsupported_link(link: &str) -> bool {
     let Some((_, rest)) = link.split_once("://") else {
         return false;
     };
@@ -35,7 +33,7 @@ pub fn needs_xray_link(link: &str) -> bool {
             (k.eq_ignore_ascii_case(key)).then(|| v.to_string())
         })
     };
-    is_xray_only(
+    is_unsupported(
         get("type").as_deref(),
         get("encryption").as_deref(),
         get("extra").as_deref(),
@@ -43,13 +41,13 @@ pub fn needs_xray_link(link: &str) -> bool {
 }
 
 /// `vlessFromClash`: xhttp network, or an encryption other than `none`.
-pub fn needs_xray_clash(proxy: &Value) -> bool {
+pub fn is_unsupported_clash(proxy: &Value) -> bool {
     let f = |k: &str| proxy.get(k).and_then(|v| v.as_str());
-    is_xray_only(f("network"), f("encryption"), None)
+    is_unsupported(f("network"), f("encryption"), None)
 }
 
 /// The shared rule, so the link and Clash paths cannot drift apart.
-fn is_xray_only(network: Option<&str>, encryption: Option<&str>, extra: Option<&str>) -> bool {
+fn is_unsupported(network: Option<&str>, encryption: Option<&str>, extra: Option<&str>) -> bool {
     let xhttp = network.is_some_and(|n| n.eq_ignore_ascii_case("xhttp"));
     // Upstream treats absent and "none" alike; anything else is Xray-only.
     let encrypted = encryption.is_some_and(|e| !e.is_empty() && !e.eq_ignore_ascii_case("none"));
@@ -73,25 +71,25 @@ mod tests {
             &format!("vless://{UUID}@a.example.com:443?encryption=none&type=ws&host=cdn.example#n"),
             &format!("vless://{UUID}@a.example.com:443?encryption=none&security=reality&pbk=k#n"),
         ] {
-            assert!(!needs_xray_link(link), "{link}");
+            assert!(!is_unsupported_link(link), "{link}");
         }
-        assert!(!needs_xray_clash(&json!({"type":"vless","network":"ws"})));
-        assert!(!needs_xray_clash(&json!({"type":"vless","encryption":"none"})));
+        assert!(!is_unsupported_clash(&json!({"type":"vless","network":"ws"})));
+        assert!(!is_unsupported_clash(&json!({"type":"vless","encryption":"none"})));
     }
 
     #[test]
-    fn xhttp_encryption_and_extra_need_xray() {
-        assert!(needs_xray_link(&format!("vless://{UUID}@a.example.com:443?type=xhttp&path=%2Fx")));
-        assert!(needs_xray_link(&format!("vless://{UUID}@a.example.com:443?encryption=mlkem768x25519plus")));
-        assert!(needs_xray_link(&format!("vless://{UUID}@a.example.com:443?extra=%7B%22a%22%3A1%7D")));
-        assert!(needs_xray_clash(&json!({"type":"vless","network":"xhttp"})));
-        assert!(needs_xray_clash(&json!({"type":"vless","encryption":"mlkem768x25519plus"})));
+    fn xhttp_encryption_and_extra_are_unsupported() {
+        assert!(is_unsupported_link(&format!("vless://{UUID}@a.example.com:443?type=xhttp&path=%2Fx")));
+        assert!(is_unsupported_link(&format!("vless://{UUID}@a.example.com:443?encryption=mlkem768x25519plus")));
+        assert!(is_unsupported_link(&format!("vless://{UUID}@a.example.com:443?extra=%7B%22a%22%3A1%7D")));
+        assert!(is_unsupported_clash(&json!({"type":"vless","network":"xhttp"})));
+        assert!(is_unsupported_clash(&json!({"type":"vless","encryption":"mlkem768x25519plus"})));
     }
 
     /// A `#fragment` may contain anything; it must not be mistaken for the query.
     #[test]
     fn fragment_is_not_parsed_as_query() {
-        assert!(!needs_xray_link(&format!("vless://{UUID}@a.example.com:443#type=xhttp")));
-        assert!(!needs_xray_link(&format!("vless://{UUID}@a.example.com:443#&encryption=aes")));
+        assert!(!is_unsupported_link(&format!("vless://{UUID}@a.example.com:443#type=xhttp")));
+        assert!(!is_unsupported_link(&format!("vless://{UUID}@a.example.com:443#&encryption=aes")));
     }
 }

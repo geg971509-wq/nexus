@@ -48,24 +48,8 @@ message LoadConfigReq {
   optional string extra_process_args = 5 [default = ""];
   optional string extra_process_conf = 6 [default = ""];
   optional bool extra_no_out = 8 [default = false];
-  optional bool need_xray = 9 [default = false];
-  optional string xray_config = 10 [default = ""];
   optional string tun_ipv4_cidr = 11 [default = ""];
-  // Address of sing-box's loopback DNS-in (e.g. "127.0.0.1:15353") used by the
-  // live Xray instance to resolve outbound server domains. Empty => no outbound
-  // DNS wiring (test/validation fallback).
-  optional string xray_outbound_dns_address = 12 [default = ""];
-  // Xray-style domain strategy (e.g. "UseIP", "UseIPv4v6") applied to outbound
-  // domain resolution when xray_outbound_dns_address is set.
-  optional string xray_outbound_dns_strategy = 13 [default = ""];
-  // Keep the Xray instance cold until something dials it. Set for auto-selector
-  // profiles, whose pools can hold Xray members that only get probed once a
-  // bench cycle: the core takes over the loopback ports sing-box was told to
-  // dial and builds the instance on the first connection instead.
-  optional bool xray_lazy_start = 14 [default = false];
-  // Seconds without gated traffic before a lazily started instance is shut down
-  // again. 0 keeps it resident once it has started.
-  optional int32 xray_idle_seconds = 15 [default = 0];
+  reserved 9, 10, 12 to 15; // removed Xray integration; never reuse on this wire
   // Fields from 100 up are fork-local, so merges from upstream-official never
   // collide on a field number.
   optional int32 profile_id = 100 [default = -1];
@@ -90,13 +74,7 @@ message TestReq {
   optional bool test_current = 5 [default = false];
   optional int32 max_concurrency = 6 [default = 0];
   optional int32 test_timeout_ms = 7 [default = 0];
-  optional bool need_xray = 8 [default = false];
-  optional string xray_config = 9 [default = ""];
-  // Opaque, standalone Xray full configs, one per profile. Each becomes its own
-  // Xray instance whose socks inbound backs a socks outbound already present in
-  // `config`; unlike `xray_config` (the single merged Xray for regular profiles)
-  // these are not merged. Lets many xray-full profiles share one sing-box box.
-  repeated string xray_full_configs = 10;
+  reserved 8 to 10; // removed Xray integration
 }
 
 message TestResp {
@@ -159,10 +137,7 @@ message SpeedTestRequest {
   optional int32 timeout_ms = 9 [default = 0];
   optional bool only_country = 10 [default = false];
   optional int32 country_concurrency = 11 [default = 0];
-  optional bool need_xray = 12 [default = false];
-  optional string xray_config = 13 [default = ""];
-  // See TestReq.xray_full_configs.
-  repeated string xray_full_configs = 14;
+  reserved 12 to 14; // removed Xray integration
 }
 
 message SpeedTestResult {
@@ -208,10 +183,7 @@ message IPTestRequest {
   optional bool use_default_outbound = 3 [default = false];
   optional int32 max_concurrency = 4 [default = 0];
   optional int32 test_timeout_ms = 5 [default = 0];
-  optional bool need_xray = 6 [default = false];
-  optional string xray_config = 7 [default = ""];
-  // See TestReq.xray_full_configs.
-  repeated string xray_full_configs = 8;
+  reserved 6 to 8; // removed Xray integration
 }
 
 message IPTestResp {

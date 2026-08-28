@@ -44,9 +44,9 @@ pub fn parse_share_body(body: &str) -> (Vec<ShareNode>, Vec<String>) {
         // sing-box cannot carry it and the shell has no Xray config generator.
         // Turn it away by name instead.
         if line.to_ascii_lowercase().starts_with("vless://")
-            && crate::data::xray::needs_xray_link(line)
+            && crate::data::vless_compat::is_unsupported_link(line)
         {
-            note(crate::data::xray::XRAY_VLESS_LABEL.to_string());
+            note(crate::data::vless_compat::UNSUPPORTED_VLESS_LABEL.to_string());
             continue;
         }
         match parse_to_outbound(line) {

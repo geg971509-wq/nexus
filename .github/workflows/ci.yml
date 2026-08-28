@@ -2,24 +2,27 @@ name: CI
 
 on:
   push:
-    branches: [dev, main]
+    branches: [qt-dev, dev, main]
   pull_request:
 
 jobs:
   ui:
-    name: UI (i18n)
+    name: UI (i18n, metadata)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       # t() falls back to zh-CN, so a missing translation ships as Chinese text
-      # in the English UI without any error. ubuntu runners have ruby preinstalled.
+      # in the English UI without any error. The checker also rejects missing packs.
       - run: bash script/check-i18n.sh
+      - run: bash script/check-release-metadata.sh
 
   core:
     name: Core (Go)
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Require Apple Silicon
+        run: test "$(uname -m)" = arm64
       - uses: actions/setup-go@v5
         with:
           go-version-file: core/server/go.mod
@@ -35,7 +38,7 @@ jobs:
       # The IPC dispatcher hands every request to its own goroutine.
       - run: go test -race ./...
         working-directory: core/server
-      # Core is the half that touches network traffic, on a sing-box/xray dep tree
+      # Core is the half that touches network traffic, on the sing-box dependency tree
       # nobody here reads. govulncheck is call-graph based: it fails only when this
       # code can actually reach a known-vulnerable symbol, not on every advisory.
       - name: govulncheck
@@ -46,15 +49,21 @@ jobs:
 
   shell:
     name: Shell (Rust, macOS)
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Require Apple Silicon
+        run: test "$(uname -m)" = arm64
       # build.rs runs prost-build against core/server/gen/libcore.proto.
       - uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       # repo-root rust-toolchain.toml pins 1.94.0; install that, not stable.
       - uses: dtolnay/rust-toolchain@1.94.0
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.11.0'
+          cache: 'true'
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
@@ -66,6 +75,12 @@ jobs:
           touch app/src-tauri/binaries/NexusCore-$(rustc -vV | sed -n 's/^host: //p')
       - run: cargo test --lib
         working-directory: app/src-tauri
+      # Compile the actual Qt host and every embedded QML/resource path. The
+      # Rust-only check cannot catch a broken C++ bridge or missing QML file.
+      - name: Qt host build
+        run: |
+          cmake -S app/qt -B app/qt/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build app/qt/build --target nexus --parallel 2
       # Fails on RUSTSEC vulnerabilities only. The unmaintained/unsound warnings it
       # prints today are all in Tauri's Linux GTK stack, which this macOS product
       # never compiles — so they stay visible without gating the build.

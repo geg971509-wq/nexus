@@ -2,7 +2,7 @@ pub mod clash;
 pub mod generate;
 pub mod store;
 pub mod share_link;
-pub mod xray;
+pub mod vless_compat;
 
 /// Protocol label for an entry the parsers had to drop, so the import can say
 /// *what* it skipped instead of silently reporting a smaller count.

@@ -35,39 +35,7 @@ Item {
     property string filterText: ""
     property string filterLvl: "all"
 
-    readonly property var extra: ({
-        "th.time": { "zh-CN": "时间", "en": "Time", "ru": "Время", "zh-TW": "時間" },
-        "th.proc": { "zh-CN": "进程", "en": "Process", "ru": "Процесс", "zh-TW": "程序" },
-        "th.dest": { "zh-CN": "目标", "en": "Destination", "ru": "Назначение", "zh-TW": "目標" },
-        "th.proto": { "zh-CN": "协议", "en": "Protocol", "ru": "Протокол", "zh-TW": "協定" },
-        "th.outbound": { "zh-CN": "出站", "en": "Outbound", "ru": "Исходящий", "zh-TW": "出站" },
-        "log.filterAll": { "zh-CN": "全部", "en": "All", "ru": "Все", "zh-TW": "全部" },
-        "title.dockResize": { "zh-CN": "拖动调节日志高度", "en": "Drag to resize the log dock", "ru": "Изменить высоту журнала", "zh-TW": "拖曳調整日誌高度" },
-        "title.dockToggle": { "zh-CN": "展开或收起运行日志", "en": "Expand or collapse the runtime log", "ru": "Развернуть или свернуть журнал", "zh-TW": "展開或收起執行日誌" },
-        "title.logClear": { "zh-CN": "清空日志内容", "en": "Clear log contents", "ru": "Очистить журнал", "zh-TW": "清空日誌內容" },
-        "title.dockCollapse": { "zh-CN": "收起面板", "en": "Collapse panel", "ru": "Свернуть панель", "zh-TW": "收起面板" },
-        "title.dockExpand": { "zh-CN": "展开日志/连接", "en": "Expand log / connections", "ru": "Развернуть журнал / соединения", "zh-TW": "展開日誌/連線" },
-        "log.copy": { "zh-CN": "复制", "en": "Copy", "ru": "Копировать", "zh-TW": "複製" },
-        "ctx.selectAll": { "zh-CN": "全选", "en": "Select All", "ru": "Выбрать все", "zh-TW": "全選" },
-        "conn.copyHost": { "zh-CN": "复制域名/IP", "en": "Copy Domain/IP", "ru": "Копировать домен/IP", "zh-TW": "複製網域/IP" },
-        "conn.copyRow": { "zh-CN": "复制整行", "en": "Copy Row", "ru": "Копировать строку", "zh-TW": "複製整列" },
-        "log.clear": { "zh-CN": "清除", "en": "Clear", "ru": "Очистить", "zh-TW": "清除" }
-    })
-
-    function lang() { return i18 && i18.lang ? i18.lang : "zh-CN" }
-
-    function t(k, v) {
-        var s = i18 ? i18.t(k, v) : k
-        if (!s || s === k) {
-            var e = extra[k]
-            s = (e && (e[lang()] || e["zh-CN"])) || k
-            if (v) {
-                for (var p in v)
-                    s = s.replace("{" + p + "}", v[p])
-            }
-        }
-        return s
-    }
+    function t(k, v) { return i18 ? i18.t(k, v) : k }
 
     function clampH(px) {
         var n = Math.round(px)
@@ -222,7 +190,7 @@ Item {
     function clearLog() {
         logs.clear()
         if (logView) logView.text = ""
-        appendLog("SYS", "info", lang().indexOf("en") === 0 ? "Log cleared" : "日志已清空")
+        appendLog("SYS", "info", t("log.cleared"))
     }
 
     function lineVisible(lvl, msg) {
@@ -543,7 +511,7 @@ Item {
                         width: Math.max(80, parent.width - 10 - 4 * 52 - 20)
                         height: 22
                         anchors.verticalCenter: parent.verticalCenter
-                        placeholderText: lang().indexOf("en") === 0 ? "Filter logs…" : "过滤日志…"
+                        placeholderText: root.t("log.filterPlaceholder")
                         color: root.controlText
                         font.family: root.fonts[0]
                         font.pixelSize: 12

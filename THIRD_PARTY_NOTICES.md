@@ -55,11 +55,10 @@ https://github.com/SagerNet/sing-box · https://github.com/Throneproj/sing-box
 
 | Module | License | Notes |
 |--------|---------|--------|
-| `github.com/xtls/xray-core` (replace: `github.com/throneproj/xray-core`) | MPL-2.0 | Xray engine |
-| `github.com/xtls/reality` | MPL-2.0 | transitive |
-| `github.com/hashicorp/yamux` | MPL-2.0 | transitive |
+| `github.com/xtls/reality` | MPL-2.0 | transitive through the sing-box graph |
+| `github.com/hashicorp/yamux` | MPL-2.0 | transitive when present |
 
-Upstream: https://github.com/XTLS/Xray-core · https://github.com/throneproj/xray-core
+Nexus does not bundle Xray Core.
 
 ### LGPL
 
@@ -126,8 +125,25 @@ Product GUI is Qt Quick (`app/qt`):
 | Component | License | Notes |
 |-----------|---------|--------|
 | Qt 6.11 (`Quick`, `QuickControls2`, `Widgets`, `Svg`, `Gui`) | LGPLv3 | Dynamically linked. https://www.qt.io/licensing |
+| `quirc` | ISC-style | QR image decoder; source is vendored under `app/qt/third_party/quirc` |
 
 The Tauri crate remains as a compile dependency of the Rust library the Qt host links; it is not the window. Former HTML lives in `archive/webview-ui/`.
+
+### quirc license
+
+Copyright (C) 2010-2012 Daniel Beer <dlbeer@gmail.com>
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
 
 ---
 

@@ -53,32 +53,7 @@ Item {
     property var connectedAt: null
     property alias table: table
 
-    readonly property var extra: ({
-        "status.connecting": { "zh-CN": "连接中…", "en": "Connecting…", "ru": "Подключение…", "zh-TW": "連線中…" },
-        "status.disconnecting": { "zh-CN": "断开中…", "en": "Disconnecting…", "ru": "Отключение…", "zh-TW": "中斷中…" },
-        "status.subOn": { "zh-CN": "经 {name} · 延迟 {lat}", "en": "via {name} · latency {lat}", "ru": "через {name} · {lat}", "zh-TW": "經 {name} · 延遲 {lat}" },
-        "status.subConnecting": { "zh-CN": "正在连接 {name}…", "en": "Connecting {name}…", "ru": "Подключение {name}…", "zh-TW": "正在連線 {name}…" },
-        "status.subDisconnecting": { "zh-CN": "正在断开 {name}…", "en": "Disconnecting {name}…", "ru": "Отключение {name}…", "zh-TW": "正在中斷 {name}…" },
-        "status.subMismatch": { "zh-CN": "当前隧道：{tunnel} · 选定：{selected}（需重新连接）· 延迟 {lat}", "en": "Tunnel: {tunnel} · selected: {selected} (reconnect) · {lat}", "ru": "Туннель: {tunnel} · выбран: {selected} · {lat}", "zh-TW": "目前隧道：{tunnel} · 選定：{selected}（需重新連線）· 延遲 {lat}" },
-        "log.coreLost": { "zh-CN": "核心已失联 — 正在断开", "en": "Core lost — disconnecting", "ru": "Ядро потеряно — отключение", "zh-TW": "核心已失聯 — 正在中斷" },
-        "log.notConnected": { "zh-CN": "当前未连接", "en": "Not connected", "ru": "Нет подключения", "zh-TW": "目前未連線" },
-        "log.selectedN": { "zh-CN": "已全选 {n} 个节点", "en": "Selected all {n} nodes", "ru": "Выбрано все {n} узлов", "zh-TW": "已全選 {n} 個節點" }
-    })
-
-    function lang() { return i18 && i18.lang ? i18.lang : "zh-CN" }
-
-    function t(k, v) {
-        var s = i18 ? i18.t(k, v) : k
-        if (!s || s === k) {
-            var e = extra[k]
-            s = (e && (e[lang()] || e["zh-CN"])) || k
-            if (v) {
-                for (var p in v)
-                    s = s.replace("{" + p + "}", v[p])
-            }
-        }
-        return s
-    }
+    function t(k, v) { return i18 ? i18.t(k, v) : k }
 
     function api() {
         if (typeof nexus === "undefined" || !nexus) return null
