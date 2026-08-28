@@ -15,7 +15,6 @@ Item {
     readonly property color secondary: th ? th.secondary : "#6e6e73"
     readonly property color tertiary: th ? th.tertiary : "#8e8e93"
     readonly property color blue: th ? th.blue : "#007aff"
-    readonly property color red: th ? th.red : "#ff3b30"
     readonly property color surface: th ? th.surface : "#ffffff"
     readonly property color chrome: th ? th.chromeSolid : "#fafafc"
     readonly property color sep: th ? th.separator : "#1e3c3c43"
@@ -38,7 +37,6 @@ Item {
     readonly property color dirtyBg: dark ? "#24ff9f0a" : "#1aff9500"
     readonly property color dirtyBd: dark ? "#52ff9f0a" : "#47ff9500"
     readonly property color dirtyFg: dark ? "#ffd60a" : "#9a5b00"
-    readonly property bool isSub: win && win.currentView === "sub"
     readonly property string lang: i18 ? i18.lang : "zh-CN"
 
     readonly property var langOpts: ["简体中文", "English", "Русский", "繁體中文"]
@@ -59,12 +57,6 @@ Item {
     property bool savedHide: false
     property bool dirty: false
     property bool applying: false
-    readonly property bool subBusy: !!(win && win.dialogs && win.dialogs.subUpdating)
-    property string subUrl: ""
-    property string subUrlError: ""
-    property string groupName: "Default"
-    property string groupId: "default"
-    property var catalog: null
 
     Settings {
         id: store
@@ -91,8 +83,6 @@ Item {
         return (typeof nexus === "undefined") ? null : nexus
         // qmllint enable unqualified
     }
-
-    function parseReply(raw) { return backend.parseReply(raw) }
 
     function invoke(cmd, payload) { return backend.invoke(cmd, payload) }
 
@@ -173,47 +163,6 @@ Item {
         hideSw.on = on
     }
 
-    function unwrapCatalog(blob) { return backend.unwrapCatalog(blob) }
-
-    function homeSibling() {
-        var p = parent
-        if (!p) return null
-        var kids = p.children
-        for (var i = 0; i < kids.length; i++) {
-            if (kids[i] !== root && typeof kids[i].loadCatalog === "function")
-                return kids[i]
-        }
-        return null
-    }
-
-    function activeGroup() {
-        var data = catalog
-        if (!data || !data.groups || !data.groups.length)
-            return { id: "default", name: "Default", url: "" }
-        var gid = data.active
-        var home = homeSibling()
-        if (home && home.activeGid) gid = home.activeGid
-        var g = null
-        for (var i = 0; i < data.groups.length; i++) {
-            if (data.groups[i].id === gid) { g = data.groups[i]; break }
-        }
-        return g || data.groups[0]
-    }
-
-    function loadCatalog() {
-        var r = invoke("catalog_get", {})
-        catalog = unwrapCatalog(r && r.ok ? (r.data || r) : (r && r.data))
-        var g = activeGroup()
-        groupId = g.id || "default"
-        groupName = g.name || "Default"
-        subUrl = g.url || ""
-        urlField.text = subUrl
-    }
-
-    function putCatalog(blob) {
-        return invoke("catalog_put", { blob: blob })
-    }
-
     function loadPrefs() {
         savedLang = pick(store.lang, langOpts, "简体中文")
         savedFont = pick(store.font, fontOpts, "系统默认")
@@ -258,36 +207,6 @@ Item {
         if (win) win.currentView = "home"
     }
 
-    function applySub() {
-        if (subBusy) return
-        var url = (urlField.text || "").trim()
-        if (url === "https://…/sub") url = ""
-        subUrlError = ""
-        if (url && (!/^https?:\/\/\S+$/i.test(url) || url.length > 4096)) {
-            subUrlError = t("error.subUrlHttp")
-            urlField.forceActiveFocus()
-            urlField.selectAll()
-            return
-        }
-        var r0 = invoke("catalog_get", {})
-        var data = unwrapCatalog(r0 && r0.ok ? (r0.data || r0) : (r0 && r0.data))
-        if (!data || !data.groups || !data.groups.length) {
-            catalog = data
-            return
-        }
-        catalog = data
-        var g = activeGroup()
-        if (!g) return
-        g.url = url
-        groupId = g.id
-        groupName = g.name || "Default"
-        subUrl = url
-        putCatalog(data)
-        if (!url) return
-        if (win && win.dialogs && typeof win.dialogs.refreshSub === "function")
-            win.dialogs.refreshSub()
-    }
-
     function onLangPicked(v) {
         draftLang = v
         applyLocale(v)
@@ -319,11 +238,9 @@ Item {
 
     onVisibleChanged: if (visible) {
         loadHide()
-        loadCatalog()
     }
     Component.onCompleted: {
         loadPrefs()
-        loadCatalog()
     }
 
     Rectangle { anchors.fill: parent; color: root.bg }
@@ -341,7 +258,7 @@ Item {
                 anchors.left: parent.left
                 anchors.leftMargin: 24
                 anchors.verticalCenter: parent.verticalCenter
-                text: root.t(root.isSub ? "panel.sub" : "panel.basic")
+                text: root.t("panel.basic")
                 color: root.label
                 font.family: root.fonts[0]
                 font.pixelSize: 15
@@ -378,7 +295,6 @@ Item {
                     spacing: 16
 
                     Rectangle {
-                        visible: !root.isSub
                         width: parent.width
                         height: basicCol.height
                         radius: root.rLg
@@ -459,7 +375,6 @@ Item {
                     }
 
                     Rectangle {
-                        visible: !root.isSub
                         width: parent.width
                         height: aboutCol.height
                         radius: root.rLg
@@ -490,111 +405,6 @@ Item {
                         }
                     }
 
-                    Rectangle {
-                        visible: root.isSub
-                        width: parent.width
-                        height: subCol.height
-                        radius: root.rLg
-                        color: root.surface
-                        border.width: 1
-                        border.color: root.hairline
-
-                        Column {
-                            id: subCol
-                            width: parent.width
-                            Text {
-                                width: parent.width
-                                height: 32
-                                text: root.t("sec.0c7d604b")
-                                color: root.sectionLabel
-                                font.family: root.fonts[0]
-                                font.pixelSize: 11
-                                font.weight: Font.Medium
-                                leftPadding: 16
-                                topPadding: 10
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            SetRow {
-                                labelKey: "label.728c7d71"
-                                hintText: root.subUrlError || root.t("hint.subUrlNamed", { name: root.groupName })
-                                hintError: !!root.subUrlError
-                                last: true
-                                wide: true
-                                Row {
-                                    width: parent.width
-                                    spacing: 8
-                                    Item {
-                                        width: parent.width - applyBtn.width - 8
-                                        height: 32
-                                        TextField {
-                                            id: urlField
-                                            anchors.fill: parent
-                                            z: 0
-                                            placeholderText: "https://…/sub"
-                                            color: root.controlText
-                                            placeholderTextColor: root.tertiary
-                                            font.family: root.fonts[0]
-                                            font.pixelSize: 13
-                                            font.weight: Font.Medium
-                                            selectByMouse: true
-                                            inputMethodHints: Qt.ImhUrlCharactersOnly
-                                            echoMode: TextInput.Normal
-                                            clip: true
-                                            leftPadding: 11
-                                            rightPadding: 11
-                                            verticalAlignment: Text.AlignVCenter
-                                            onTextEdited: root.subUrlError = ""
-                                            background: Rectangle {
-                                                radius: 8
-                                                color: root.controlBg
-                                                border.width: 1
-                                                border.color: root.subUrlError ? root.red : (urlField.activeFocus ? root.blue : (urlHover.hovered ? root.controlBorderHover : root.controlBorder))
-                                            }
-                                            Keys.onReturnPressed: root.applySub()
-                                            Keys.onEnterPressed: root.applySub()
-                                            Accessible.name: root.t("label.728c7d71")
-                                        }
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            visible: !urlField.activeFocus
-                                            z: 1
-                                            radius: 8
-                                            color: root.controlBg
-                                            border.width: 1
-                                            border.color: root.subUrlError ? root.red : (urlHover.hovered ? root.controlBorderHover : root.controlBorder)
-                                            HoverHandler { id: urlHover }
-                                            Text {
-                                                anchors.left: parent.left
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.leftMargin: 11
-                                                anchors.rightMargin: 11
-                                                text: urlField.text.length ? urlField.text : "https://…/sub"
-                                                color: urlField.text.length ? root.controlText : root.tertiary
-                                                font.family: root.fonts[0]
-                                                font.pixelSize: 13
-                                                font.weight: urlField.text.length ? Font.Medium : Font.Normal
-                                                elide: Text.ElideRight
-                                                wrapMode: Text.NoWrap
-                                            }
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.IBeamCursor
-                                                onClicked: urlField.forceActiveFocus()
-                                            }
-                                        }
-                                    }
-                                    SetMini {
-                                        id: applyBtn
-                                        text: root.t("btn.apply")
-                                        enabled: !root.subBusy
-                                        Accessible.name: root.t("title.applySub")
-                                        onClicked: root.applySub()
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -693,10 +503,7 @@ Item {
         id: row
         property string labelKey: ""
         property string hintKey: ""
-        property string hintText: ""
-        property bool hintError: false
         property bool last: false
-        property bool wide: false
         default property alias extras: rightCol.data
         width: parent ? parent.width : 0
         height: Math.max(44, inner.implicitHeight + 24)
@@ -748,13 +555,13 @@ Item {
                 id: rightCol
                 anchors.right: parent.right
                 anchors.top: parent.top
-                width: Math.min(row.wide ? parent.width - 156 : 340, parent.width - 156)
+                width: Math.min(340, parent.width - 156)
                 spacing: 5
                 Text {
-                    visible: (row.hintText || row.hintKey).length > 0
+                    visible: row.hintKey.length > 0
                     width: parent.width
-                    text: row.hintText.length ? row.hintText : root.t(row.hintKey)
-                    color: row.hintError ? root.red : root.tertiary
+                    text: root.t(row.hintKey)
+                    color: root.tertiary
                     font.family: root.fonts[0]
                     font.pixelSize: 11
                     wrapMode: Text.Wrap
@@ -882,29 +689,6 @@ Item {
                 x: sw.on ? 18 : 2
                 Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
             }
-        }
-    }
-
-    component SetMini: AbstractButton {
-        id: mini
-        height: 32
-        implicitHeight: 32
-        implicitWidth: Math.max(52, miniTxt.implicitWidth + 22)
-        hoverEnabled: true
-        opacity: enabled ? 1 : 0.45
-        background: Rectangle {
-            radius: 8
-            color: mini.hovered && mini.enabled ? "#2e787880" : root.fill
-        }
-        contentItem: Text {
-            id: miniTxt
-            text: mini.text
-            color: root.blue
-            font.family: root.fonts[0]
-            font.pixelSize: 12
-            font.weight: Font.DemiBold
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
         }
     }
 

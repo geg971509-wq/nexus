@@ -20,6 +20,7 @@ ApplicationWindow {
     property alias home: homeView
     property alias dialogs: dialogs
     property alias settings: settingsView
+    property alias subscription: subscriptionView
     property string currentView: "home"
     property string subTab: "default"
     property bool sidebarCollapsed: false
@@ -75,7 +76,13 @@ ApplicationWindow {
                 SettingsView {
                     id: settingsView
                     anchors.fill: parent
-                    visible: win.currentView === "settings" || win.currentView === "sub"
+                    visible: win.currentView === "settings"
+                    enabled: visible
+                }
+                SubscriptionView {
+                    id: subscriptionView
+                    anchors.fill: parent
+                    visible: win.currentView === "sub"
                     enabled: visible
                 }
             }

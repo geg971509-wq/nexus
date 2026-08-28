@@ -223,8 +223,8 @@ QtObject {
         g.count = next.length
         putCatalog(data)
         reloadHome()
-        if (win && win.settings && typeof win.settings.loadCatalog === "function")
-            win.settings.loadCatalog()
+        if (win && win.subscription && typeof win.subscription.loadCatalog === "function")
+            win.subscription.loadCatalog()
         log("OK", "ok", t("log.subUpdated", {
             name: g.name || g.id,
             add: addR,
@@ -321,8 +321,8 @@ QtObject {
         if (!g || !g.url) {
             log("SYS", "warn", t("log.noSubUrl"))
             if (win) win.currentView = "sub"
-            if (win && win.settings && typeof win.settings.loadCatalog === "function")
-                win.settings.loadCatalog()
+            if (win && win.subscription && typeof win.subscription.loadCatalog === "function")
+                win.subscription.loadCatalog()
             return
         }
         kickFetch(g)

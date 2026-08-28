@@ -240,8 +240,8 @@ Item {
         refreshSbProxy()
         if (logIt !== false)
             log("SYS", "info", t("log.subSwitched", { name: gname }))
-        if (win && win.settings && typeof win.settings.loadCatalog === "function")
-            win.settings.loadCatalog()
+        if (win && win.subscription && typeof win.subscription.loadCatalog === "function")
+            win.subscription.loadCatalog()
     }
 
     function startNamed(name) {
