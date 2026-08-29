@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 
 AbstractButton {
     id: button
@@ -12,8 +13,22 @@ AbstractButton {
     // Equal width is a layout concern; it must not create a second visual style.
     property bool uniform: false
 
-    height: 30
-    implicitWidth: uniform ? 112 : Math.max(72, label.implicitWidth + 32)
+    readonly property int controlHeight: 30
+    readonly property int uniformWidth: 112
+
+    // Plain Rows honor height, while Qt Quick Layouts size children from their
+    // implicit/Layout metrics. Keep both paths pinned to the same dimensions.
+    height: controlHeight
+    implicitHeight: controlHeight
+    implicitWidth: uniform ? uniformWidth : Math.max(72, label.implicitWidth + 32)
+
+    Layout.minimumWidth: implicitWidth
+    Layout.preferredWidth: implicitWidth
+    Layout.maximumWidth: implicitWidth
+    Layout.minimumHeight: implicitHeight
+    Layout.preferredHeight: implicitHeight
+    Layout.maximumHeight: implicitHeight
+
     hoverEnabled: true
     opacity: enabled ? 1 : 0.45
     focusPolicy: Qt.StrongFocus
