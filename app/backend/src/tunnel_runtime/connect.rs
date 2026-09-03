@@ -7,7 +7,7 @@ use crate::{
     defaults::MIXED_PORT,
     firewall,
     session_access::{action_is_current, commit_if_action_current},
-    tun_if, tunnel_sm,
+    sys, tun_if, tunnel_sm,
 };
 use std::path::PathBuf;
 
@@ -41,6 +41,20 @@ pub(crate) fn connect_selected_sync(
     use crate::data::generate::generate_with_outbound;
     use crate::data::share_link::parse_to_outbound;
     use crate::data::store::Store;
+
+    // A crash-recovery journal is a hard gate before a new session. `nexus_init`
+    // already attempts this synchronously, but recovery can fail transiently
+    // (for example while a network service is changing). Retry here and refuse
+    // the connect if the old OS state is still unresolved. When this process
+    // already owns the current journal, the check is an inexpensive no-op.
+    if !action_is_current(action_gen) {
+        return Err("connect superseded".into());
+    }
+    sys::recover_stale_network_state()
+        .map_err(|e| format!("cannot connect before system network recovery: {e}"))?;
+    if !action_is_current(action_gen) {
+        return Err("connect superseded".into());
+    }
 
     // Start uses current checkbox state, not a stale disk flag.
     // Prefer explicit UI args; persist so next cold Start matches chips.
