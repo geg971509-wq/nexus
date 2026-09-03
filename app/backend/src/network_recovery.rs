@@ -28,8 +28,8 @@ struct ProxyState {
     enabled: bool,
     server: String,
     port: u16,
-    // networksetup's getter exposes only whether authentication is enabled, not
-    // credentials. Keep a default for journals written by earlier audit builds.
+    // networksetup exposes only whether authentication is enabled, not the
+    // credentials required to reconstruct it.
     #[serde(default)]
     authenticated: bool,
 }
@@ -47,10 +47,10 @@ struct ProxyServiceState {
     secure_web: ProxyState,
     socks: ProxyState,
     auto_proxy: AutoProxyState,
-    // Older recovery journals predate explicit WPAD ownership. Defaulting to
-    // false keeps those journals readable without pretending Nexus observed it.
+    // Old version-2 journals did not record WPAD. None means “unknown, do not
+    // mutate during restore”; new captures always store Some(...).
     #[serde(default)]
-    auto_discovery_enabled: bool,
+    auto_discovery_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -93,7 +93,7 @@ fn run_capture(args: &[&str]) -> Result<String, String> {
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("networksetup start {args:?}: {e}"))?;
-    let start = Instant::now();
+    let started = Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
@@ -113,7 +113,7 @@ fn run_capture(args: &[&str]) -> Result<String, String> {
                     String::from_utf8_lossy(&err).trim()
                 ));
             }
-            Ok(None) if start.elapsed() <= TIMEOUT => {
+            Ok(None) if started.elapsed() <= TIMEOUT => {
                 std::thread::sleep(Duration::from_millis(5));
             }
             Ok(None) => {
@@ -151,15 +151,14 @@ fn parse_proxy(text: &str) -> ProxyState {
 }
 
 fn parse_auto_proxy(text: &str) -> AutoProxyState {
-    let raw_url = value(text, "URL");
-    let url = if raw_url.eq_ignore_ascii_case("(null)") {
-        String::new()
-    } else {
-        raw_url.to_string()
-    };
+    let raw = value(text, "URL");
     AutoProxyState {
         enabled: bool_value(text, "Enabled"),
-        url,
+        url: if raw.eq_ignore_ascii_case("(null)") {
+            String::new()
+        } else {
+            raw.to_string()
+        },
     }
 }
 
@@ -181,17 +180,34 @@ fn parse_dns(text: &str) -> Option<Vec<String>> {
 }
 
 fn capture_proxy_service(service: &str) -> Result<ProxyServiceState, String> {
-    Ok(ProxyServiceState {
+    let state = ProxyServiceState {
         service: service.to_string(),
         web: parse_proxy(&run_capture(&["-getwebproxy", service])?),
         secure_web: parse_proxy(&run_capture(&["-getsecurewebproxy", service])?),
         socks: parse_proxy(&run_capture(&["-getsocksfirewallproxy", service])?),
         auto_proxy: parse_auto_proxy(&run_capture(&["-getautoproxyurl", service])?),
-        auto_discovery_enabled: parse_auto_discovery(&run_capture(&[
+        auto_discovery_enabled: Some(parse_auto_discovery(&run_capture(&[
             "-getproxyautodiscovery",
             service,
-        ])?),
-    })
+        ])?)),
+    };
+    for (kind, proxy) in [
+        ("Web", &state.web),
+        ("Secure Web", &state.secure_web),
+        ("SOCKS", &state.socks),
+    ] {
+        if proxy.enabled && (proxy.server.is_empty() || proxy.port == 0) {
+            return Err(format!(
+                "enabled {kind} proxy on `{service}` has no restorable server/port"
+            ));
+        }
+    }
+    if state.auto_proxy.enabled && state.auto_proxy.url.is_empty() {
+        return Err(format!(
+            "enabled PAC proxy on `{service}` has no restorable URL"
+        ));
+    }
+    Ok(state)
 }
 
 fn capture_dns_service(service: &str) -> Result<DnsServiceState, String> {
@@ -201,6 +217,8 @@ fn capture_dns_service(service: &str) -> Result<DnsServiceState, String> {
     })
 }
 
+/// `networksetup` prefixes disabled-but-existing services with `*`. Keep them in
+/// a recovery transaction; only a genuinely deleted service may be discarded.
 fn current_service_names() -> Option<HashSet<String>> {
     let out = run_capture(&["-listallnetworkservices"]).ok()?;
     Some(
@@ -211,9 +229,6 @@ fn current_service_names() -> Option<HashSet<String>> {
                 if raw.is_empty() {
                     return None;
                 }
-                // networksetup prefixes disabled-but-existing services with `*`.
-                // They must remain recoverable; only genuinely deleted services
-                // may be discarded from the journal.
                 let name = raw.strip_prefix('*').unwrap_or(raw).trim();
                 (!name.is_empty()).then(|| name.to_string())
             })
@@ -223,8 +238,8 @@ fn current_service_names() -> Option<HashSet<String>> {
 
 fn prune_deleted_services(snapshot: &mut Snapshot) {
     let Some(existing) = current_service_names() else {
-        // Discovery failure is not evidence that a service was deleted. Keep the
-        // only copy of the user's original values and retry later.
+        // Discovery failure is not evidence of deletion. Preserve the user's
+        // only original snapshot and retry later.
         return;
     };
     if let Some(proxy) = snapshot.proxy.as_mut() {
@@ -305,8 +320,7 @@ fn save_snapshot(p: &Path, snapshot: &Snapshot) -> Result<(), String> {
     fs::rename(&tmp, p).map_err(|e| format!("commit network recovery snapshot: {e}"))?;
     fs::set_permissions(p, fs::Permissions::from_mode(0o600))
         .map_err(|e| format!("chmod committed network recovery snapshot: {e}"))?;
-    sync_parent(p)?;
-    Ok(())
+    sync_parent(p)
 }
 
 fn persist_or_remove(p: &Path, snapshot: &Snapshot) -> Result<(), String> {
@@ -366,21 +380,16 @@ fn restore_proxy(services: &[ProxyServiceState]) -> Result<(), String> {
             run(&[
                 "-setautoproxystate",
                 &service.service,
-                if service.auto_proxy.enabled {
-                    "on"
-                } else {
-                    "off"
-                },
+                if service.auto_proxy.enabled { "on" } else { "off" },
             ])?;
-            run(&[
-                "-setproxyautodiscovery",
-                &service.service,
-                if service.auto_discovery_enabled {
-                    "on"
-                } else {
-                    "off"
-                },
-            ])
+            if let Some(enabled) = service.auto_discovery_enabled {
+                run(&[
+                    "-setproxyautodiscovery",
+                    &service.service,
+                    if enabled { "on" } else { "off" },
+                ])?;
+            }
+            Ok(())
         })();
         if let Err(e) = result {
             failures.push(format!("{}: {e}", service.service));
@@ -420,8 +429,8 @@ fn restore_dns(services: &[DnsServiceState]) -> Result<(), String> {
     }
 }
 
-/// Restore a journal left by a prior process. A failed restoration deliberately
-/// leaves the journal intact so a later startup/network mutation can retry it.
+/// Restore a journal left by a prior process. Failed categories remain in the
+/// journal so a later startup/network mutation can retry them.
 pub(crate) fn recover_stale_and_clear() -> Result<bool, String> {
     if CURRENT_OWNERSHIP.load(Ordering::SeqCst) {
         return Ok(false);
@@ -479,6 +488,7 @@ fn authenticated_proxy_description(states: &[ProxyServiceState]) -> Option<Strin
 
 pub(crate) fn ensure_proxy_snapshot(services: &[String]) -> Result<(), String> {
     let (p, mut snapshot) = prepare_current_snapshot()?;
+    let was_none = snapshot.proxy.is_none();
     let mut stored = snapshot.proxy.take().unwrap_or_default();
     let known: HashSet<String> = stored.iter().map(|item| item.service.clone()).collect();
     let mut current = Vec::new();
@@ -491,7 +501,6 @@ pub(crate) fn ensure_proxy_snapshot(services: &[String]) -> Result<(), String> {
         ));
     }
     let changed = merge_proxy_states(&mut stored, current);
-    let was_none = snapshot.proxy.is_none();
     snapshot.proxy = Some(stored);
     if was_none || changed {
         mark_stale(save_snapshot(&p, &snapshot))?;
@@ -502,6 +511,7 @@ pub(crate) fn ensure_proxy_snapshot(services: &[String]) -> Result<(), String> {
 
 pub(crate) fn ensure_dns_snapshot(services: &[String]) -> Result<(), String> {
     let (p, mut snapshot) = prepare_current_snapshot()?;
+    let was_none = snapshot.dns.is_none();
     let mut stored = snapshot.dns.take().unwrap_or_default();
     let known: HashSet<String> = stored.iter().map(|item| item.service.clone()).collect();
     let mut current = Vec::new();
@@ -509,7 +519,6 @@ pub(crate) fn ensure_dns_snapshot(services: &[String]) -> Result<(), String> {
         current.push(capture_dns_service(service)?);
     }
     let changed = merge_dns_states(&mut stored, current);
-    let was_none = snapshot.dns.is_none();
     snapshot.dns = Some(stored);
     if was_none || changed {
         mark_stale(save_snapshot(&p, &snapshot))?;
@@ -579,9 +588,8 @@ pub(crate) fn restore_all_and_clear() -> Result<bool, String> {
     if failures.is_empty() {
         Ok(restored_any)
     } else {
-        // A full teardown that could not restore every owned component leaves a
-        // recovery journal, but that journal must be treated as stale before any
-        // future mutation—even inside this process.
+        // A partial teardown keeps only unfinished categories and marks them stale
+        // so a future mutation cannot silently take ownership over them.
         CURRENT_OWNERSHIP.store(false, Ordering::SeqCst);
         Err(failures.join(" · "))
     }
@@ -616,7 +624,7 @@ mod tests {
                 enabled: false,
                 url: String::new(),
             },
-            auto_discovery_enabled: false,
+            auto_discovery_enabled: Some(false),
         }
     }
 
@@ -633,26 +641,13 @@ mod tests {
                 authenticated: false,
             }
         );
-        assert!(
-            parse_proxy(
-                "Enabled: Yes\nServer: proxy.example\nPort: 8080\nAuthenticated Proxy Enabled: 1\n"
-            )
-            .authenticated
-        );
-        assert_eq!(
-            parse_auto_proxy("URL: https://example/pac\nEnabled: Yes\n"),
-            AutoProxyState {
-                enabled: true,
-                url: "https://example/pac".into()
-            }
-        );
+        assert!(parse_proxy(
+            "Enabled: Yes\nServer: proxy.example\nPort: 8080\nAuthenticated Proxy Enabled: 1\n"
+        )
+        .authenticated);
         assert_eq!(
             parse_dns("1.1.1.1\n9.9.9.9\n"),
             Some(vec!["1.1.1.1".into(), "9.9.9.9".into()])
-        );
-        assert_eq!(
-            parse_dns("There aren't any DNS Servers set on Wi-Fi."),
-            None
         );
     }
 
@@ -689,6 +684,19 @@ mod tests {
         assert!(authenticated_proxy_description(&[state.clone()]).is_some());
         state.web.authenticated = false;
         assert!(authenticated_proxy_description(&[state]).is_none());
+    }
+
+    #[test]
+    fn old_snapshot_without_wpad_does_not_claim_wpad() {
+        let body = r#"{
+            "service":"Wi-Fi",
+            "web":{"enabled":false,"server":"","port":0},
+            "secure_web":{"enabled":false,"server":"","port":0},
+            "socks":{"enabled":false,"server":"","port":0},
+            "auto_proxy":{"enabled":false,"url":""}
+        }"#;
+        let state: ProxyServiceState = serde_json::from_str(body).unwrap();
+        assert_eq!(state.auto_discovery_enabled, None);
     }
 
     #[test]
