@@ -3,7 +3,7 @@
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::ffi::{c_char, CStr, CString};
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicU64, Ordering};
 
 type EventCb = unsafe extern "C" fn(*const c_char, *const c_char);
 type BoolCb = unsafe extern "C" fn(bool);
@@ -11,6 +11,9 @@ type BoolCb = unsafe extern "C" fn(bool);
 static EVENT_CB: AtomicPtr<()> = AtomicPtr::new(std::ptr::null_mut());
 static TRAY_VISIBLE_CB: AtomicPtr<()> = AtomicPtr::new(std::ptr::null_mut());
 static SPINNING_CB: AtomicPtr<()> = AtomicPtr::new(std::ptr::null_mut());
+static URL_TEST_SEQ: AtomicU64 = AtomicU64::new(0);
+static FIREWALL_REQUEST_SEQ: AtomicU64 = AtomicU64::new(0);
+static RUNTIME_METRICS_SEQ: AtomicU64 = AtomicU64::new(0);
 
 fn load_event_cb() -> Option<EventCb> {
     let p = EVENT_CB.load(Ordering::SeqCst);
@@ -173,27 +176,41 @@ fn qt_connect_selected(v: &Value) -> String {
     let profile_id = get_i32(v, "profile_id", "profileId");
     let tun = get_bool(v, "tun", "tun");
     let system_proxy = get_bool(v, "system_proxy", "systemProxy");
+    let action_gen = crate::session_access::admit_lifecycle_action();
     // ponytail: same kick-off as tcp probe — GUI must not block_on osascript/Start.
     std::thread::spawn(move || {
-        let payload = match crate::connect_selected_sync(link, outbound, profile_id, tun, system_proxy)
-        {
+        let mut payload = match crate::connect_selected_sync(
+            action_gen,
+            link,
+            outbound,
+            profile_id,
+            tun,
+            system_proxy,
+        ) {
             Ok(v) => v,
-            Err(e) => json!({"error": e}),
+            Err(e) => json!({"ok": false, "error": e}),
         };
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("action_gen".into(), json!(action_gen));
+        }
         notify_event("connect-result", &payload);
     });
-    json!({"started": true}).to_string()
+    json!({"started": true, "action_gen": action_gen}).to_string()
 }
 
 fn qt_disconnect_selected() -> String {
-    std::thread::spawn(|| {
-        let payload = match crate::disconnect_selected_sync() {
+    let action_gen = crate::session_access::admit_lifecycle_action();
+    std::thread::spawn(move || {
+        let mut payload = match crate::disconnect_selected_sync(action_gen) {
             Ok(v) => v,
-            Err(e) => json!({"error": e}),
+            Err(e) => json!({"ok": false, "error": e}),
         };
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("action_gen".into(), json!(action_gen));
+        }
         notify_event("disconnect-result", &payload);
     });
-    json!({"started": true}).to_string()
+    json!({"started": true, "action_gen": action_gen}).to_string()
 }
 
 fn qt_set_tun(enabled: bool) -> String {
@@ -235,6 +252,72 @@ fn qt_sub_fetch(url: String) -> String {
     json!({"started": true}).to_string()
 }
 
+fn qt_core_url_test_current(v: &Value) -> String {
+    let url = get_str(v, "url", "url");
+    let timeout_ms = get_i32(v, "timeout_ms", "timeoutMs");
+    let test_id = URL_TEST_SEQ.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
+    std::thread::spawn(move || {
+        let mut payload =
+            match crate::runtime::block_on(crate::core_url_test_current(url, timeout_ms)) {
+                Ok(v) => v,
+                Err(e) => json!({"ok": false, "error": e}),
+            };
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("test_id".into(), json!(test_id));
+        }
+        notify_event("core-url-test-result", &payload);
+    });
+    json!({"started": true, "test_id": test_id}).to_string()
+}
+
+fn qt_core_url_test_stop() -> String {
+    std::thread::spawn(|| {
+        let _ = crate::runtime::block_on(crate::core_url_test_stop());
+    });
+    json!({"started": true}).to_string()
+}
+
+fn qt_firewall_request(op: &'static str) -> String {
+    let request_id = FIREWALL_REQUEST_SEQ
+        .fetch_add(1, Ordering::Relaxed)
+        .wrapping_add(1);
+    std::thread::spawn(move || {
+        let result = match op {
+            "status" => crate::runtime::block_on(crate::firewall_status()),
+            "install" => crate::runtime::block_on(crate::firewall_helper_install()),
+            "uninstall" => crate::runtime::block_on(crate::firewall_helper_uninstall()),
+            _ => Err("unknown firewall operation".to_string()),
+        };
+        let mut payload = match result {
+            Ok(v) => v,
+            Err(e) => json!({"ok": false, "error": e}),
+        };
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("request_id".into(), json!(request_id));
+            obj.insert("op".into(), json!(op));
+        }
+        notify_event("firewall-result", &payload);
+    });
+    json!({"started": true, "request_id": request_id, "op": op}).to_string()
+}
+
+fn qt_runtime_metrics() -> String {
+    let request_id = RUNTIME_METRICS_SEQ
+        .fetch_add(1, Ordering::Relaxed)
+        .wrapping_add(1);
+    std::thread::spawn(move || {
+        let mut payload = match crate::runtime::block_on(crate::query_runtime_metrics()) {
+            Ok(v) => v,
+            Err(e) => json!({"ok": false, "error": e}),
+        };
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("request_id".into(), json!(request_id));
+        }
+        notify_event("runtime-metrics-result", &payload);
+    });
+    json!({"started": true, "request_id": request_id}).to_string()
+}
+
 pub(crate) fn dispatch(cmd: &str, json: &str) -> String {
     let v = obj(json);
     match cmd {
@@ -265,7 +348,8 @@ pub(crate) fn dispatch(cmd: &str, json: &str) -> String {
             match crate::persist_hide_tray(hide) {
                 Ok(msg) => {
                     notify_tray_visible(!hide);
-                    serde_json::to_string(&msg).unwrap_or_else(|_| json!({"error": "json"}).to_string())
+                    serde_json::to_string(&msg)
+                        .unwrap_or_else(|_| json!({"error": "json"}).to_string())
                 }
                 Err(e) => json!({"error": e}).to_string(),
             }
@@ -274,9 +358,10 @@ pub(crate) fn dispatch(cmd: &str, json: &str) -> String {
         "disconnect_selected" => qt_disconnect_selected(),
         "query_connections" => await_json(crate::query_connections()),
         "query_stats" => await_json(crate::query_stats()),
-        "firewall_status" => await_json(crate::firewall_status()),
-        "firewall_helper_install" => await_json(crate::firewall_helper_install()),
-        "firewall_helper_uninstall" => await_json(crate::firewall_helper_uninstall()),
+        "query_runtime_metrics" => qt_runtime_metrics(),
+        "firewall_status" => qt_firewall_request("status"),
+        "firewall_helper_install" => qt_firewall_request("install"),
+        "firewall_helper_uninstall" => qt_firewall_request("uninstall"),
         "sub_fetch" => {
             let url = get_str(&v, "url", "url").unwrap_or_default();
             qt_sub_fetch(url)
@@ -300,11 +385,8 @@ pub(crate) fn dispatch(cmd: &str, json: &str) -> String {
         "exit_ip_probe" => await_json(crate::exit_ip_probe()),
         "net_tcp_probe" => qt_net_tcp_probe(&v),
         "net_tcp_probe_stop" => result_json(crate::net_tcp_probe_stop()),
-        "core_url_test_current" => await_json(crate::core_url_test_current(
-            get_str(&v, "url", "url"),
-            get_i32(&v, "timeout_ms", "timeoutMs"),
-        )),
-        "core_url_test_stop" => await_json(crate::core_url_test_stop()),
+        "core_url_test_current" => qt_core_url_test_current(&v),
+        "core_url_test_stop" => qt_core_url_test_stop(),
         "net_resolve_hosts" => qt_net_resolve_hosts(&v),
         "app_quit" => {
             let force = get_bool(&v, "force", "force").unwrap_or(false);
@@ -331,7 +413,11 @@ pub extern "C" fn nexus_invoke(cmd: *const c_char, json: *const c_char) -> *mut 
 }
 
 #[no_mangle]
-pub extern "C" fn nexus_free(ptr: *mut c_char) {
+/// # Safety
+///
+/// `ptr` must be null or a pointer returned by `nexus_invoke` that has not
+/// already been passed to `nexus_free`.
+pub unsafe extern "C" fn nexus_free(ptr: *mut c_char) {
     if ptr.is_null() {
         return;
     }
@@ -404,6 +490,7 @@ mod tests {
 
     #[test]
     fn probe_stop_is_not_nyi() {
+        let _g = crate::net::probe_test_lock();
         let s = dispatch("net_tcp_probe_stop", "{}");
         assert!(!s.contains("nyi"), "{s}");
     }
@@ -417,7 +504,11 @@ mod tests {
     #[test]
     fn connect_kicks_off() {
         let s = dispatch("connect_selected", "{}");
-        assert!(s.contains(r#""started":true"#) || s.contains(r#""started": true"#), "{s}");
+        assert!(
+            s.contains(r#""started":true"#) || s.contains(r#""started": true"#),
+            "{s}"
+        );
+        assert!(s.contains("action_gen"), "{s}");
     }
 
     #[test]
@@ -453,5 +544,32 @@ mod tests {
             s.contains(r#""started":true"#) || s.contains(r#""started": true"#),
             "{s}"
         );
+    }
+
+    #[test]
+    fn core_url_test_kicks_off() {
+        let s = dispatch("core_url_test_current", "{}");
+        assert!(s.contains(r#""started":true"#), "{s}");
+        assert!(s.contains("test_id"), "{s}");
+    }
+
+    #[test]
+    fn core_url_test_stop_kicks_off() {
+        let s = dispatch("core_url_test_stop", "{}");
+        assert!(s.contains(r#""started":true"#), "{s}");
+    }
+
+    #[test]
+    fn firewall_status_kicks_off() {
+        let s = dispatch("firewall_status", "{}");
+        assert!(s.contains(r#""started":true"#), "{s}");
+        assert!(s.contains("request_id"), "{s}");
+    }
+
+    #[test]
+    fn runtime_metrics_kicks_off() {
+        let s = dispatch("query_runtime_metrics", "{}");
+        assert!(s.contains(r#""started":true"#), "{s}");
+        assert!(s.contains("request_id"), "{s}");
     }
 }

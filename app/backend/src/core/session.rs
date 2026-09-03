@@ -1,6 +1,6 @@
 //! GUI-side session: listen IPC, spawn NexusCore, accept, libcore calls.
 use super::elevate::{ensure_setuid_core, path_has_setuid, privileged_core_path};
-use super::frame::LibcoreClient;
+use super::frame::{LibcoreClient, LibcoreControl};
 use super::proto_min::{
     decode_core_state, decode_error_resp, decode_has_privilege, decode_query_connections,
     decode_query_stats_proxy, decode_test_resp, encode_load_config_core_json,
@@ -9,8 +9,13 @@ use super::proto_min::{
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
+};
 use std::time::{Duration, Instant};
+
+static CORE_SOCKET_SEQ: AtomicU64 = AtomicU64::new(0);
 
 pub struct CoreSession {
     /// Unix socket path passed to Core via NEXUS_CORE_SOCKET.
@@ -51,7 +56,10 @@ impl CoreSession {
             // and it did not. This also closes the bind-then-chmod window on the
             // socket itself: nobody else can reach the path to begin with.
             let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
-            return dir.join(format!("nexus-core-{}.sock", std::process::id()));
+            let seq = CORE_SOCKET_SEQ
+                .fetch_add(1, Ordering::Relaxed)
+                .wrapping_add(1);
+            dir.join(format!("nexus-core-{}-{seq}.sock", std::process::id()))
         }
     }
 
@@ -210,7 +218,10 @@ impl CoreSession {
     /// `ps -o comm=` gives the executable path; compare its basename exactly.
     #[cfg(unix)]
     fn core_pids() -> Vec<u32> {
-        let Ok(out) = Command::new("/bin/ps").args(["-axo", "pid=,comm="]).output() else {
+        let Ok(out) = Command::new("/bin/ps")
+            .args(["-axo", "pid=,comm="])
+            .output()
+        else {
             return Vec::new();
         };
         parse_core_pids(&String::from_utf8_lossy(&out.stdout))
@@ -285,7 +296,6 @@ impl CoreSession {
         let mut child = Command::new(core_bin)
             .current_dir(&core_cwd)
             .env("NEXUS_CORE_SOCKET", &env_socket)
-            .env("NEXUS_CORE_DEBUG", "1")
             .stdout(stdout)
             .stderr(stderr)
             .spawn()?;
@@ -323,14 +333,16 @@ impl CoreSession {
 
     pub fn query_state(&mut self) -> Result<(bool, i32), String> {
         let c = self.client.as_mut().ok_or("no client")?;
-        let data = c.call("QueryState", &[]).map_err(|e| e.to_string())?;
-        Ok(decode_core_state(&data))
+        let data = c
+            .call_timeout("QueryState", &[], Duration::from_secs(2))
+            .map_err(|e| e.to_string())?;
+        decode_core_state(&data)
     }
 
     pub fn is_privileged(&mut self) -> Result<bool, String> {
         let c = self.client.as_mut().ok_or("no client")?;
         let data = c.call("IsPrivileged", &[]).map_err(|e| e.to_string())?;
-        Ok(decode_has_privilege(&data))
+        decode_has_privilege(&data)
     }
 
     /// Takes the already-elevated binary rather than elevating itself: callers hold
@@ -346,7 +358,7 @@ impl CoreSession {
         let c = self.client.as_mut().ok_or("no client")?;
         let payload = encode_load_config_core_json(json);
         let data = c.call("CheckConfig", &payload).map_err(|e| e.to_string())?;
-        Ok(decode_error_resp(&data))
+        decode_error_resp(&data)
     }
 
     pub fn start_rpc(
@@ -359,26 +371,30 @@ impl CoreSession {
         let data = c
             .call_timeout("Start", &payload, std::time::Duration::from_secs(60))
             .map_err(|e| e.to_string())?;
-        Ok(decode_error_resp(&data))
+        decode_error_resp(&data)
     }
 
     pub fn stop_rpc(&mut self) -> Result<Option<String>, String> {
         let c = self.client.as_mut().ok_or("no client")?;
         let data = c.call("Stop", &[]).map_err(|e| e.to_string())?;
-        Ok(decode_error_resp(&data))
+        decode_error_resp(&data)
     }
 
     pub fn query_connections(&mut self) -> Result<Vec<ConnRow>, String> {
         let c = self.client.as_mut().ok_or("no client")?;
-        let data = c.call("QueryConnections", &[]).map_err(|e| e.to_string())?;
-        Ok(decode_query_connections(&data))
+        let data = c
+            .call_timeout("QueryConnections", &[], Duration::from_secs(2))
+            .map_err(|e| e.to_string())?;
+        decode_query_connections(&data)
     }
 
     /// Cumulative outbound traffic for tag `proxy` (TrafficManager.TotalOutbound).
     pub fn query_stats_proxy(&mut self) -> Result<(i64, i64), String> {
         let c = self.client.as_mut().ok_or("no client")?;
-        let data = c.call("QueryStats", &[]).map_err(|e| e.to_string())?;
-        Ok(decode_query_stats_proxy(&data))
+        let data = c
+            .call_timeout("QueryStats", &[], Duration::from_secs(2))
+            .map_err(|e| e.to_string())?;
+        decode_query_stats_proxy(&data)
     }
 
     /// One-shot Core `Test(test_current=true)` via live box proxy/default outbound.
@@ -387,22 +403,22 @@ impl CoreSession {
         &mut self,
         url: &str,
         timeout_ms: i32,
+        sent: impl FnOnce(LibcoreControl),
     ) -> Result<Vec<UrlTestRow>, String> {
         let c = self.client.as_mut().ok_or("no client")?;
+        let control = c.control_handle().map_err(|e| e.to_string())?;
         let timeout_ms = if timeout_ms > 0 { timeout_ms } else { 3000 };
-        let url = if url.is_empty() { DEFAULT_URL_TEST } else { url };
+        let url = if url.is_empty() {
+            DEFAULT_URL_TEST
+        } else {
+            url
+        };
         let payload = encode_test_req_current(url, timeout_ms, 1);
         let call_to = Duration::from_millis((timeout_ms as u64).saturating_add(5_000).max(10_000));
         let data = c
-            .call_timeout("Test", &payload, call_to)
+            .call_timeout_with_sent("Test", &payload, call_to, || sent(control))
             .map_err(|e| e.to_string())?;
-        Ok(decode_test_resp(&data))
-    }
-
-    pub fn stop_test(&mut self) -> Result<(), String> {
-        let c = self.client.as_mut().ok_or("no client")?;
-        let _ = c.call("StopTest", &[]).map_err(|e| e.to_string())?;
-        Ok(())
+        decode_test_resp(&data)
     }
 
     pub fn stop_core_process(&mut self) -> io::Result<()> {
@@ -513,6 +529,13 @@ mod stray_tests {
     fn junk_lines_are_skipped() {
         assert!(parse_core_pids("").is_empty());
         assert!(parse_core_pids("garbage\nno-pid /bin/NexusCore\n").is_empty());
+    }
+
+    #[test]
+    fn socket_paths_are_unique_per_session() {
+        let first = CoreSession::socket_path();
+        let second = CoreSession::socket_path();
+        assert_ne!(first, second);
     }
 }
 

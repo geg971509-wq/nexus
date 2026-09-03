@@ -15,6 +15,7 @@ Item {
     property bool powerBusy: false
     property string powerOp: ""
     property string powerError: ""
+    property var powerActionGen: null
     property bool tunOn: false
     property bool tunBusy: false
     property bool tunWant: false
@@ -31,6 +32,8 @@ Item {
     property var coreBaseUp: null
     property var coreBaseDown: null
     property int connPollFailStreak: 0
+    property bool runtimeMetricsBusy: false
+    property var runtimeMetricsRequestId: null
     property var connectedAt: null
 
     BackendClient {
@@ -155,6 +158,8 @@ Item {
             connectedAt = null
             host.dockControl.setConns([])
             connPollFailStreak = 0
+            runtimeMetricsBusy = false
+            runtimeMetricsRequestId = null
             coreBaseUp = null
             coreBaseDown = null
         }
@@ -247,7 +252,7 @@ Item {
     function startNamed(name) {
         if (name && host.table && host.table.pickRow)
             host.table.pickRow(name)
-        if (powerBusy) return
+        if (powerBusy || tunBusy || sysBusy) return
         if (connected) {
             powerError = ""
             powerBusy = true
@@ -293,6 +298,7 @@ Item {
         powerError = msg || "failed"
         powerBusy = false
         powerOp = ""
+        powerActionGen = null
         log("CORE", "warn", powerError)
         if (host.statusSubControl) host.statusSubControl.text = powerError
         if (win) win.sbStatus = powerError
@@ -301,6 +307,7 @@ Item {
     function donePower() {
         powerBusy = false
         powerOp = ""
+        powerActionGen = null
         heroStatus()
     }
 
@@ -308,6 +315,8 @@ Item {
         var r = invoke("connect_selected", args)
         if (!r || r.offline) { failPower("backend offline"); return false }
         if (!r.ok) { failPower(r.error || "connect failed"); return false }
+        if (!r.data || r.data.action_gen == null) { failPower("connect failed"); return false }
+        powerActionGen = r.data.action_gen
         return true
     }
 
@@ -315,11 +324,13 @@ Item {
         var r = invoke("disconnect_selected", {})
         if (!r || r.offline) { failPower("backend offline"); return false }
         if (!r.ok) { failPower(r.error || "disconnect failed"); return false }
+        if (!r.data || r.data.action_gen == null) { failPower("disconnect failed"); return false }
+        powerActionGen = r.data.action_gen
         return true
     }
 
     function togglePower() {
-        if (powerBusy) return
+        if (powerBusy || tunBusy || sysBusy) return
         powerError = ""
         powerBusy = true
         powerOp = connected ? "disconnect" : "connect"
@@ -360,6 +371,7 @@ Item {
         if (powerOp !== "connect" && powerOp !== "retune") return
         var r = parseReply(raw)
         var data = (r && r.data) || r || {}
+        if (powerActionGen == null || data.action_gen !== powerActionGen) return
         if (!r || r.offline) { failPower("backend offline"); return }
         if (!r.ok) { failPower(r.error || "connect failed"); return }
         if (data.start_error || !data.started) {
@@ -385,6 +397,8 @@ Item {
                 && powerOp !== "cleanup" && powerOp !== "lost")
             return
         var r = parseReply(raw)
+        var data = (r && r.data) || r || {}
+        if (powerActionGen == null || data.action_gen !== powerActionGen) return
         var next = powerOp
         setConnected(false)
         if (next === "switch") {
@@ -403,6 +417,7 @@ Item {
         if (next === "cleanup" || next === "lost") {
             powerBusy = false
             powerOp = ""
+            powerActionGen = null
             heroStatus()
             return
         }
@@ -416,9 +431,9 @@ Item {
 
     function applyTun(on) {
         if (applyingChip) return
-        if (tunBusy) {
+        if (powerBusy || tunBusy || sysBusy) {
             applyingChip = true
-            host.tunControl.checked = tunWant
+            host.tunControl.checked = tunBusy ? tunWant : tunOn
             applyingChip = false
             return
         }
@@ -476,9 +491,9 @@ Item {
 
     function applySys(on) {
         if (applyingChip) return
-        if (sysBusy) {
+        if (powerBusy || tunBusy || sysBusy) {
             applyingChip = true
-            host.sysControl.checked = sysWant
+            host.sysControl.checked = sysBusy ? sysWant : sysOn
             applyingChip = false
             return
         }
@@ -630,20 +645,22 @@ Item {
         if (!connected) {
             host.dockControl.setConns([])
             connPollFailStreak = 0
+            runtimeMetricsBusy = false
+            runtimeMetricsRequestId = null
             return
         }
-        var pollOk = false
-        var r = invoke("query_connections", {})
-        if (r && r.ok && r.data) {
-            pollOk = true
-            if (host.dockControl.open && host.dockControl.panel === "conn")
-                host.dockControl.setConns(r.data.active || r.data.connections || r.data)
+        if (runtimeMetricsBusy) return
+        var r = invoke("query_runtime_metrics", {})
+        var data = r && r.data ? r.data : null
+        if (!r || !r.ok || !data || data.request_id == null) {
+            finishConnPoll(false)
+            return
         }
-        var st = invoke("query_stats", {})
-        if (st && st.ok && st.data) {
-            applyNodeFlow(st.data.upload, st.data.download)
-            pollOk = true
-        }
+        runtimeMetricsBusy = true
+        runtimeMetricsRequestId = data.request_id
+    }
+
+    function finishConnPoll(pollOk) {
         if (pollOk) {
             connPollFailStreak = 0
             return
@@ -657,6 +674,27 @@ Item {
         powerOp = "lost"
         heroStatus()
         kickDisconnect()
+    }
+
+    function onRuntimeMetricsResult(raw) {
+        var r = parseReply(raw)
+        var data = (r && r.data) || r || {}
+        if (runtimeMetricsRequestId == null || data.request_id !== runtimeMetricsRequestId) return
+        runtimeMetricsBusy = false
+        runtimeMetricsRequestId = null
+        if (!connected) return
+
+        var pollOk = false
+        if (r && r.ok && data.connections_ok) {
+            pollOk = true
+            if (host.dockControl.open && host.dockControl.panel === "conn")
+                host.dockControl.setConns(data.active || [])
+        }
+        if (r && r.ok && data.stats_ok) {
+            applyNodeFlow(data.upload, data.download)
+            pollOk = true
+        }
+        finishConnPoll(pollOk)
     }
 
     Timer {
@@ -697,6 +735,8 @@ Item {
             }
             if (name === "proxy-result")
                 flow.onProxyResult(json)
+            if (name === "runtime-metrics-result")
+                flow.onRuntimeMetricsResult(json)
         }
     }
 

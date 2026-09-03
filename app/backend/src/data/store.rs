@@ -153,6 +153,7 @@ fn lock_store_file(store_path: &std::path::Path) -> Result<StoreLock, std::io::E
     let lock_path = store_path.with_extension("json.lock");
     let file = fs::OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .open(&lock_path)?;
@@ -168,6 +169,17 @@ fn apply_exclusive_lock(file: &fs::File) -> Result<(), std::io::Error> {
         return Err(std::io::Error::last_os_error());
     }
     Ok(())
+}
+
+// Unlock on drop: flock unlock and file close release the lock.
+impl Drop for StoreLock {
+    fn drop(&mut self) {
+        use std::os::unix::io::AsRawFd;
+        let fd = self._file.as_raw_fd();
+        unsafe {
+            let _ = libc::flock(fd, libc::LOCK_UN);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -196,10 +208,15 @@ mod tests {
         assert_eq!(saved.len(), 1, "exactly one quarantined copy");
         assert_eq!(fs::read(saved[0].path()).unwrap(), b"{ not json");
 
-        let mut good = Store::default();
-        good.catalog = Some(serde_json::json!({"groups": []}));
+        let good = Store {
+            catalog: Some(serde_json::json!({"groups": []})),
+            ..Store::default()
+        };
         save_unlocked(&p, &good).unwrap();
-        assert!(load_unlocked(&p).catalog.is_some(), "valid store round-trips");
+        assert!(
+            load_unlocked(&p).catalog.is_some(),
+            "valid store round-trips"
+        );
         assert!(p.exists(), "valid store must not be quarantined");
 
         let _ = fs::remove_dir_all(&dir);
@@ -212,17 +229,9 @@ mod tests {
         assert_eq!(c["active"], "default");
         assert_eq!(c["groups"].as_array().map(Vec::len), Some(1));
         assert_eq!(c["groups"][0]["id"], "default");
-        assert_eq!(c["profiles"]["default"]["nodes"].as_array().map(Vec::len), Some(0));
-    }
-}
-
-// Unlock on drop: flock unlock and file close release the lock.
-impl Drop for StoreLock {
-    fn drop(&mut self) {
-        use std::os::unix::io::AsRawFd;
-        let fd = self._file.as_raw_fd();
-        unsafe {
-            let _ = libc::flock(fd, libc::LOCK_UN);
-        }
+        assert_eq!(
+            c["profiles"]["default"]["nodes"].as_array().map(Vec::len),
+            Some(0)
+        );
     }
 }

@@ -195,7 +195,10 @@ pub fn parse_to_outbound(input: &str) -> Result<Value, String> {
             Err("http(s) without user@ is not a proxy share link".into())
         }
     } else {
-        Err(format!("unsupported share scheme: {}", s.chars().take(16).collect::<String>()))
+        Err(format!(
+            "unsupported share scheme: {}",
+            s.chars().take(16).collect::<String>()
+        ))
     }
 }
 
@@ -232,7 +235,6 @@ fn parse_vless(link: &str) -> Result<Value, String> {
     }
     Ok(Value::Object(o))
 }
-
 
 fn parse_vmess(link: &str) -> Result<Value, String> {
     // vmess::ParseFromLink:
@@ -283,14 +285,14 @@ fn vmess_from_v2rayn_json(j: &Value) -> Result<Value, String> {
         })
         .unwrap_or(443) as u16;
     // scy = cipher (auto/aes-128-gcm/…); not TLS
-    let security = j
-        .get("scy")
-        .and_then(|v| v.as_str())
-        .unwrap_or("auto");
+    let security = j.get("scy").and_then(|v| v.as_str()).unwrap_or("auto");
     let alter_id = j
         .get("aid")
         .or_else(|| j.get("alterId"))
-        .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+        .and_then(|v| {
+            v.as_u64()
+                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        })
         .unwrap_or(0);
     let mut o = Map::new();
     o.insert("type".into(), json!("vmess"));
@@ -319,19 +321,28 @@ fn vmess_from_v2rayn_json(j: &Value) -> Result<Value, String> {
         if !sni.is_empty() {
             tls.insert("server_name".into(), json!(sni));
         }
-        if let Some(fp) = j.get("fp").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
-            tls.insert(
-                "utls".into(),
-                json!({"enabled": true, "fingerprint": fp}),
-            );
+        if let Some(fp) = j
+            .get("fp")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
+            tls.insert("utls".into(), json!({"enabled": true, "fingerprint": fp}));
         }
         if tls_raw == "reality" {
             let mut reality = Map::new();
             reality.insert("enabled".into(), json!(true));
-            if let Some(pbk) = j.get("pbk").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            if let Some(pbk) = j
+                .get("pbk")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+            {
                 reality.insert("public_key".into(), json!(pbk));
             }
-            if let Some(sid) = j.get("sid").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            if let Some(sid) = j
+                .get("sid")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+            {
                 reality.insert("short_id".into(), json!(sid));
             }
             tls.insert("reality".into(), Value::Object(reality));
@@ -389,7 +400,9 @@ fn looks_like_uuid(s: &str) -> bool {
             && b[13] == b'-'
             && b[18] == b'-'
             && b[23] == b'-'
-            && t.chars().filter(|c| *c != '-').all(|c| c.is_ascii_hexdigit());
+            && t.chars()
+                .filter(|c| *c != '-')
+                .all(|c| c.is_ascii_hexdigit());
     }
     t.len() == 32 && t.chars().all(|c| c.is_ascii_hexdigit())
 }
@@ -453,7 +466,7 @@ fn parse_vmess_uri(link: &str) -> Result<Value, String> {
 fn b64_decode_std(s: &str) -> Result<Vec<u8>, String> {
     // standard + url-safe, pad
     let mut t = s.replace('-', "+").replace('_', "/");
-    while t.len() % 4 != 0 {
+    while !t.len().is_multiple_of(4) {
         t.push('=');
     }
     // minimal decoder without extra crate — reuse existing if any
@@ -513,7 +526,9 @@ fn parse_trojan(link: &str) -> Result<Value, String> {
 
 fn parse_ss(link: &str) -> Result<Value, String> {
     // shadowsocks::ParseFromLink (SIP002 + legacy base64)
-    let rest = link.trim_start_matches(|c| c != ':').trim_start_matches("://");
+    let rest = link
+        .trim_start_matches(|c| c != ':')
+        .trim_start_matches("://");
     let (main, _frag) = match rest.split_once('#') {
         Some((a, b)) => (a, Some(b)),
         None => (rest, None),
@@ -528,9 +543,7 @@ fn parse_ss(link: &str) -> Result<Value, String> {
     };
     let (method, password) = if u.password.is_empty() {
         let mp = b64_decode(&u.user).unwrap_or_else(|| u.user.clone());
-        let (m, p) = mp
-            .split_once(':')
-            .ok_or("ss: method:password missing")?;
+        let (m, p) = mp.split_once(':').ok_or("ss: method:password missing")?;
         (m.to_string(), p.to_string())
     } else {
         (u.user.clone(), u.password.clone())
@@ -668,11 +681,7 @@ fn parse_tuic(link: &str) -> Result<Value, String> {
     {
         o.insert("congestion_control".into(), json!(cc));
     }
-    if let Some(mode) = u
-        .query
-        .get("udp_relay_mode")
-        .filter(|s| !s.is_empty())
-    {
+    if let Some(mode) = u.query.get("udp_relay_mode").filter(|s| !s.is_empty()) {
         o.insert("udp_relay_mode".into(), json!(mode));
     }
     let mut tls = Map::new();
@@ -696,8 +705,14 @@ fn parse_tuic(link: &str) -> Result<Value, String> {
             tls.insert("alpn".into(), Value::Array(list));
         }
     }
-    if u.query.get("insecure").map(|s| s == "1" || s == "true").unwrap_or(false)
-        || u.query.get("allowInsecure").map(|s| s == "1" || s == "true").unwrap_or(false)
+    if u.query
+        .get("insecure")
+        .map(|s| s == "1" || s == "true")
+        .unwrap_or(false)
+        || u.query
+            .get("allowInsecure")
+            .map(|s| s == "1" || s == "true")
+            .unwrap_or(false)
     {
         tls.insert("insecure".into(), json!(true));
     }
@@ -736,11 +751,18 @@ fn parse_hysteria(link: &str, ver: u8) -> Result<Value, String> {
             ("recv_window_conn", "recv_window_conn"),
             ("recv_window", "recv_window"),
         ] {
-            if let Some(n) = q.get(key).and_then(|v| v.parse::<u64>().ok()).filter(|n| *n > 0) {
+            if let Some(n) = q
+                .get(key)
+                .and_then(|v| v.parse::<u64>().ok())
+                .filter(|n| *n > 0)
+            {
                 o.insert(out.into(), json!(n));
             }
         }
-        if q.get("disable_mtu_discovery").map(|v| v == "1" || v == "true") == Some(true) {
+        if q.get("disable_mtu_discovery")
+            .map(|v| v == "1" || v == "true")
+            == Some(true)
+        {
             o.insert("disable_mtu_discovery".into(), json!(true));
         }
     } else {
@@ -762,14 +784,18 @@ fn parse_hysteria(link: &str, ver: u8) -> Result<Value, String> {
     }
 
     for (key, out) in [("upmbps", "up_mbps"), ("downmbps", "down_mbps")] {
-        if let Some(n) = q.get(key).and_then(|v| v.parse::<u64>().ok()).filter(|n| *n > 0) {
+        if let Some(n) = q
+            .get(key)
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|n| *n > 0)
+        {
             o.insert(out.into(), json!(n));
         }
     }
     // Port hopping: `mport=1000,2000-3000` becomes sing-box `server_ports`.
     if let Some(mport) = q.get("mport").filter(|s| !s.is_empty()) {
         let ports: Vec<Value> = mport
-            .split(|c: char| c == ',' || c == '/')
+            .split([',', '/'])
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(|s| json!(s))
@@ -813,7 +839,10 @@ fn tls_from_query(q: &HashMap<String, String>, default_enable_if_security: bool)
         return None;
     }
     let mut tls = Map::new();
-    tls.insert("enabled".into(), json!(enabled || !sni.is_empty() || security == "tls" || security == "reality"));
+    tls.insert(
+        "enabled".into(),
+        json!(enabled || !sni.is_empty() || security == "tls" || security == "reality"),
+    );
     if !sni.is_empty() {
         tls.insert("server_name".into(), json!(sni));
     }
@@ -822,13 +851,14 @@ fn tls_from_query(q: &HashMap<String, String>, default_enable_if_security: bool)
         tls.insert("alpn".into(), Value::Array(arr));
     }
     if let Some(fp) = q.get("fp").filter(|s| !s.is_empty()) {
-        tls.insert(
-            "utls".into(),
-            json!({"enabled": true, "fingerprint": fp}),
-        );
+        tls.insert("utls".into(), json!({"enabled": true, "fingerprint": fp}));
     }
-    if q.get("insecure").map(|s| s == "1" || s == "true").unwrap_or(false)
-        || q.get("allowInsecure").map(|s| s == "1" || s == "true").unwrap_or(false)
+    if q.get("insecure")
+        .map(|s| s == "1" || s == "true")
+        .unwrap_or(false)
+        || q.get("allowInsecure")
+            .map(|s| s == "1" || s == "true")
+            .unwrap_or(false)
     {
         tls.insert("insecure".into(), json!(true));
     }
@@ -1004,7 +1034,7 @@ fn b64_decode(s: &str) -> Option<String> {
     // std-only: try via base64 alphabet manually is heavy — use a tiny decoder
     let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
     let mut buf = cleaned.replace('-', "+").replace('_', "/");
-    while buf.len() % 4 != 0 {
+    while !buf.len().is_multiple_of(4) {
         buf.push('=');
     }
     decode_standard_b64(&buf).map(|v| String::from_utf8_lossy(&v).into_owned())
@@ -1023,7 +1053,7 @@ fn decode_standard_b64(s: &str) -> Option<Vec<u8>> {
         }
     }
     let bytes = s.as_bytes();
-    if bytes.len() % 4 != 0 {
+    if !bytes.len().is_multiple_of(4) {
         return None;
     }
     let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
@@ -1088,13 +1118,19 @@ mod tests {
         let w = &nodes[1];
         assert_eq!(w.name, "WsNode");
         assert_eq!(w.outbound["transport"]["type"], "ws");
-        assert_eq!(w.outbound["transport"]["headers"]["Host"], "cdn.example.com");
+        assert_eq!(
+            w.outbound["transport"]["headers"]["Host"],
+            "cdn.example.com"
+        );
         assert_eq!(w.outbound["transport"]["path"], "/ws");
         let t = &nodes[2];
         assert_eq!(t.name, "TrojanWs");
         assert_eq!(t.outbound["password"], "secretpass");
         assert_eq!(t.outbound["tls"]["server_name"], "trojan.example.com");
-        assert_eq!(t.outbound["transport"]["headers"]["Host"], "trojan.example.com");
+        assert_eq!(
+            t.outbound["transport"]["headers"]["Host"],
+            "trojan.example.com"
+        );
     }
 
     #[test]
@@ -1129,14 +1165,23 @@ mod tests {
         // {"v":"2","ps":"n","add":"1.2.3.4","port":"443","id":"11111111-1111-1111-1111-111111111111","aid":"0","net":"tcp","type":"none","host":"","path":"","tls":"tls"}
         let raw = r#"{"v":"2","ps":"n","add":"1.2.3.4","port":"443","id":"11111111-1111-1111-1111-111111111111","aid":"0","net":"tcp","type":"none","host":"","path":"","tls":"tls"}"#;
         let b64 = {
-            const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+            const TABLE: &[u8] =
+                b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
             let data = raw.as_bytes();
             let mut out = String::new();
             let mut i = 0;
             while i < data.len() {
                 let b0 = data[i] as u32;
-                let b1 = if i + 1 < data.len() { data[i + 1] as u32 } else { 0 };
-                let b2 = if i + 2 < data.len() { data[i + 2] as u32 } else { 0 };
+                let b1 = if i + 1 < data.len() {
+                    data[i + 1] as u32
+                } else {
+                    0
+                };
+                let b2 = if i + 2 < data.len() {
+                    data[i + 2] as u32
+                } else {
+                    0
+                };
                 let triple = (b0 << 16) | (b1 << 8) | b2;
                 out.push(TABLE[((triple >> 18) & 63) as usize] as char);
                 out.push(TABLE[((triple >> 12) & 63) as usize] as char);
@@ -1292,4 +1337,3 @@ mod tests {
         assert!(skipped.contains(&"juicity".to_string()), "{skipped:?}");
     }
 }
-

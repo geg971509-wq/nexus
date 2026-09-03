@@ -54,25 +54,21 @@ pub fn encode_load_config_req(core_json: &str, profile_id: Option<i32>) -> Vec<u
     msg.encode_to_vec()
 }
 
-pub fn decode_error_resp(data: &[u8]) -> Option<String> {
-    ErrorResp::decode(data).ok().and_then(|m| m.error).filter(|s| !s.is_empty())
+pub fn decode_error_resp(data: &[u8]) -> Result<Option<String>, String> {
+    let msg = ErrorResp::decode(data).map_err(|e| format!("decode ErrorResp: {e}"))?;
+    Ok(msg.error.filter(|s| !s.is_empty()))
 }
 
-pub fn decode_has_privilege(data: &[u8]) -> bool {
-    IsPrivilegedResponse::decode(data)
-        .ok()
-        .and_then(|m| m.has_privilege)
-        .unwrap_or(false)
+pub fn decode_has_privilege(data: &[u8]) -> Result<bool, String> {
+    let msg = IsPrivilegedResponse::decode(data)
+        .map_err(|e| format!("decode IsPrivilegedResponse: {e}"))?;
+    Ok(msg.has_privilege.unwrap_or(false))
 }
 
-pub fn decode_core_state(data: &[u8]) -> (bool, i32) {
-    match CoreStateResponse::decode(data) {
-        Ok(m) => (
-            m.running.unwrap_or(false),
-            m.profile_id.unwrap_or(-1),
-        ),
-        Err(_) => (false, -1),
-    }
+pub fn decode_core_state(data: &[u8]) -> Result<(bool, i32), String> {
+    let msg =
+        CoreStateResponse::decode(data).map_err(|e| format!("decode CoreStateResponse: {e}"))?;
+    Ok((msg.running.unwrap_or(false), msg.profile_id.unwrap_or(-1)))
 }
 
 fn meta_to_row(m: ConnectionMetaData) -> ConnRow {
@@ -93,10 +89,9 @@ fn meta_to_row(m: ConnectionMetaData) -> ConnRow {
 }
 
 /// QueryConnectionsResp active=1 + closed=2; short HTTP often lands in closed first.
-pub fn decode_query_connections(data: &[u8]) -> Vec<ConnRow> {
-    let Ok(resp) = QueryConnectionsResp::decode(data) else {
-        return Vec::new();
-    };
+pub fn decode_query_connections(data: &[u8]) -> Result<Vec<ConnRow>, String> {
+    let resp = QueryConnectionsResp::decode(data)
+        .map_err(|e| format!("decode QueryConnectionsResp: {e}"))?;
     let mut active: Vec<ConnRow> = resp.active.into_iter().map(meta_to_row).collect();
     let mut closed: Vec<ConnRow> = resp.closed.into_iter().map(meta_to_row).collect();
     // ponytail: 80 closed cap; raise if UI needs longer history
@@ -105,14 +100,12 @@ pub fn decode_query_connections(data: &[u8]) -> Vec<ConnRow> {
         closed = closed.split_off(closed.len() - MAX_CLOSED);
     }
     active.extend(closed);
-    active
+    Ok(active)
 }
 
 /// QueryStatsResp ups/downs maps — cumulative for tag `proxy` (session tunnel).
-pub fn decode_query_stats_proxy(data: &[u8]) -> (i64, i64) {
-    let Ok(resp) = QueryStatsResp::decode(data) else {
-        return (0, 0);
-    };
+pub fn decode_query_stats_proxy(data: &[u8]) -> Result<(i64, i64), String> {
+    let resp = QueryStatsResp::decode(data).map_err(|e| format!("decode QueryStatsResp: {e}"))?;
     let pick = |m: &std::collections::BTreeMap<String, i64>| -> i64 {
         if let Some(v) = m.get("proxy") {
             return *v;
@@ -122,7 +115,7 @@ pub fn decode_query_stats_proxy(data: &[u8]) -> (i64, i64) {
             .map(|(_, v)| *v)
             .sum()
     };
-    (pick(&resp.ups), pick(&resp.downs))
+    Ok((pick(&resp.ups), pick(&resp.downs)))
 }
 
 /// Shell SOT for Core TestCurrent URL (not empty — Core defaults to "").
@@ -159,18 +152,17 @@ pub fn encode_test_req_current(url: &str, timeout_ms: i32, max_concurrency: i32)
     msg.encode_to_vec()
 }
 
-pub fn decode_test_resp(data: &[u8]) -> Vec<UrlTestRow> {
-    let Ok(resp) = TestResp::decode(data) else {
-        return Vec::new();
-    };
-    resp.results
+pub fn decode_test_resp(data: &[u8]) -> Result<Vec<UrlTestRow>, String> {
+    let resp = TestResp::decode(data).map_err(|e| format!("decode TestResp: {e}"))?;
+    Ok(resp
+        .results
         .into_iter()
         .map(|r| UrlTestRow {
             tag: r.outbound_tag.unwrap_or_default(),
             ms: r.latency_ms.unwrap_or(0),
             error: r.error.unwrap_or_default(),
         })
-        .collect()
+        .collect())
 }
 
 #[cfg(test)]
@@ -198,6 +190,17 @@ mod tests {
         assert_eq!(msg.core_config.as_deref(), Some("hi"));
     }
 
+    #[test]
+    fn malformed_responses_are_errors() {
+        let malformed = [0x80];
+        assert!(decode_error_resp(&malformed).is_err());
+        assert!(decode_has_privilege(&malformed).is_err());
+        assert!(decode_core_state(&malformed).is_err());
+        assert!(decode_query_connections(&malformed).is_err());
+        assert!(decode_query_stats_proxy(&malformed).is_err());
+        assert!(decode_test_resp(&malformed).is_err());
+    }
+
     fn hand_meta(id: &str, process: &str) -> ConnectionMetaData {
         ConnectionMetaData {
             id: Some(id.into()),
@@ -218,7 +221,7 @@ mod tests {
             active: vec![hand_meta("c1", "Chrome")],
             closed: vec![],
         };
-        let rows = decode_query_connections(&resp.encode_to_vec());
+        let rows = decode_query_connections(&resp.encode_to_vec()).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, "c1");
         assert_eq!(rows[0].created_at, 1_700_000_000_000);
@@ -236,7 +239,7 @@ mod tests {
             active: vec![],
             closed: vec![hand_meta("c2", "curl")],
         };
-        let rows = decode_query_connections(&resp.encode_to_vec());
+        let rows = decode_query_connections(&resp.encode_to_vec()).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, "c2");
         assert_eq!(rows[0].process, "curl");
@@ -250,7 +253,7 @@ mod tests {
         let mut downs = std::collections::BTreeMap::new();
         downs.insert("proxy".into(), 20);
         let resp = QueryStatsResp { ups, downs };
-        let (u, d) = decode_query_stats_proxy(&resp.encode_to_vec());
+        let (u, d) = decode_query_stats_proxy(&resp.encode_to_vec()).unwrap();
         assert_eq!((u, d), (10, 20));
     }
 
@@ -273,7 +276,7 @@ mod tests {
                 error: Some("".into()),
             }],
         };
-        let rows = decode_test_resp(&resp.encode_to_vec());
+        let rows = decode_test_resp(&resp.encode_to_vec()).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].tag, "proxy");
         assert_eq!(rows[0].ms, 42);

@@ -50,9 +50,7 @@ fn common_l2() -> String {
     s.push_str(
         "pass out quick inet6 proto udp from fe80::/10 port 546 to { ff02::1:2, ff05::1:3 } port 547\n",
     );
-    s.push_str(
-        "pass in quick inet6 proto udp from fe80::/10 port 547 to fe80::/10 port 546\n",
-    );
+    s.push_str("pass in quick inet6 proto udp from fe80::/10 port 547 to fe80::/10 port 546\n");
     // NDP / IPv6 L2 (Mullvad typed NDP; we keep ipv6-icmp for stability)
     s.push_str("pass quick proto ipv6-icmp all\n");
     s
@@ -196,9 +194,15 @@ mod tests {
     #[test]
     fn blocked_keeps_doh_bootstrap() {
         let r = rules_blocked(Some(&peer()), 2080, &dns());
-        assert!(r.contains("8.8.8.8"), "blocked still allows DoH bootstrap: {r}");
+        assert!(
+            r.contains("8.8.8.8"),
+            "blocked still allows DoH bootstrap: {r}"
+        );
         // reconnect resolve needs DNS53 (hostname peers)
-        assert!(r.contains("to any port 53"), "blocked must allow DNS53 for reconnect: {r}");
+        assert!(
+            r.contains("to any port 53"),
+            "blocked must allow DNS53 for reconnect: {r}"
+        );
     }
 
     #[test]
@@ -264,7 +268,10 @@ mod tests {
     /// injection vector; drop it and fall back rather than emitting it.
     #[test]
     fn non_ip_dns_entries_are_dropped() {
-        let bad = vec!["dns.google".to_string(), "} \n pass out all \n #".to_string()];
+        let bad = vec![
+            "dns.google".to_string(),
+            "} \n pass out all \n #".to_string(),
+        ];
         let r = rules_fail_closed(&peer(), 2080, Some("utun9"), &bad);
         assert!(!r.contains("dns.google"), "{r}");
         assert!(!r.contains("pass out all"), "{r}");

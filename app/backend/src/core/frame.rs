@@ -1,6 +1,9 @@
 //! libcore framed IPC (LE), matches NexusCore dispatch.go / Qt RPC.cpp
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc, Mutex,
+};
 use std::time::Duration;
 
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
@@ -14,9 +17,15 @@ const MAX_STALE_FRAMES: u32 = 8;
 
 pub struct LibcoreClient {
     stream: IpcStream,
+    write_lock: Arc<Mutex<()>>,
     /// Latched on [`IpcError::Desync`]. Callers must drop the session rather than
     /// keep issuing calls that can only misparse from here on.
     broken: bool,
+}
+
+pub struct LibcoreControl {
+    stream: IpcStream,
+    write_lock: Arc<Mutex<()>>,
 }
 
 #[derive(Debug)]
@@ -46,6 +55,35 @@ impl From<std::io::Error> for IpcError {
     }
 }
 
+fn write_request(
+    stream: &mut IpcStream,
+    write_lock: &Mutex<()>,
+    method: &str,
+    payload: &[u8],
+) -> Result<u32, IpcError> {
+    let req_id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    let method_bytes = method.as_bytes();
+    if method_bytes.len() > u16::MAX as usize {
+        return Err(IpcError::Protocol("method name too long".into()));
+    }
+    let mut frame = Vec::with_capacity(4 + 2 + method_bytes.len() + 4 + payload.len());
+    frame.extend_from_slice(&req_id.to_le_bytes());
+    frame.extend_from_slice(&(method_bytes.len() as u16).to_le_bytes());
+    frame.extend_from_slice(method_bytes);
+    frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    frame.extend_from_slice(payload);
+    let _guard = write_lock.lock().unwrap_or_else(|e| e.into_inner());
+    stream.write_all(&frame)?;
+    Ok(req_id)
+}
+
+impl LibcoreControl {
+    pub fn send(&mut self, method: &str, payload: &[u8]) -> Result<(), IpcError> {
+        let _ = write_request(&mut self.stream, &self.write_lock, method, payload)?;
+        Ok(())
+    }
+}
+
 impl LibcoreClient {
     pub fn from_stream(stream: IpcStream) -> std::io::Result<Self> {
         let default = Duration::from_secs(15);
@@ -53,7 +91,15 @@ impl LibcoreClient {
         stream.set_write_timeout(Some(default))?;
         Ok(Self {
             stream,
+            write_lock: Arc::new(Mutex::new(())),
             broken: false,
+        })
+    }
+
+    pub fn control_handle(&self) -> std::io::Result<LibcoreControl> {
+        Ok(LibcoreControl {
+            stream: self.stream.try_clone()?,
+            write_lock: Arc::clone(&self.write_lock),
         })
     }
 
@@ -72,6 +118,16 @@ impl LibcoreClient {
         payload: &[u8],
         timeout: Duration,
     ) -> Result<Vec<u8>, IpcError> {
+        self.call_timeout_with_sent(method, payload, timeout, || {})
+    }
+
+    pub fn call_timeout_with_sent(
+        &mut self,
+        method: &str,
+        payload: &[u8],
+        timeout: Duration,
+        sent: impl FnOnce(),
+    ) -> Result<Vec<u8>, IpcError> {
         // Apply a deadline for this call, then restore the previous values.
         let prev_r = self.stream.read_timeout().ok().flatten();
         let prev_w = self.stream.write_timeout().ok().flatten();
@@ -79,19 +135,8 @@ impl LibcoreClient {
         let _ = self.stream.set_write_timeout(Some(timeout));
 
         let result = (|| {
-            let req_id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-            let method_bytes = method.as_bytes();
-            if method_bytes.len() > u16::MAX as usize {
-                return Err(IpcError::Protocol("method name too long".into()));
-            }
-
-            let mut frame = Vec::with_capacity(4 + 2 + method_bytes.len() + 4 + payload.len());
-            frame.extend_from_slice(&req_id.to_le_bytes());
-            frame.extend_from_slice(&(method_bytes.len() as u16).to_le_bytes());
-            frame.extend_from_slice(method_bytes);
-            frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-            frame.extend_from_slice(payload);
-            self.stream.write_all(&frame)?;
+            let req_id = write_request(&mut self.stream, &self.write_lock, method, payload)?;
+            sent();
 
             const MAX_IPC_PAYLOAD: usize = 16 * 1024 * 1024;
 
@@ -131,7 +176,9 @@ impl LibcoreClient {
                 }
             };
             if status != 0 {
-                return Err(IpcError::Status(String::from_utf8_lossy(&data).into_owned()));
+                return Err(IpcError::Status(
+                    String::from_utf8_lossy(&data).into_owned(),
+                ));
             }
             Ok(data)
         })();
@@ -230,5 +277,28 @@ mod tests {
         t.join().unwrap();
         assert!(matches!(&err, IpcError::Status(s) if s == "boom"), "{err}");
         assert!(!c.is_broken());
+    }
+
+    #[test]
+    fn control_frame_can_cancel_while_primary_call_waits() {
+        let (client_s, mut server_s) = UnixStream::pair().unwrap();
+        let mut c = LibcoreClient::from_stream(client_s).unwrap();
+        let mut control = c.control_handle().unwrap();
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let server = std::thread::spawn(move || {
+            let test_id = read_req_id(&mut server_s);
+            ready_tx.send(()).unwrap();
+            let stop_id = read_req_id(&mut server_s);
+            reply(&mut server_s, stop_id, 0, b"");
+            reply(&mut server_s, test_id, 0, b"test-result");
+        });
+        let primary = std::thread::spawn(move || c.call("Test", &[]));
+
+        ready_rx.recv().unwrap();
+        control.send("StopTest", &[]).unwrap();
+
+        let got = primary.join().unwrap().unwrap();
+        server.join().unwrap();
+        assert_eq!(got, b"test-result");
     }
 }

@@ -13,6 +13,7 @@ QtObject {
     property int testOk: 0
     property int testFail: 0
     property string testLabel: ""
+    property var coreTestId: null
 
     function t(k, v) { return host.t(k, v) }
     function invoke(cmd, payload) { return host.invoke(cmd, payload) }
@@ -105,6 +106,7 @@ QtObject {
         testOk = 0
         testFail = 0
         testLabel = ""
+        coreTestId = null
     }
 
     function coreRunning() {
@@ -143,31 +145,19 @@ QtObject {
             log("TEST", "info", t("log.testStartViaNode", { name: connectedName }))
             if (home.table && home.table.setLat)
                 home.table.setLat(connectedName, "…")
-            var res = invoke("core_url_test_current", {
+            var started = invoke("core_url_test_current", {
                 url: "https://www.gstatic.com/generate_204",
                 timeoutMs: 3000
             })
-            if (!res || res.ok === false) {
+            var startData = started && started.data ? started.data : started
+            if (!started || started.ok === false || !startData || startData.test_id == null) {
                 if (home.table && home.table.setLat) home.table.setLat(connectedName, -1)
                 testFail = 1
-                log("TEST", "warn", t("log.probeUnavailable", { error: (res && res.error) || "probe" }))
+                log("TEST", "warn", t("log.probeUnavailable", { error: (started && started.error) || "probe" }))
                 finishTest()
                 return
             }
-            var rows = (res.data && res.data.results) ? res.data.results : []
-            var r0 = rows[0] || {}
-            var err = String(r0.error || "").trim()
-            var ms = Number(r0.ms) || 0
-            if (testAbort || err || ms <= 0) {
-                if (home.table && home.table.setLat) home.table.setLat(connectedName, -1)
-                testFail = 1
-                if (err && err !== "test aborted" && !testAbort)
-                    log("TEST", "warn", "[" + connectedName + "] " + err)
-            } else {
-                if (home.table && home.table.setLat) home.table.setLat(connectedName, ms)
-                testOk = 1
-            }
-            finishTest()
+            coreTestId = startData.test_id
             return
         }
         testing = true
@@ -198,6 +188,32 @@ QtObject {
             return
         }
         log("TEST", "info", t("log.testStart", { label: testLabel, n: targets.length }))
+    }
+
+    function onCoreUrlTestResult(raw) {
+        if (!testing || coreTestId == null || !raw || raw.test_id !== coreTestId) return
+        var connectedName = home ? home.connectedName : ""
+        if (raw.ok === false || raw.error) {
+            if (home.table && home.table.setLat) home.table.setLat(connectedName, -1)
+            testFail = 1
+            log("TEST", "warn", t("log.probeUnavailable", { error: raw.error || "probe" }))
+            finishTest()
+            return
+        }
+        var rows = raw.results || []
+        var r0 = rows[0] || {}
+        var err = String(r0.error || "").trim()
+        var ms = Number(r0.ms) || 0
+        if (testAbort || err || ms <= 0) {
+            if (home.table && home.table.setLat) home.table.setLat(connectedName, -1)
+            testFail = 1
+            if (err && err !== "test aborted" && !testAbort)
+                log("TEST", "warn", "[" + connectedName + "] " + err)
+        } else {
+            if (home.table && home.table.setLat) home.table.setLat(connectedName, ms)
+            testOk = 1
+        }
+        finishTest()
     }
 
     function testStop() {

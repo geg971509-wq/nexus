@@ -553,9 +553,10 @@ Item {
             }
             Column {
                 id: rightCol
+                anchors.left: lab.right
+                anchors.leftMargin: 16
                 anchors.right: parent.right
                 anchors.top: parent.top
-                width: Math.min(340, parent.width - 156)
                 spacing: 5
                 Text {
                     visible: row.hintKey.length > 0
@@ -702,8 +703,10 @@ Item {
         background: Rectangle {
             radius: 8
             color: btn.primary
-                   ? (btn.hovered ? "#0071eb" : "#007aff")
+                   ? (btn.hovered ? Qt.darker(root.blue, 1.08) : root.blue)
                    : (btn.hovered ? "#2e787880" : root.fill)
+            border.width: btn.activeFocus ? 1 : 0
+            border.color: root.blue
         }
         contentItem: Text {
             id: btnTxt

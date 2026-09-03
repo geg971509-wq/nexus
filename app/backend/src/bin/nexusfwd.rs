@@ -301,7 +301,10 @@ mod log_tests {
     #[test]
     fn control_characters_cannot_forge_lines() {
         let out = clamp_log("a\nnexusfwd listening on /tmp/evil\r\tb");
-        assert!(!out.contains('\n') && !out.contains('\r') && !out.contains('\t'), "{out}");
+        assert!(
+            !out.contains('\n') && !out.contains('\r') && !out.contains('\t'),
+            "{out}"
+        );
         assert_eq!(out, "a nexusfwd listening on /tmp/evil  b");
     }
 }

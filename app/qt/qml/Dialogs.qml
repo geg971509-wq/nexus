@@ -161,6 +161,7 @@ Item {
     function testRun(scope) { testFlow.testRun(scope) }
     function testStop() { testFlow.testStop() }
     function testClear() { testFlow.testClear() }
+    function onCoreUrlTestResult(raw) { testFlow.onCoreUrlTestResult(raw) }
 
     DialogNodeController { id: nodeFlow; host: root }
     property alias eOrigName: nodeFlow.eOrigName
@@ -361,6 +362,10 @@ Item {
                         root.resolveGot = 0
                     }
                 }
+                return
+            }
+            if (name === "core-url-test-result") {
+                root.onCoreUrlTestResult(r)
                 return
             }
             if (name === "sub-fetch-result")

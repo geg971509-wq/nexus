@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing/common/metadata"
 	"github.com/sagernet/sing/service"
@@ -27,8 +28,10 @@ type IPInfo struct {
 var IPReporter IPTestReporter
 
 const IPTestTimeout = 5 * time.Second
+
 // Free ip-api is fragile under high parallel load; URL-test concurrency is too high here.
 const MaxConcurrentIPTests = 8
+
 // Same provider as DialogRuntimeStats / profile-start egress snapshot so
 // "Resolve Selected Out IP" agrees with the runtime stats Out IP (typically IPv4).
 const ipInfoAPI = "http://ip-api.com/json/?fields=status,message,query,countryCode"
@@ -71,48 +74,63 @@ func BatchIPTest(ctx context.Context, i *boxbox.Box, outboundTags []string, maxC
 	limiter := make(chan struct{}, maxConcurrency)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(len(outboundTags))
 	for _, tag := range outboundTags {
 		select {
 		case <-ctx.Done():
-			wg.Done()
 			resAccess.Lock()
 			resMap[tag] = &IPTestResult{
+				Tag:   tag,
 				Error: errors.New("test aborted"),
 			}
 			resAccess.Unlock()
+			continue
 		default:
-			time.Sleep(2 * time.Millisecond) // don't spawn goroutines too quickly
-			limiter <- struct{}{}
-			go func(t string) {
-				defer wg.Done()
-				outbound, found := outbounds.Outbound(t)
-				if !found {
-					panic("no outbound with tag " + t + " found")
-				}
-				client := &http.Client{
-					Transport: &http.Transport{
-						// Prefer IPv4 so Out IP matches runtime-stats.
-						DialContext: func(_ context.Context, network string, addr string) (net.Conn, error) {
-							return outbound.DialContext(ctx, "tcp4", metadata.ParseSocksaddr(addr))
-						},
-						DisableKeepAlives: true,
-					},
-					Timeout: timeout,
-				}
-				resp, err := ipTestWithRetry(ctx, client)
-				resAccess.Lock()
-				u := &IPTestResult{
-					Result: resp,
-					Tag:    t,
-					Error:  err,
-				}
-				resMap[t] = u
-				IPReporter.AddResult(u)
-				resAccess.Unlock()
-				<-limiter
-			}(tag)
 		}
+
+		outbound, found := outbounds.Outbound(tag)
+		if !found {
+			u := &IPTestResult{Tag: tag, Error: fmt.Errorf("no outbound with tag %s found", tag)}
+			resAccess.Lock()
+			resMap[tag] = u
+			resAccess.Unlock()
+			IPReporter.AddResult(u)
+			continue
+		}
+
+		time.Sleep(2 * time.Millisecond) // don't spawn goroutines too quickly
+		select {
+		case limiter <- struct{}{}:
+		case <-ctx.Done():
+			resAccess.Lock()
+			resMap[tag] = &IPTestResult{Tag: tag, Error: errors.New("test aborted")}
+			resAccess.Unlock()
+			continue
+		}
+		wg.Add(1)
+		go func(t string, outbound adapter.Outbound) {
+			defer wg.Done()
+			defer func() { <-limiter }()
+			client := &http.Client{
+				Transport: &http.Transport{
+					// Prefer IPv4 so Out IP matches runtime-stats.
+					DialContext: func(_ context.Context, network string, addr string) (net.Conn, error) {
+						return outbound.DialContext(ctx, "tcp4", metadata.ParseSocksaddr(addr))
+					},
+					DisableKeepAlives: true,
+				},
+				Timeout: timeout,
+			}
+			resp, err := ipTestWithRetry(ctx, client)
+			resAccess.Lock()
+			u := &IPTestResult{
+				Result: resp,
+				Tag:    t,
+				Error:  err,
+			}
+			resMap[t] = u
+			IPReporter.AddResult(u)
+			resAccess.Unlock()
+		}(tag, outbound)
 	}
 
 	wg.Wait()

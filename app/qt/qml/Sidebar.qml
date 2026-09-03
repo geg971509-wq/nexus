@@ -18,10 +18,12 @@ Item {
     readonly property color label: th ? th.label : "#1d1d1f"
     readonly property color secondary: th ? th.secondary : "#6e6e73"
     readonly property color blue: th ? th.blue : "#007aff"
+    readonly property color icon: th ? th.icon : secondary
     readonly property color hover: th ? th.sideHover : "#12000000"
+    readonly property color pressed: th ? th.pressed : hover
+    readonly property color selectionSoft: th ? th.selectionSoft : "#290a84ff"
     readonly property color sep: th ? th.separator : "#1e3c3c43"
-    readonly property color topC: th ? th.sidebarTop : "#ececef"
-    readonly property color botC: th ? th.sidebarBot : "#e5e5ea"
+    readonly property color sidebarBg: th ? th.sidebarBackground : "#f5f5f7"
     readonly property color hair: th ? th.hairline : "#0b000000"
     readonly property int itemH: th ? th.sideItemH : 32
     readonly property int r: th ? th.radius : 6
@@ -30,10 +32,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        gradient: Gradient {
-            GradientStop { position: 0; color: root.topC }
-            GradientStop { position: 1; color: root.botC }
-        }
+        color: root.sidebarBg
     }
     Rectangle {
         anchors.top: parent.top
@@ -50,23 +49,26 @@ Item {
         anchors.top: parent.top
         anchors.leftMargin: root.collapsed ? 6 : 8
         anchors.rightMargin: root.collapsed ? 6 : 8
-        anchors.topMargin: 2
-        spacing: 2
+        // In the collapsed macOS rail the traffic lights occupy the top-left
+        // chrome. Keep the expand control below that 48 px titlebar zone.
+        anchors.topMargin: root.collapsed && Qt.platform.os === "osx" ? 48 : 8
+        spacing: 3
 
         AbstractButton {
             id: collapse
-            width: nav.width
-            height: 24
+            width: root.collapsed ? nav.width : 32
+            height: 32
+            x: root.collapsed ? 0 : nav.width - width
             hoverEnabled: true
+            focusPolicy: Qt.StrongFocus
             Accessible.name: root.t(root.collapsed ? "nav.expandTitle" : "nav.collapseTitle")
-            ToolTip.visible: hovered
-            ToolTip.text: root.t("title.collapse")
+            Tip { text: root.t("title.collapse") }
             onClicked: if (root.win) root.win.sidebarCollapsed = !root.win.sidebarCollapsed
             background: Rectangle {
-                radius: 4
-                color: collapse.hovered ? root.hover : "transparent"
-                border.width: 1
-                border.color: root.sep
+                radius: root.r
+                color: collapse.down ? root.pressed : (collapse.hovered ? root.hover : "transparent")
+                border.width: collapse.activeFocus ? 1 : 0
+                border.color: root.blue
             }
             contentItem: Item {
                 Canvas {
@@ -102,37 +104,50 @@ Item {
                 height: root.itemH
                 padding: 0
                 hoverEnabled: true
+                checkable: true
+                autoExclusive: true
+                focusPolicy: Qt.StrongFocus
                 Accessible.name: root.t(item.modelData.key)
-                Accessible.role: Accessible.MenuItem
-                ToolTip.visible: hovered
-                ToolTip.text: root.t(item.modelData.tip)
-                ToolTip.delay: 500
+                Accessible.role: Accessible.RadioButton
+                Accessible.checkable: true
+                Accessible.checked: item.on
+                Tip {
+                    text: root.t(item.modelData.tip)
+                    active: item.hovered && root.collapsed
+                    delay: 500
+                }
                 onClicked: if (root.win) root.win.currentView = item.modelData.id
                 property bool on: root.win && root.win.currentView === item.modelData.id
+                checked: on
+                onOnChanged: if (checked !== on) checked = on
                 background: Rectangle {
                     radius: root.r
-                    color: item.on ? root.blue : (item.hovered ? root.hover : "transparent")
+                    color: item.on ? root.selectionSoft
+                                   : (item.down ? root.pressed : (item.hovered ? root.hover : "transparent"))
+                    border.width: item.activeFocus ? 1 : 0
+                    border.color: root.blue
+                    Behavior on color { ColorAnimation { duration: 160 } }
                 }
                 contentItem: Item {
                     Row {
-                        x: root.collapsed ? Math.round((parent.width - width) / 2) : 8
+                        x: root.collapsed ? Math.round((parent.width - width) / 2) : 10
                         y: Math.round((parent.height - height) / 2)
                         spacing: 8
                         Canvas {
                             id: ico
-                            width: 16
-                            height: 16
+                            width: 18
+                            height: 18
                             property string kind: item.modelData.icon
                             property string iconMode: root.th ? root.th.iconStyle : "Monochrome"
                             property color stroke: {
-                                if (item.on) return "#ffffff"
+                                if (item.on) return root.blue
                                 if (iconMode === "Colorful") {
                                     if (kind === "home") return root.blue
                                     if (kind === "fw") return (root.th ? root.th.purple : "#af52de")
                                     if (kind === "sub") return (root.th ? root.th.green : "#34c759")
                                     return (root.th ? root.th.orange : "#ff9f0a")
                                 }
-                                return root.secondary
+                                return root.icon
                             }
                             onStrokeChanged: requestPaint()
                             onKindChanged: requestPaint()
@@ -143,7 +158,7 @@ Item {
                                 ctx.lineWidth = 1.4
                                 ctx.lineCap = "round"
                                 ctx.lineJoin = "round"
-                                var s = 16 / 24
+                                var s = 18 / 24
                                 ctx.save()
                                 ctx.scale(s, s)
                                 ctx.beginPath()
@@ -183,10 +198,10 @@ Item {
                         Text {
                             visible: !root.collapsed
                             text: root.t(item.modelData.key)
-                            color: item.on ? "#ffffff" : root.label
+                            color: root.label
                             font.family: root.fonts[0]
                             font.pixelSize: 13
-                            font.weight: Font.Medium
+                            font.weight: item.on ? Font.DemiBold : Font.Normal
                             anchors.verticalCenter: parent.verticalCenter
                             elide: Text.ElideRight
                         }
@@ -218,5 +233,5 @@ Item {
         }
     }
 
-    Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+    Behavior on width { NumberAnimation { duration: root.th ? root.th.fastAnimation : 160; easing.type: Easing.OutCubic } }
 }

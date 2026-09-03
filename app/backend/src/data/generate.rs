@@ -410,7 +410,9 @@ mod tests {
 
     #[test]
     fn generate_has_mixed_and_proxy() {
-        let n = sample_node(json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}));
+        let n = sample_node(
+            json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}),
+        );
         let v = gen(&n, 2080, false);
         assert_eq!(v["inbounds"][0]["listen_port"], 2080);
         assert_eq!(v["outbounds"][0]["type"], "socks");
@@ -429,14 +431,19 @@ mod tests {
         }));
         let v = gen(&n, 2080, false);
         let o = &v["outbounds"][0];
-        assert!(o.get("server_ip").is_none(), "server_ip must not reach Core: {o}");
+        assert!(
+            o.get("server_ip").is_none(),
+            "server_ip must not reach Core: {o}"
+        );
         assert!(o.get("ip").is_none(), "ip must not reach Core: {o}");
         assert_eq!(o["server"], "us.example.com");
     }
 
     #[test]
     fn tun_mac_omits_named_interface() {
-        let n = sample_node(json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}));
+        let n = sample_node(
+            json!({"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":1080}),
+        );
         let v = gen(&n, 2080, true);
         let tun = v["inbounds"]
             .as_array()
@@ -454,8 +461,8 @@ mod tests {
         assert!(excl_s.contains(&"10.0.0.0/8"));
         assert!(excl_s.contains(&"192.168.0.0/16"));
         // Tun /24 carved out of 172.16.0.0/12 — full /12 must not remain.
-        assert!(!excl_s.iter().any(|s| *s == "172.16.0.0/12"));
-        assert!(!excl_s.iter().any(|s| *s == "172.19.0.0/24"));
+        assert!(!excl_s.contains(&"172.16.0.0/12"));
+        assert!(!excl_s.contains(&"172.19.0.0/24"));
         #[cfg(target_os = "macos")]
         {
             assert!(
@@ -476,22 +483,30 @@ mod tests {
     }
     #[test]
     fn route_defaults_proxy_final() {
-        let p = sample_node(json!({"type":"socks","tag":"proxy","server":"1.1.1.1","server_port":1080}));
+        let p = sample_node(
+            json!({"type":"socks","tag":"proxy","server":"1.1.1.1","server_port":1080}),
+        );
         let v = gen(&p, 2080, false);
         assert_eq!(v["route"]["final"], "proxy");
         assert_eq!(v["route"]["auto_detect_interface"], true);
         assert_eq!(
-            v["route"]["find_process"],
-            true,
+            v["route"]["find_process"], true,
             "conn table / process enricher need route.find_process"
         );
         let rules = v["route"]["rules"].as_array().expect("rules");
-        assert!(rules.iter().any(|r| r.get("action") == Some(&json!("sniff"))));
-        assert!(rules.iter().any(|r| r.get("ip_is_private") == Some(&json!(true))
-            && r.get("outbound") == Some(&json!("direct"))));
+        assert!(rules
+            .iter()
+            .any(|r| r.get("action") == Some(&json!("sniff"))));
+        assert!(rules
+            .iter()
+            .any(|r| r.get("ip_is_private") == Some(&json!(true))
+                && r.get("outbound") == Some(&json!("direct"))));
         assert_eq!(v["inbounds"][0]["type"], "mixed");
         assert_eq!(v["inbounds"].as_array().unwrap().len(), 1); // no tun
-        assert!(v["experimental"]["clash_api"].is_object(), "clash_api required for QueryConnections");
+        assert!(
+            v["experimental"]["clash_api"].is_object(),
+            "clash_api required for QueryConnections"
+        );
         let path = v["experimental"]["cache_file"]["path"]
             .as_str()
             .expect("cache_file.path required (Core cwd is /)");
@@ -583,7 +598,9 @@ mod tests {
 
     #[test]
     fn dns_present_and_hijack_route() {
-        let p = sample_node(json!({"type":"socks","tag":"proxy","server":"1.1.1.1","server_port":1080}));
+        let p = sample_node(
+            json!({"type":"socks","tag":"proxy","server":"1.1.1.1","server_port":1080}),
+        );
         let v = gen(&p, 2080, false);
         assert!(v.get("dns").is_some(), "dns section required");
         let servers = v["dns"]["servers"].as_array().expect("dns.servers");
@@ -594,8 +611,11 @@ mod tests {
         assert_eq!(remote["detour"], "proxy");
         assert_eq!(v["dns"]["final"], "dns-remote");
         let rules = v["route"]["rules"].as_array().unwrap();
-        assert!(rules.iter().any(|r| r.get("action") == Some(&json!("hijack-dns"))
-            || (r.get("protocol") == Some(&json!("dns")) && r.get("action") == Some(&json!("hijack-dns")))));
+        assert!(rules
+            .iter()
+            .any(|r| r.get("action") == Some(&json!("hijack-dns"))
+                || (r.get("protocol") == Some(&json!("dns"))
+                    && r.get("action") == Some(&json!("hijack-dns")))));
     }
 
     #[test]
@@ -608,7 +628,10 @@ mod tests {
             .iter()
             .find(|s| s["tag"] == "dns-remote")
             .unwrap();
-        assert!(remote.get("detour").is_none(), "detour→direct rejected by sing-box");
+        assert!(
+            remote.get("detour").is_none(),
+            "detour→direct rejected by sing-box"
+        );
         assert_eq!(v["dns"]["final"], "dns-direct");
     }
 
@@ -631,13 +654,11 @@ mod tests {
             "proxy server hostname must bootstrap via dns-direct; got {rules:?}"
         );
         assert_eq!(
-            v["route"]["default_domain_resolver"]["server"],
-            "dns-direct",
+            v["route"]["default_domain_resolver"]["server"], "dns-direct",
             "missing upstream default_domain_resolver → DNS loopback on proxy dial"
         );
         assert_eq!(
-            v["outbounds"][0]["domain_resolver"],
-            "dns-direct",
+            v["outbounds"][0]["domain_resolver"], "dns-direct",
             "proxy outbound must pin domain_resolver for hostname server"
         );
     }
@@ -661,5 +682,4 @@ mod tests {
         assert!(domains.iter().any(|x| x == "edge.example.net"));
         assert!(domains.iter().any(|x| x == "sni.example.net"));
     }
-
 }

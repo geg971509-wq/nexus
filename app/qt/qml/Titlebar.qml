@@ -104,8 +104,6 @@ Item {
                             hoverEnabled: true
                             Accessible.name: gname
                             Accessible.role: Accessible.PageTab
-                            ToolTip.visible: hovered
-                            ToolTip.text: gname
                             onClicked: {
                                 if (root.win && root.win.home && typeof root.win.home.switchGroup === "function")
                                     root.win.home.switchGroup(tabBtn.gid, true)
@@ -162,8 +160,7 @@ Item {
                 hoverEnabled: true
                 Accessible.name: root.t("title.appMenu")
                 Accessible.role: Accessible.ButtonMenu
-                ToolTip.visible: hovered
-                ToolTip.text: root.t("title.appMenu")
+                Tip { text: root.t("title.appMenu") }
                 onClicked: appMenu.visible ? appMenu.close() : appMenu.open()
                 background: Rectangle {
                     radius: root.r
@@ -229,8 +226,7 @@ Item {
                 implicitWidth: Math.max(24, implicitContentWidth + leftPadding + rightPadding)
                 hoverEnabled: true
                 Accessible.name: root.t("tb.test")
-                ToolTip.visible: hovered
-                ToolTip.text: root.t("title.testMenu")
+                Tip { text: root.t("title.testMenu") }
                 onClicked: testMenu.visible ? testMenu.close() : testMenu.open()
                 background: Rectangle {
                     radius: root.r
@@ -314,8 +310,7 @@ Item {
                 implicitWidth: Math.max(24, implicitContentWidth + leftPadding + rightPadding)
                 hoverEnabled: true
                 Accessible.name: root.t("tb.groups")
-                ToolTip.visible: hovered
-                ToolTip.text: root.t("title.manageGroups")
+                Tip { text: root.t("title.manageGroups") }
                 onClicked: if (root.win && root.win.dialogs) root.win.dialogs.openGroups()
                 background: Rectangle {
                     radius: root.r
@@ -345,8 +340,7 @@ Item {
                 enabled: !(root.win && root.win.dialogs && root.win.dialogs.subUpdating)
                 opacity: enabled ? 1 : 0.45
                 Accessible.name: root.t("tb.refresh")
-                ToolTip.visible: hovered
-                ToolTip.text: root.t("title.refresh")
+                Tip { text: root.t("title.refresh") }
                 onClicked: if (root.win && root.win.dialogs) root.win.dialogs.refreshSub()
                 background: Rectangle {
                     radius: root.r
@@ -394,8 +388,6 @@ Item {
             hoverEnabled: true
             Accessible.name: root.t(appRow.itemData.k)
             Accessible.role: Accessible.MenuItem
-            ToolTip.visible: hovered && !!appRow.itemData.tip
-            ToolTip.text: appRow.itemData.tip ? root.t(appRow.itemData.tip) : ""
             onClicked: {
                 appMenu.close()
                 var d = root.win ? root.win.dialogs : null
@@ -449,8 +441,6 @@ Item {
             width: parent ? parent.width : 200
             hoverEnabled: true
             Accessible.name: root.t(row.itemData.k)
-            ToolTip.visible: hovered && !!row.itemData.tip
-            ToolTip.text: row.itemData.tip ? root.t(row.itemData.tip) : ""
             onClicked: {
                 testMenu.close()
                 var d = root.win ? root.win.dialogs : null

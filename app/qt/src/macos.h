@@ -2,4 +2,4 @@
 
 class QWindow;
 
-void hideNativeTitle(QWindow *window);
+void styleMacosMainWindow(QWindow *window);

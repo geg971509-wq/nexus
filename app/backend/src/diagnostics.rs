@@ -1,12 +1,36 @@
 //! Firewall status, connection statistics, and network diagnostic commands.
 
 use crate::{
-    core::session::SESSION,
+    core::{frame::LibcoreControl, proto_min::ConnRow, session::SESSION},
     defaults::MIXED_PORT,
     exit_ip, firewall, net, runtime,
     session_access::{current_connect_gen, reinstall_poll_session},
     tunnel_sm,
 };
+use std::sync::Mutex;
+
+static URL_TEST_CONTROL: Mutex<Option<LibcoreControl>> = Mutex::new(None);
+
+fn connection_rows_json(rows: Vec<ConnRow>) -> Vec<serde_json::Value> {
+    rows.into_iter()
+        .map(|r| {
+            serde_json::json!({
+                "id": r.id,
+                "created_at": r.created_at,
+                "process": r.process,
+                "process_path": r.process_path,
+                "process_id": r.process_id,
+                "dest": r.dest,
+                "domain": r.domain,
+                "network": r.network,
+                "protocol": r.protocol,
+                "outbound": r.outbound,
+                "upload": r.upload,
+                "download": r.download,
+            })
+        })
+        .collect()
+}
 
 pub(crate) fn firewall_status_json() -> serde_json::Value {
     let st = firewall::status();
@@ -76,29 +100,45 @@ pub(crate) async fn query_connections() -> Result<serde_json::Value, String> {
             }
         };
         reinstall_poll_session(session, gen);
-        let list: Vec<serde_json::Value> = rows
-            .into_iter()
-            .map(|r| {
-                serde_json::json!({
-                    "id": r.id,
-                    "created_at": r.created_at,
-                    "process": r.process,
-                    "process_path": r.process_path,
-                    "process_id": r.process_id,
-                    "dest": r.dest,
-                    "domain": r.domain,
-                    "network": r.network,
-                    "protocol": r.protocol,
-                    "outbound": r.outbound,
-                    "upload": r.upload,
-                    "download": r.download,
-                })
-            })
-            .collect();
+        let list = connection_rows_json(rows);
         Ok(serde_json::json!({ "active": list, "count": list.len() }))
     })
     .await
     .map_err(|e| format!("query_connections join: {e}"))?
+}
+
+pub(crate) async fn query_runtime_metrics() -> Result<serde_json::Value, String> {
+    runtime::spawn_blocking(|| {
+        let (mut session, gen) = {
+            let mut g = SESSION.lock().map_err(|e| e.to_string())?;
+            let gen = current_connect_gen();
+            let s = g.take().ok_or_else(|| "core not started".to_string())?;
+            (s, gen)
+        };
+        let connections = session.query_connections();
+        let stats = session.query_stats_proxy();
+        reinstall_poll_session(session, gen);
+
+        let (active, connections_error) = match connections {
+            Ok(rows) => (Some(connection_rows_json(rows)), None),
+            Err(e) => (None, Some(e)),
+        };
+        let (upload, download, stats_error) = match stats {
+            Ok((upload, download)) => (Some(upload), Some(download), None),
+            Err(e) => (None, None, Some(e)),
+        };
+        Ok(serde_json::json!({
+            "connections_ok": active.is_some(),
+            "active": active,
+            "connections_error": connections_error,
+            "stats_ok": upload.is_some(),
+            "upload": upload,
+            "download": download,
+            "stats_error": stats_error,
+        }))
+    })
+    .await
+    .map_err(|e| format!("query_runtime_metrics join: {e}"))?
 }
 
 /// Cumulative proxy outbound traffic (Core QueryStats / TrafficManager).
@@ -176,7 +216,14 @@ pub(crate) async fn core_url_test_current(
         let Some(mut s) = taken else {
             return Err("no core session".into());
         };
-        let result = s.test_current_url(&url, timeout_ms);
+        let result = s.test_current_url(&url, timeout_ms, |control| {
+            let mut slot = URL_TEST_CONTROL.lock().unwrap_or_else(|e| e.into_inner());
+            *slot = Some(control);
+        });
+        URL_TEST_CONTROL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
         reinstall_poll_session(s, gen);
         let rows = result?;
         let results: Vec<serde_json::Value> = rows
@@ -198,16 +245,14 @@ pub(crate) async fn core_url_test_current(
 /// Cancel in-flight Core URL test (StopTest).
 pub(crate) async fn core_url_test_stop() -> Result<(), String> {
     runtime::spawn_blocking(|| {
-        let (taken, gen) = match SESSION.lock() {
-            Ok(mut g) => {
-                let gen = current_connect_gen();
-                (g.take(), gen)
-            }
-            Err(_) => (None, 0),
-        };
-        if let Some(mut s) = taken {
-            let _ = s.stop_test();
-            reinstall_poll_session(s, gen);
+        let control = URL_TEST_CONTROL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(mut control) = control {
+            control
+                .send("StopTest", &[])
+                .map_err(|e| format!("stop url test: {e}"))?;
         }
         Ok(())
     })

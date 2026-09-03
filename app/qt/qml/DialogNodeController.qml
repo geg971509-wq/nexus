@@ -194,8 +194,9 @@ QtObject {
     function buildOutboundFromFields(f) {
         var typeRaw = String(f.type || "").toLowerCase()
         var server = String(f.server || "").trim()
-        var port = Number(f.port || 443) || 443
-        if (!server) return null
+        var port = Number(f.port)
+        if (!server || !isFinite(port) || port < 1 || port > 65535 || Math.floor(port) !== port)
+            return null
         var ty = typeRaw
         if (ty === "ss" || ty === "shadowsocks") ty = "shadowsocks"
         else if (ty === "socks" || ty === "socks5") ty = "socks"
@@ -227,7 +228,7 @@ QtObject {
             ob.method = f.cipher || f.method || "aes-128-gcm"
             ob.password = pass
         } else if (ty === "vmess") {
-            if (!uuid) return null
+            if (!looksLikeUuid(uuid)) return null
             ob.uuid = uuid
             var sec = f.cipher || f.security || f.method || "auto"
             if (sec && sec !== "auto" && sec !== "none" && sec !== "tls") ob.security = sec
@@ -246,7 +247,7 @@ QtObject {
                 ob.transport = tr
             }
         } else if (ty === "vless") {
-            if (!uuid) return null
+            if (!looksLikeUuid(uuid)) return null
             ob.uuid = uuid
             if (f.flow) ob.flow = f.flow
             if (f.tls !== false) {
@@ -268,7 +269,7 @@ QtObject {
             if (f.sni) ob.tls.server_name = f.sni
             if (f.skip) ob.tls.insecure = true
         } else if (ty === "tuic") {
-            if (!uuid) return null
+            if (!looksLikeUuid(uuid)) return null
             ob.uuid = uuid
             if (pass) ob.password = pass
             var cc = String(f.congestion_control || f.congestion || "").trim()
@@ -341,7 +342,7 @@ QtObject {
 
     function saveEdit() {
         var name = (eName || "").trim() || t("js.unnamed")
-        var host = (eServer || "").trim() || "0.0.0.0"
+        var host = (eServer || "").trim()
         var port = (ePort || "").trim() || "443"
         var type = eType || "VLESS"
         var tk = editTypeKey(type)
@@ -376,6 +377,10 @@ QtObject {
         if ((tk === "http" || tk === "https" || tk === "socks") && !fields.username && fields.password)
             fields.username = fields.password
         var outbound = buildOutboundFromFields(fields)
+        if (!outbound) {
+            log("SYS", "warn", t("log.nodeInvalid"))
+            return
+        }
         var pack = liveProfile()
         if (!pack) return
         var oldName = eOrigName
@@ -387,30 +392,37 @@ QtObject {
             }
         }
         if (!node) { log("SYS", "warn", t("log.noNode")); return }
+        if (name !== oldName) {
+            for (var ni = 0; ni < pack.prof.nodes.length; ni++) {
+                var other = pack.prof.nodes[ni]
+                if (other && other !== node && other.name === name) {
+                    log("SYS", "warn", t("log.nodeDuplicate", { name: name }))
+                    return
+                }
+            }
+        }
         node.name = name
         node.type = type
         node.addr = host + ":" + port
         if (eNote) node.note = eNote
         else delete node.note
-        if (outbound) {
-            if (node.outbound && typeof node.outbound === "object") {
-                var prev = node.outbound
-                var keep = JSON.parse(JSON.stringify(outbound))
-                var extras = ["multiplex", "dialer", "detour", "domain_strategy", "domain_resolver", "bind_interface", "routing_mark", "packet_encoding", "global_padding", "authenticated_length"]
-                for (var k = 0; k < extras.length; k++)
-                    if (prev[extras[k]] != null && keep[extras[k]] == null) keep[extras[k]] = prev[extras[k]]
-                if (prev.tls && typeof prev.tls === "object" && keep.tls && typeof keep.tls === "object") {
-                    var tlsKeep = ["utls", "reality", "alpn", "min_version", "max_version"]
-                    for (var ti = 0; ti < tlsKeep.length; ti++)
-                        if (prev.tls[tlsKeep[ti]] != null && keep.tls[tlsKeep[ti]] == null)
-                            keep.tls[tlsKeep[ti]] = prev.tls[tlsKeep[ti]]
-                }
-                node.outbound = keep
-            } else {
-                node.outbound = outbound
+        if (node.outbound && typeof node.outbound === "object") {
+            var prev = node.outbound
+            var keep = JSON.parse(JSON.stringify(outbound))
+            var extras = ["multiplex", "dialer", "detour", "domain_strategy", "domain_resolver", "bind_interface", "routing_mark", "packet_encoding", "global_padding", "authenticated_length"]
+            for (var k = 0; k < extras.length; k++)
+                if (prev[extras[k]] != null && keep[extras[k]] == null) keep[extras[k]] = prev[extras[k]]
+            if (prev.tls && typeof prev.tls === "object" && keep.tls && typeof keep.tls === "object") {
+                var tlsKeep = ["utls", "reality", "alpn", "min_version", "max_version"]
+                for (var ti = 0; ti < tlsKeep.length; ti++)
+                    if (prev.tls[tlsKeep[ti]] != null && keep.tls[tlsKeep[ti]] == null)
+                        keep.tls[tlsKeep[ti]] = prev.tls[tlsKeep[ti]]
             }
-            if (node.link) delete node.link
+            node.outbound = keep
+        } else {
+            node.outbound = outbound
         }
+        if (node.link) delete node.link
         if (home && home.connected && home.connectedName === oldName)
             home.connectedName = name
         putLive(pack)

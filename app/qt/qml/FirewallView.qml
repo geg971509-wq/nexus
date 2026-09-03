@@ -42,6 +42,8 @@ Item {
     property bool hasApi: false
     property bool helperRunning: false
     property bool helperInstalled: false
+    property var requestId: null
+    property string actionError: ""
 
     property string stateText: "—"
     property string stateTone: "neutral"
@@ -154,8 +156,9 @@ Item {
         peerTone = empty(st.peer) ? "muted" : ""
         tunText = empty(st.tun_if) ? "—" : String(st.tun_if)
         tunTone = empty(st.tun_if) ? "muted" : ""
-        errText = empty(st.last_error) ? "—" : String(st.last_error)
-        errTone = empty(st.last_error) ? "muted" : "err"
+        var shownError = actionError || st.last_error
+        errText = empty(shownError) ? "—" : String(shownError)
+        errTone = empty(shownError) ? "muted" : "err"
 
         helperRunning = !!st.helper_running
         helperInstalled = !!st.helper_installed
@@ -174,33 +177,67 @@ Item {
     }
 
     function refresh() {
+        if (busy) return
         var n = api()
         hasApi = !!(n && typeof n.invoke === "function")
         if (!hasApi) {
             paint(null)
             return
         }
-        paint(unwrap(invoke("firewall_status")))
+        var started = invoke("firewall_status")
+        if (!started || started._missing || started.ok === false || started.request_id == null) {
+            paint(unwrap(started))
+            return
+        }
+        requestId = started.request_id
     }
 
     function runHelper(cmd) {
         if (busy || !hasApi) return
         busy = true
-        var r = invoke(cmd)
-        busy = false
-        if (r && r._missing) {
-            paint(null)
+        actionError = ""
+        var started = invoke(cmd)
+        if (!started || started._missing || started.ok === false || started.request_id == null) {
+            busy = false
+            if (started && started._missing) {
+                paint(null)
+                return
+            }
+            actionError = (started && started.error) || "firewall helper failed"
+            errText = actionError
+            errTone = "err"
             return
         }
-        if (r && r.ok === false) {
+        requestId = started.request_id
+    }
+
+    function onFirewallResult(r) {
+        if (!r || requestId == null || r.request_id !== requestId) return
+        if (r.op !== "status") busy = false
+        if (r.ok === false || r.error) {
+            if (r.op === "status") {
+                paint({ last_error: r.error || "firewall_status failed" })
+                return
+            }
+            actionError = r.error || "firewall helper failed"
             refresh()
             return
         }
-        var st = (r && r.data && typeof r.data === "object") ? r.data : r
-        if (st && typeof st === "object" && !st.offline)
-            paint(st)
-        else
-            refresh()
+        if (r.op !== "status") actionError = ""
+        paint(r)
+    }
+
+    Connections {
+        target: root.api()
+        function onEvent(name, json) {
+            if (name !== "firewall-result") return
+            var r = json
+            if (typeof json === "string") {
+                try { r = JSON.parse(json) } catch (e) { return }
+            }
+            if (r && r.payload !== undefined) r = r.payload
+            root.onFirewallResult(r)
+        }
     }
 
     onVisibleChanged: if (visible) refresh()
@@ -501,8 +538,10 @@ Item {
         background: Rectangle {
             radius: 8
             color: btn.primary
-                   ? (btn.hovered && btn.enabled ? "#0071eb" : "#007aff")
+                   ? (btn.hovered && btn.enabled ? Qt.darker(root.blue, 1.08) : root.blue)
                    : (btn.hovered && btn.enabled ? "#2e787880" : root.fill)
+            border.width: btn.activeFocus ? 1 : 0
+            border.color: root.blue
         }
         contentItem: Text {
             id: txt

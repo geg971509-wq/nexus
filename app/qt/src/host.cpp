@@ -13,11 +13,11 @@ Host::Host(QWindow *window, QObject *parent)
     if (!m_window) {
         return;
     }
-    m_window->resize(1100, 720);
-    m_window->setMinimumSize(QSize(900, 600));
+    m_window->resize(1000, 668);
+    m_window->setMinimumSize(QSize(900, 550));
     m_window->installEventFilter(this);
 #ifdef Q_OS_MACOS
-    hideNativeTitle(m_window);
+    styleMacosMainWindow(m_window);
 #endif
     connect(qApp, &QGuiApplication::applicationStateChanged, this,
             [this](Qt::ApplicationState state) {
@@ -41,8 +41,9 @@ bool Host::eventFilter(QObject *obj, QEvent *event) {
         return QObject::eventFilter(obj, event);
     }
 #ifdef Q_OS_MACOS
-    if (event->type() == QEvent::Show || event->type() == QEvent::WinIdChange) {
-        hideNativeTitle(m_window);
+    if (event->type() == QEvent::Show || event->type() == QEvent::WinIdChange ||
+        event->type() == QEvent::Resize) {
+        styleMacosMainWindow(m_window);
     }
 #endif
     if (event->type() == QEvent::Close) {

@@ -73,23 +73,41 @@ mod tests {
         ] {
             assert!(!is_unsupported_link(link), "{link}");
         }
-        assert!(!is_unsupported_clash(&json!({"type":"vless","network":"ws"})));
-        assert!(!is_unsupported_clash(&json!({"type":"vless","encryption":"none"})));
+        assert!(!is_unsupported_clash(
+            &json!({"type":"vless","network":"ws"})
+        ));
+        assert!(!is_unsupported_clash(
+            &json!({"type":"vless","encryption":"none"})
+        ));
     }
 
     #[test]
     fn xhttp_encryption_and_extra_are_unsupported() {
-        assert!(is_unsupported_link(&format!("vless://{UUID}@a.example.com:443?type=xhttp&path=%2Fx")));
-        assert!(is_unsupported_link(&format!("vless://{UUID}@a.example.com:443?encryption=mlkem768x25519plus")));
-        assert!(is_unsupported_link(&format!("vless://{UUID}@a.example.com:443?extra=%7B%22a%22%3A1%7D")));
-        assert!(is_unsupported_clash(&json!({"type":"vless","network":"xhttp"})));
-        assert!(is_unsupported_clash(&json!({"type":"vless","encryption":"mlkem768x25519plus"})));
+        assert!(is_unsupported_link(&format!(
+            "vless://{UUID}@a.example.com:443?type=xhttp&path=%2Fx"
+        )));
+        assert!(is_unsupported_link(&format!(
+            "vless://{UUID}@a.example.com:443?encryption=mlkem768x25519plus"
+        )));
+        assert!(is_unsupported_link(&format!(
+            "vless://{UUID}@a.example.com:443?extra=%7B%22a%22%3A1%7D"
+        )));
+        assert!(is_unsupported_clash(
+            &json!({"type":"vless","network":"xhttp"})
+        ));
+        assert!(is_unsupported_clash(
+            &json!({"type":"vless","encryption":"mlkem768x25519plus"})
+        ));
     }
 
     /// A `#fragment` may contain anything; it must not be mistaken for the query.
     #[test]
     fn fragment_is_not_parsed_as_query() {
-        assert!(!is_unsupported_link(&format!("vless://{UUID}@a.example.com:443#type=xhttp")));
-        assert!(!is_unsupported_link(&format!("vless://{UUID}@a.example.com:443#&encryption=aes")));
+        assert!(!is_unsupported_link(&format!(
+            "vless://{UUID}@a.example.com:443#type=xhttp"
+        )));
+        assert!(!is_unsupported_link(&format!(
+            "vless://{UUID}@a.example.com:443#&encryption=aes"
+        )));
     }
 }

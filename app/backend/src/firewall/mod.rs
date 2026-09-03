@@ -226,16 +226,21 @@ pub fn peer_from_outbound(outbound: &serde_json::Value) -> Result<PeerEndpoint, 
     if server.is_empty() {
         return Err("outbound server empty".into());
     }
-    let port = outbound
-        .get("server_port")
-        .and_then(|v| v.as_u64())
-        .or_else(|| {
-            outbound
-                .get("server_port")
-                .and_then(|v| v.as_str())
-                .and_then(|s| s.parse().ok())
-        })
-        .unwrap_or(443) as u16;
+    let port = match outbound.get("server_port") {
+        None => 443,
+        Some(value) => {
+            let raw = value
+                .as_u64()
+                .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok()))
+                .ok_or_else(|| "outbound invalid server_port".to_string())?;
+            let port =
+                u16::try_from(raw).map_err(|_| format!("outbound invalid server_port: {raw}"))?;
+            if port == 0 {
+                return Err("outbound invalid server_port: 0".into());
+            }
+            port
+        }
+    };
 
     // Optional UI/catalog hint: display addr IP when server is a hostname (CDN).
     let mut hint_ips: Vec<IpAddr> = Vec::new();
@@ -307,6 +312,27 @@ mod tests {
         let p = peer_from_outbound(&v).unwrap();
         assert!(p.ips.contains(&IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))));
         assert!(p.ips.contains(&IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8))));
+    }
+
+    #[test]
+    fn peer_rejects_invalid_ports() {
+        for port in [
+            serde_json::json!(0),
+            serde_json::json!(65536),
+            serde_json::json!(-1),
+            serde_json::json!("not-a-port"),
+        ] {
+            let v = serde_json::json!({"type":"socks","server":"1.2.3.4","server_port":port});
+            assert!(peer_from_outbound(&v).is_err(), "accepted {port}");
+        }
+    }
+
+    #[test]
+    fn peer_defaults_port_only_when_absent() {
+        let v = serde_json::json!({"type":"socks","server":"1.2.3.4"});
+        assert_eq!(peer_from_outbound(&v).unwrap().port, 443);
+        let v = serde_json::json!({"type":"socks","server":"1.2.3.4","server_port":"8443"});
+        assert_eq!(peer_from_outbound(&v).unwrap().port, 8443);
     }
 
     #[test]

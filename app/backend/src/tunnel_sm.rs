@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 static CONNECT_GEN: AtomicU64 = AtomicU64::new(1);
+static STATE_REVISION: AtomicU64 = AtomicU64::new(1);
 static STATE: Mutex<State> = Mutex::new(State::Idle);
 static LAST_PARAMS: Mutex<Option<ConnectParams>> = Mutex::new(None);
 static LAST_ERROR: Mutex<Option<String>> = Mutex::new(None);
@@ -53,7 +54,9 @@ pub struct ConnectParams {
 #[derive(Debug, Clone)]
 pub enum Event {
     BeginConnect(ConnectParams),
-    MarkConnected { tun_if: Option<String> },
+    MarkConnected {
+        tun_if: Option<String>,
+    },
     Fail(String),
     BeginDisconnect,
     ResetIdle,
@@ -66,6 +69,7 @@ pub struct Transition {
     pub from: State,
     pub to: State,
     pub gen: u64,
+    pub state_revision: u64,
     pub params: Option<ConnectParams>,
     pub error: Option<String>,
 }
@@ -76,6 +80,10 @@ pub fn bump_gen() -> u64 {
 
 pub fn current_gen() -> u64 {
     CONNECT_GEN.load(Ordering::SeqCst)
+}
+
+pub fn state_revision_is(revision: u64) -> bool {
+    revision != 0 && revision == STATE_REVISION.load(Ordering::SeqCst)
 }
 
 pub fn state() -> State {
@@ -90,10 +98,7 @@ pub fn last_params() -> Option<ConnectParams> {
 }
 
 pub fn last_error() -> Option<String> {
-    LAST_ERROR
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone()
+    LAST_ERROR.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 /// Apply event; returns transition for firewall/proxy wiring.
@@ -146,11 +151,23 @@ pub fn apply(event: Event) -> Transition {
         Event::BeginDisconnect => {}
     }
     *g = to;
+    let state_revision = if to != from
+        || matches!(
+            event,
+            Event::BeginConnect(_) | Event::BeginDisconnect | Event::ResetIdle
+        ) {
+        STATE_REVISION
+            .fetch_add(1, Ordering::SeqCst)
+            .wrapping_add(1)
+    } else {
+        STATE_REVISION.load(Ordering::SeqCst)
+    };
     let gen = CONNECT_GEN.load(Ordering::SeqCst);
     Transition {
         from,
         to,
         gen,
+        state_revision,
         params,
         error,
     }

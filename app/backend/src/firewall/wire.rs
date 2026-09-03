@@ -171,9 +171,7 @@ impl PolicyDto {
 }
 
 fn parse_peer(ip: &str, port: u16, more: &[String]) -> Result<PeerEndpoint, String> {
-    let primary: IpAddr = ip
-        .parse()
-        .map_err(|e| format!("bad peer ip {ip}: {e}"))?;
+    let primary: IpAddr = ip.parse().map_err(|e| format!("bad peer ip {ip}: {e}"))?;
     let mut ips = Vec::new();
     for s in more {
         if let Ok(a) = s.parse::<IpAddr>() {

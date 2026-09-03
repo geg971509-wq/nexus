@@ -35,17 +35,6 @@ pub(crate) fn qr_svg(text: String) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "svg": svg, "len": t.len() }))
 }
 
-#[cfg(test)]
-mod qr_tests {
-    use super::*;
-    #[test]
-    fn qr_svg_vless_sample() {
-        let v = qr_svg("vless://11111111-1111-1111-1111-111111111111@1.1.1.1:443?encryption=none&type=ws#n".into()).unwrap();
-        let s = v["svg"].as_str().unwrap();
-        assert!(s.contains("<svg"), "{s}");
-        assert!(s.len() > 200);
-    }
-}
 pub(crate) async fn store_snapshot() -> Result<serde_json::Value, String> {
     runtime::spawn_blocking(|| {
         use crate::data::store::Store;
@@ -140,4 +129,21 @@ pub(crate) async fn catalog_put(blob: serde_json::Value) -> Result<String, Strin
     })
     .await
     .map_err(|e| format!("catalog_put join: {e}"))?
+}
+
+#[cfg(test)]
+mod qr_tests {
+    use super::*;
+
+    #[test]
+    fn qr_svg_vless_sample() {
+        let v = qr_svg(
+            "vless://11111111-1111-1111-1111-111111111111@1.1.1.1:443?encryption=none&type=ws#n"
+                .into(),
+        )
+        .unwrap();
+        let s = v["svg"].as_str().unwrap();
+        assert!(s.contains("<svg"), "{s}");
+        assert!(s.len() > 200);
+    }
 }

@@ -29,7 +29,6 @@ pub(crate) fn set_system_proxy_cmd_sync(enabled: bool) -> Result<String, String>
         ));
     }
     // enable+running → point OS at mixed; disable → clear OS always (upstream ClearSystemProxy)
-    // primary service sync (~0.2s); other NICs background — chip must not wait ~1s for all.
     sys::set_system_proxy(enabled, port)
 }
 

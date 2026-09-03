@@ -21,7 +21,7 @@ macOS VPN / proxy client. GUI: Qt Quick (`app/qt`). Engine: Go core (**sing-box*
 
 | Target | Arch | Shell / install | Core |
 |--------|------|-----------------|------|
-| macOS 13+ | arm64 | self-contained `.app` | `NexusCore` (CGO) |
+| macOS 26+ | arm64 | self-contained `.app` | `NexusCore` (CGO) |
 
 Nexus does not ship non-macOS targets. Historical HTML GUI and platform pack
 scripts live under [`archive/`](archive/) and are excluded from the product build.
@@ -76,7 +76,7 @@ listed in `THIRD_PARTY_NOTICES.md`. This is an engineering layout, not legal adv
 
 Produces `bin/NexusCore` and `bin/Nexus.app` (Qt host).
 
-Requires: macOS 13 or newer, Xcode CLT, `go`, `cargo`/`rustc`, `cmake`, `protoc`, and Qt 6.11.
+Requires: macOS 26 or newer, Xcode CLT, `go`, `cargo`/`rustc`, `cmake`, `protoc`, and Qt 6.11.
 Homebrew Qt is detected automatically; set `NEXUS_QT_HOME` for another Qt prefix.
 
 The build embeds Nexus QML and tray assets, deploys the required Qt frameworks

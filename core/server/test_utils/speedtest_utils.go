@@ -3,7 +3,6 @@ package test_utils
 import (
 	"NexusCore/internal"
 	"NexusCore/internal/boxbox"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -51,6 +51,8 @@ func (s *SpeedTestResultQuerier) storeResult(result *SpeedTestResult) {
 }
 
 func (s *SpeedTestResultQuerier) setIsRunning(isRunning bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.isRunning = isRunning
 }
 
@@ -96,15 +98,20 @@ func BatchSpeedTest(ctx context.Context, i *boxbox.Box, outboundTags []string, t
 		queuer = make(chan struct{}, countryConcurrency)
 	}
 
+testLoop:
 	for _, tag := range outboundTags {
 		select {
 		case <-ctx.Done():
-			break
+			break testLoop
 		default:
 		}
 		outbound, exists := outbounds.Outbound(tag)
 		if !exists {
-			panic("no outbound with tag " + tag + " found")
+			results = append(results, &SpeedTestResult{
+				Tag:   tag,
+				Error: fmt.Errorf("no outbound with tag %s found", tag),
+			})
+			continue
 		}
 		res := new(SpeedTestResult)
 		res.Tag = tag
@@ -163,27 +170,29 @@ func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, ne
 	res.ServerName = "N/A"
 	res.ServerCountry = "N/A"
 
-	buf := bytes.NewBuffer(make([]byte, 0, 8*(1<<20)))
 	req, err := http.NewRequestWithContext(ctx, "GET", testURL, nil)
 	if err != nil {
 		return err
 	}
 
-	done := make(chan struct{})
-	var start time.Time
-	var latency int32
+	done := make(chan error, 1)
+	var downloaded atomic.Int64
+	var startUnixNano atomic.Int64
+	var latencyMillis atomic.Int64
 
 	go func() {
-		defer close(done)
 		reqStart := time.Now()
 		resp, err := client.Do(req)
 		if err != nil {
-			res.Error = err
+			done <- err
 			return
 		}
-		latency = int32(time.Since(reqStart).Milliseconds())
-		start = time.Now()
-		_, _ = io.Copy(buf, resp.Body)
+		defer resp.Body.Close()
+		latencyMillis.Store(time.Since(reqStart).Milliseconds())
+		startUnixNano.Store(time.Now().UnixNano())
+		writer := &atomicByteCounter{bytes: &downloaded}
+		_, err = io.Copy(writer, resp.Body)
+		done <- err
 	}()
 
 	ticker := time.NewTicker(time.Millisecond * 50)
@@ -192,24 +201,39 @@ func simpleDownloadTest(ctx context.Context, dialer func(ctx context.Context, ne
 	SpTQuerier.setIsRunning(true)
 	defer SpTQuerier.setIsRunning(false)
 
+	publish := func() {
+		bytes := downloaded.Load()
+		startNanos := startUnixNano.Load()
+		if startNanos != 0 {
+			res.DlSpeed = internal.BrateToStr(internal.CalculateBRate(float64(bytes), time.Unix(0, startNanos)))
+		}
+		res.DlBytes = bytes
+		res.Latency = int32(latencyMillis.Load())
+		SpTQuerier.storeResult(res)
+	}
+
 	for {
 		select {
-		case <-done:
-			res.DlSpeed = internal.BrateToStr(internal.CalculateBRate(float64(buf.Len()), start))
-			res.DlBytes = int64(buf.Len())
-			res.Latency = latency
-			SpTQuerier.storeResult(res)
-			return nil
+		case err := <-done:
+			publish()
+			return err
 		case <-ctx.Done():
 			res.Cancelled = true
+			publish()
 			return ctx.Err()
 		case <-ticker.C:
-			res.DlSpeed = internal.BrateToStr(internal.CalculateBRate(float64(buf.Len()), start))
-			res.DlBytes = int64(buf.Len())
-			res.Latency = latency
-			SpTQuerier.storeResult(res)
+			publish()
 		}
 	}
+}
+
+type atomicByteCounter struct {
+	bytes *atomic.Int64
+}
+
+func (w *atomicByteCounter) Write(p []byte) (int, error) {
+	w.bytes.Add(int64(len(p)))
+	return len(p), nil
 }
 
 func speedTestWithDialer(ctx context.Context, dialer func(ctx context.Context, network string, address string) (net.Conn, error), res *SpeedTestResult, testDl, testUl bool, timeout time.Duration) error {
@@ -220,56 +244,38 @@ func speedTestWithDialer(ctx context.Context, dialer func(ctx context.Context, n
 	res.ServerName = srv.Name
 	res.ServerCountry = srv.Country
 
-	done := make(chan struct{})
-
 	SpTQuerier.setIsRunning(true)
 	defer SpTQuerier.setIsRunning(false)
+	SpTQuerier.storeResult(res)
 
-	go func() {
-		defer func() { close(done) }()
-		if testDl {
-			timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
-			defer cancel()
-			err = srv.DownloadTestContext(timeoutCtx)
-			if err != nil && !errors.Is(err, context.Canceled) {
-				res.Error = err
-				return
+	if testDl {
+		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+		err = srv.DownloadTestContext(timeoutCtx)
+		cancel()
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				res.Cancelled = true
 			}
-		}
-		if testUl {
-			timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
-			defer cancel()
-			err = srv.UploadTestContext(timeoutCtx)
-			if err != nil && !errors.Is(err, context.Canceled) {
-				res.Error = err
-				return
-			}
-		}
-	}()
-
-	ticker := time.NewTicker(time.Millisecond * 50)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-done:
-			res.DlSpeed = internal.BrateToStr(float64(srv.DLSpeed))
-			res.UlSpeed = internal.BrateToStr(float64(srv.ULSpeed))
-			res.DlBytes = srv.Context.GetTotalDownload()
-			res.UlBytes = srv.Context.GetTotalUpload()
-			res.Latency = int32(srv.Latency.Milliseconds())
-			SpTQuerier.storeResult(res)
-			return nil
-		case <-ctx.Done():
-			res.Cancelled = true
-			return ctx.Err()
-		case <-ticker.C:
-			res.DlSpeed = internal.BrateToStr(srv.Context.GetEWMADownloadRate())
-			res.UlSpeed = internal.BrateToStr(srv.Context.GetEWMAUploadRate())
-			res.DlBytes = srv.Context.GetTotalDownload()
-			res.UlBytes = srv.Context.GetTotalUpload()
-			res.Latency = int32(srv.Latency.Milliseconds())
-			SpTQuerier.storeResult(res)
+			return err
 		}
 	}
+	if testUl {
+		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+		err = srv.UploadTestContext(timeoutCtx)
+		cancel()
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				res.Cancelled = true
+			}
+			return err
+		}
+	}
+
+	res.DlSpeed = internal.BrateToStr(float64(srv.DLSpeed))
+	res.UlSpeed = internal.BrateToStr(float64(srv.ULSpeed))
+	res.DlBytes = srv.Context.GetTotalDownload()
+	res.UlBytes = srv.Context.GetTotalUpload()
+	res.Latency = int32(srv.Latency.Milliseconds())
+	SpTQuerier.storeResult(res)
+	return nil
 }

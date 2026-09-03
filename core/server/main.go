@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -15,7 +14,6 @@ import (
 	"NexusCore/internal/boxmain"
 	"NexusCore/internal/corelock"
 	"NexusCore/ipc"
-	"NexusCore/test_utils"
 
 	C "github.com/sagernet/sing-box/constant"
 )
@@ -82,7 +80,6 @@ func main() {
 		}
 	}()
 
-	test_utils.TestCtx, test_utils.CancelTests = context.WithCancel(context.Background())
 	RunCore()
 	return
 }

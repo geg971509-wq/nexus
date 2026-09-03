@@ -29,6 +29,7 @@ Item {
     readonly property color sep: th ? th.separator : "#1e3c3c43"
     readonly property color chrome: th ? th.chromeSolid : "#fafafc"
     readonly property color fill: th ? th.fill : "#1e787880"
+    readonly property color fill2: th ? th.fill2 : "#14787880"
     readonly property color knob: th ? th.knob : "#ffffff"
     readonly property color switchTrack: th ? th.switchTrack : "#51787880"
 
@@ -132,6 +133,7 @@ Item {
 
                     Item {
                         id: powerBox
+                        opacity: powerHit.enabled ? 1 : 0.45
                         implicitWidth: 32
                         implicitHeight: 32
                         Layout.preferredWidth: 32
@@ -142,9 +144,9 @@ Item {
                         Rectangle {
                             anchors.fill: parent
                             radius: 6
-                            color: root.connected ? root.green : (powerHit.containsMouse ? "#33787880" : "#24787880")
-                            border.width: 1
-                            border.color: root.connected ? root.green : root.sep
+                            color: root.connected ? root.green : (powerHit.containsMouse ? root.fill : root.fill2)
+                            border.width: powerHit.activeFocus ? 2 : 1
+                            border.color: powerHit.activeFocus ? root.blue : (root.connected ? root.green : root.sep)
                         }
                         Text {
                             anchors.fill: parent
@@ -200,6 +202,7 @@ Item {
                             id: tunChip
                             text: root.t("sec.6f9bbe3d")
                             checked: false
+                            enabled: !root.powerBusy && !root.tunBusy && !root.sysBusy
                             tooltip: root.t("title.tun")
                             onClicked: root.applyTun(checked)
                         }
@@ -207,6 +210,7 @@ Item {
                             id: sysChip
                             text: root.t("sec.90c0bb9a")
                             checked: true
+                            enabled: !root.powerBusy && !root.tunBusy && !root.sysBusy
                             tooltip: root.t("title.sysProxy")
                             onClicked: root.applySys(checked)
                         }
@@ -223,6 +227,8 @@ Item {
 
                 MouseArea {
                     id: powerHit
+                    enabled: !root.powerBusy && !root.tunBusy && !root.sysBusy
+                    activeFocusOnTab: true
                     width: 44
                     height: 44
                     x: 10 + (32 - width) / 2
@@ -237,9 +243,17 @@ Item {
                     Accessible.checkable: true
                     Accessible.checked: root.connected
                     Accessible.onPressAction: root.togglePower()
-                    ToolTip.visible: containsMouse
-                    ToolTip.text: root.t("title.power")
-                    onPressed: root.togglePower()
+                    Tip { active: powerHit.containsMouse; text: root.t("title.power") }
+                    Keys.onPressed: function (event) {
+                        if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                            event.accepted = true
+                            root.togglePower()
+                        }
+                    }
+                    onPressed: {
+                        forceActiveFocus()
+                        root.togglePower()
+                    }
                 }
             }
         }
@@ -277,17 +291,17 @@ Item {
     component Chip: AbstractButton {
         id: chip
         property string tooltip: ""
+        opacity: enabled ? 1 : 0.45
         checkable: true
         height: 28
         hoverEnabled: true
         Accessible.name: text
         Accessible.checkable: true
         Accessible.checked: checked
-        ToolTip.visible: hovered && tooltip.length
-        ToolTip.text: tooltip
+        Tip { text: chip.tooltip }
         background: Rectangle {
             radius: 999
-            color: chip.checked ? root.blueSoft : (chip.hovered ? "#28787880" : "#1a787880")
+            color: chip.checked ? root.blueSoft : (chip.hovered ? root.fill : root.fill2)
         }
         contentItem: Row {
             spacing: 7

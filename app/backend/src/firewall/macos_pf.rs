@@ -23,11 +23,7 @@ pub fn apply_as_root(policy: &Policy) -> Result<(), String> {
             tun_if,
             dns,
         } => {
-            let iface = if *tun {
-                tun_if.as_deref()
-            } else {
-                None
-            };
+            let iface = if *tun { tun_if.as_deref() } else { None };
             load_as_root(&rules::rules_fail_closed(peer, *mixed_port, iface, dns))
         }
         Policy::Blocked {

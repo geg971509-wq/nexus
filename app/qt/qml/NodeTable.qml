@@ -19,18 +19,23 @@ Item {
     readonly property color blue: th ? th.blue : "#007aff"
     readonly property color blueSoft: th ? th.blueSoft : "#1e007aff"
     readonly property color green: th ? th.green : "#34c759"
+    readonly property color purple: th ? th.purple : blue
+    readonly property color bg: th ? th.bg : "#f5f5f7"
     readonly property color surface: th ? th.surface : "#ffffff"
     readonly property color tableBorder: th ? th.tableBorder : "#0b000000"
     readonly property color sep: th ? th.separator : "#1e3c3c43"
     readonly property color latGood: th ? th.latGood : "#248a3d"
     readonly property color latMid: th ? th.latMid : "#c93400"
     readonly property color latBad: th ? th.latBad : "#d70015"
-    readonly property color rowHover: dark ? "#0affffff" : "#05000000"
-    readonly property color rowSelected: dark ? "#380a84ff" : "#1a007aff"
-    readonly property color rowSelectedHover: dark ? "#470a84ff" : "#24007aff"
-    readonly property color rowConnected: dark ? "#2930d158" : "#1f34c759"
-    readonly property color rowConnectedHover: dark ? "#3d30d158" : "#2e34c759"
-    readonly property color rowConnectedSel: dark ? "#3830d158" : "#2934c759"
+    readonly property color rowHover: th ? th.rowHover : "transparent"
+    readonly property color rowSelected: th ? th.rowSelected : blueSoft
+    readonly property color rowSelectedHover: th ? th.rowSelectedHover : blueSoft
+    readonly property color rowConnected: th ? th.rowConnected : green
+    readonly property color rowConnectedHover: th ? th.rowConnectedHover : green
+    readonly property color rowConnectedSel: th ? th.rowConnectedSelected : green
+    readonly property color badgeStroke: th ? th.badgeStroke : blue
+    readonly property color flowUpload: th ? th.flowUpload : blue
+    readonly property color flowDownload: th ? th.flowDownload : purple
     readonly property int idxW: 40
     readonly property int typeW: 84
     readonly property int addrW: 170
@@ -258,6 +263,21 @@ Item {
         return -1
     }
 
+    function pickKeyboardIndex(index) {
+        if (rows.count <= 0) return
+        var i = Math.max(0, Math.min(rows.count - 1, index))
+        var r = rows.get(i)
+        if (!r || !r.name) return
+        pickRow(r.name, 0)
+        list.positionViewAtIndex(i, ListView.Contain)
+    }
+
+    function moveKeyboardSelection(delta) {
+        var i = rowIndexOf(selectedName)
+        if (i < 0) i = delta > 0 ? -1 : rows.count
+        pickKeyboardIndex(i + delta)
+    }
+
     function pickRow(name, mods) {
         var n = nodeByName(name)
         if (!n) return
@@ -353,13 +373,13 @@ Item {
         id: card
         anchors.fill: parent
         radius: 0
-        color: root.surface
-        border.width: 1
-        border.color: root.tableBorder
+        color: root.bg
+        border.width: 0
         clip: true
         Accessible.role: Accessible.Table
         Accessible.name: root.t("nav.home")
         focus: true
+        activeFocusOnTab: true
         Keys.onPressed: function (event) {
             if ((event.modifiers & (Qt.ControlModifier | Qt.MetaModifier))
                     && !(event.modifiers & Qt.AltModifier)
@@ -367,6 +387,28 @@ Item {
                     && event.key === Qt.Key_A) {
                 event.accepted = true
                 root.selectAll()
+                return
+            }
+            if (event.key === Qt.Key_Up) {
+                event.accepted = true
+                root.moveKeyboardSelection(-1)
+            } else if (event.key === Qt.Key_Down) {
+                event.accepted = true
+                root.moveKeyboardSelection(1)
+            } else if (event.key === Qt.Key_Home) {
+                event.accepted = true
+                root.pickKeyboardIndex(0)
+            } else if (event.key === Qt.Key_End) {
+                event.accepted = true
+                root.pickKeyboardIndex(rows.count - 1)
+            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                event.accepted = true
+                if (root.selectedName && root.selectedName !== "—")
+                    root.nodeEdit(root.selectedName)
+            } else if (event.key === Qt.Key_Space) {
+                event.accepted = true
+                var i = root.rowIndexOf(root.selectedName)
+                if (i >= 0) root.pickKeyboardIndex(i)
             }
         }
         MouseArea {
@@ -402,6 +444,7 @@ Item {
                         width: headerButton.modelData.w === 0 ? root.nameW : headerButton.modelData.w
                         height: 32
                         hoverEnabled: true
+                        activeFocusOnTab: true
                         Accessible.role: Accessible.ColumnHeader
                         Accessible.name: headerButton.modelData.k === "#" ? "#" : root.t(headerButton.modelData.k)
                         onClicked: root.clickSort(headerButton.modelData.key)
@@ -414,7 +457,11 @@ Item {
                             verticalAlignment: Text.AlignVCenter
                             leftPadding: 14
                         }
-                        background: Item {}
+                        background: Rectangle {
+                            color: "transparent"
+                            border.width: headerButton.activeFocus ? 1 : 0
+                            border.color: root.blue
+                        }
                     }
                 }
             }
@@ -443,6 +490,10 @@ Item {
                     required property string flowDown
                     width: list.width
                     height: 34
+                    Accessible.role: Accessible.ListItem
+                    Accessible.name: row.name + " · " + row.type + " · " + row.addr + " · " + row.lat
+                    Accessible.selected: row.on
+                    Accessible.onPressAction: root.pickRow(row.name, 0)
                     property bool live: root.connected && root.connectedName.length && row.name === root.connectedName
                     property bool on: {
                         var _n = root.selectedNames
@@ -479,7 +530,7 @@ Item {
                                 radius: 6
                                 color: root.blueSoft
                                 border.width: 1
-                                border.color: "#14007aff"
+                                border.color: root.badgeStroke
                                 implicitWidth: pillTxt.implicitWidth + 14
                                 Text {
                                     id: pillTxt
@@ -542,7 +593,7 @@ Item {
                             Text {
                                 visible: row.hasFlow
                                 text: row.flowUp
-                                color: "#0a84ff"
+                                color: root.flowUpload
                                 font.family: root.mono[0]
                                 font.pixelSize: 12
                                 anchors.verticalCenter: parent.verticalCenter
@@ -559,7 +610,7 @@ Item {
                             Text {
                                 visible: row.hasFlow && row.flowDown.length
                                 text: row.flowDown
-                                color: root.th && root.th.purple ? root.th.purple : "#af52de"
+                                color: root.flowDownload
                                 font.family: root.mono[0]
                                 font.pixelSize: 12
                                 anchors.verticalCenter: parent.verticalCenter

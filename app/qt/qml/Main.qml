@@ -7,13 +7,20 @@ import QtQuick.Window
 ApplicationWindow {
     id: win
     title: "Nexus"
-    width: 1100
-    height: 720
+    width: 1000
+    height: 668
     minimumWidth: 900
-    minimumHeight: 600
+    minimumHeight: 550
+    topPadding: 0
+    leftPadding: 0
+    rightPadding: 0
+    bottomPadding: 0
     visible: true
-    color: theme.bg
-    flags: Qt.Window
+    color: Qt.platform.os === "osx" ? "transparent" : theme.bg
+    palette: theme.palette
+    flags: Qt.platform.os === "osx"
+           ? Qt.Window | Qt.NoTitleBarBackgroundHint | Qt.ExpandedClientAreaHint
+           : Qt.Window
 
     property alias theme: theme
     property alias i18n: i18n
@@ -24,12 +31,11 @@ ApplicationWindow {
     property string currentView: "home"
     property string subTab: "default"
     property bool sidebarCollapsed: false
-    property int sidebarWidth: 180
+    property int sidebarWidth: theme.sidebarW
     property int mixedPort: 2080
     property string mixedListen: "127.0.0.1:2080"
     property string sbStatus: i18n.t("sb.stopped")
     property string sbProxy: "—"
-    property string sbDirect: "—"
 
     Theme { id: theme }
     I18n { id: i18n }

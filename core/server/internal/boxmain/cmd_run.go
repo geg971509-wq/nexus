@@ -44,7 +44,7 @@ func parseConfig(ctx context.Context, configContent []byte) (*option.Options, er
 	)
 	options, err := json.UnmarshalExtendedContext[option.Options](ctx, configContent)
 	if err != nil {
-		return nil, E.Cause(err, "decode config at ", string(configContent))
+		return nil, E.Cause(err, "decode config")
 	}
 	return &options, nil
 }

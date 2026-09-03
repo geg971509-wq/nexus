@@ -330,6 +330,7 @@ Item {
         anchors.top: parent.top
         height: 1
         color: root.sep
+        visible: root.open
     }
 
     MouseArea {
@@ -427,8 +428,7 @@ Item {
                     height: 26
                     hoverEnabled: true
                     Accessible.name: root.t("title.logClear")
-                    ToolTip.visible: hovered
-                    ToolTip.text: root.t("title.logClear")
+                    Tip { text: root.t("title.logClear") }
                     onClicked: root.clearLog()
                     background: Rectangle {
                         radius: 6
@@ -464,8 +464,7 @@ Item {
                     hoverEnabled: true
                     Accessible.name: root.open ? root.t("title.dockCollapse") : root.t("title.dockExpand")
                     Accessible.checked: root.open
-                    ToolTip.visible: hovered
-                    ToolTip.text: root.open ? root.t("title.dockCollapse") : root.t("title.dockExpand")
+                    Tip { text: root.open ? root.t("title.dockCollapse") : root.t("title.dockExpand") }
                     onClicked: root.setOpen(!root.open)
                     background: Rectangle {
                         radius: 6

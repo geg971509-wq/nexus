@@ -235,9 +235,10 @@ Item {
 
                                 Column {
                                     id: editorColumn
+                                    anchors.left: rowLabel.right
+                                    anchors.leftMargin: 16
                                     anchors.right: parent.right
                                     anchors.top: parent.top
-                                    width: parent.width - 156
                                     spacing: 5
 
                                     Text {

@@ -167,7 +167,10 @@ fn tun_if_from_core_log() -> Option<String> {
                 .chars()
                 .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
                 .collect();
-            if name.starts_with("utun") && crate::firewall::is_safe_ifname(&name) && if_exists(&name) {
+            if name.starts_with("utun")
+                && crate::firewall::is_safe_ifname(&name)
+                && if_exists(&name)
+            {
                 last = Some(name);
             }
         }

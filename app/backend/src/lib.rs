@@ -29,12 +29,10 @@ pub(crate) use catalog::{
 };
 pub(crate) use diagnostics::{
     core_url_test_current, core_url_test_stop, exit_ip_probe, firewall_helper_install,
-    firewall_helper_uninstall, firewall_status, net_tcp_probe_stop, query_connections, query_stats,
-    require_tunnel_idle,
+    firewall_helper_uninstall, firewall_status, net_tcp_probe_stop, query_connections,
+    query_runtime_metrics, query_stats, require_tunnel_idle,
 };
 pub(crate) use preferences::{set_system_proxy_cmd_sync, set_tun_cmd_sync};
 pub(crate) use quit::{prepare_quit, teardown_session, tunnel_is_live};
 pub(crate) use subscription_commands::{sub_fetch_sync, sub_parse_clash, sub_parse_share};
-pub(crate) use tunnel_runtime::{
-    connect_selected_sync, disconnect_selected_sync, session_status,
-};
+pub(crate) use tunnel_runtime::{connect_selected_sync, disconnect_selected_sync, session_status};

@@ -18,20 +18,6 @@ fn is_http_url(url: &str) -> bool {
         && (scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https"))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::is_http_url;
-
-    #[test]
-    fn subscription_url_is_http_only_and_has_no_whitespace() {
-        assert!(is_http_url("https://example.com/sub"));
-        assert!(is_http_url("HTTP://example.com/sub"));
-        assert!(!is_http_url("ftp://example.com/sub"));
-        assert!(!is_http_url("https://"));
-        assert!(!is_http_url("https://example.com/a b"));
-    }
-}
-
 /// Fetch subscription body. Returns `{ ok, body, status, error, bytes }`.
 pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
     let url = url.trim();
@@ -104,4 +90,18 @@ pub fn fetch(url: &str) -> Result<serde_json::Value, String> {
         "bytes": bytes,
         "url": url,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_http_url;
+
+    #[test]
+    fn subscription_url_is_http_only_and_has_no_whitespace() {
+        assert!(is_http_url("https://example.com/sub"));
+        assert!(is_http_url("HTTP://example.com/sub"));
+        assert!(!is_http_url("ftp://example.com/sub"));
+        assert!(!is_http_url("https://"));
+        assert!(!is_http_url("https://example.com/a b"));
+    }
 }

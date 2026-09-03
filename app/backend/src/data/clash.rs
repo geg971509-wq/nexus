@@ -21,7 +21,8 @@ pub struct ClashNode {
 /// Returns `(nodes, skipped_types)` — see [`crate::data::share_link::parse_share_body`]
 /// for why the skipped half is reported rather than folded into a smaller count.
 pub fn parse_clash_yaml(body: &str) -> Result<(Vec<ClashNode>, Vec<String>), String> {
-    let root: Value = serde_yaml::from_str(body).map_err(|e| format!("Clash YAML parse error: {e}"))?;
+    let root: Value =
+        serde_yaml::from_str(body).map_err(|e| format!("Clash YAML parse error: {e}"))?;
     let Some(proxies) = root.get("proxies").and_then(|v| v.as_array()) else {
         return Ok((Vec::new(), Vec::new()));
     };
@@ -262,10 +263,7 @@ fn tls_from_clash(p: &Value, force_enabled: bool) -> Option<Value> {
         tls.insert("disable_sni".into(), json!(true));
     }
     if !fp.is_empty() {
-        tls.insert(
-            "utls".into(),
-            json!({ "enabled": true, "fingerprint": fp }),
-        );
+        tls.insert("utls".into(), json!({ "enabled": true, "fingerprint": fp }));
     }
     if !pbk.is_empty() {
         let mut r = Map::new();
@@ -388,11 +386,9 @@ fn transport_from_clash(p: &Value) -> Option<Value> {
                 if let Some(host_v) = hdrs.get("Host") {
                     let host = match host_v {
                         Value::String(s) => s.clone(),
-                        Value::Array(a) => a
-                            .first()
-                            .and_then(|x| x.as_str())
-                            .unwrap_or("")
-                            .to_string(),
+                        Value::Array(a) => {
+                            a.first().and_then(|x| x.as_str()).unwrap_or("").to_string()
+                        }
                         _ => String::new(),
                     };
                     if !host.is_empty() {
@@ -631,8 +627,7 @@ fn any_to_mbps(raw: &str) -> i64 {
     if let Ok(n) = s.parse::<i64>() {
         return n;
     }
-    let re = regex_lite_num_unit(s);
-    re
+    regex_lite_num_unit(s)
 }
 
 /// Minimal unit parse without new crate (Throne regex ^(\d+)([KMGT]?)([Bb]?)).
@@ -691,7 +686,7 @@ fn parse_hysteria(p: &Value, clash_ty: &str) -> Result<Value, String> {
     let ports = s(p, "ports");
     if !ports.is_empty() {
         let arr: Vec<String> = ports
-            .split(|c| c == ',' || c == '/')
+            .split([',', '/'])
             .map(|x| x.trim().to_string())
             .filter(|x| !x.is_empty())
             .collect();

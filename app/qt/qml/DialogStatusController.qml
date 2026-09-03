@@ -8,7 +8,7 @@ QtObject {
     readonly property var home: host.home
 
     property var stats: ({
-        core: "—", conn: "—", proxy: "—", direct: "—",
+        core: "—", proxy: "—",
         uptime: "—", ip: "—", country: "—", next: "—"
     })
     property string exportText: ""
@@ -38,10 +38,9 @@ QtObject {
         } else if (d && d.process_alive) {
             core = t("stats.coreAliveIdle")
         }
-        var proxy = "—", direct = "—"
+        var proxy = "—"
         if (live && win) {
             if (win.sbProxy && win.sbProxy !== "—") proxy = win.sbProxy
-            if (win.sbDirect && win.sbDirect !== "—") direct = win.sbDirect
         }
         var ip = "—", country = "—"
         if (live) {
@@ -64,9 +63,7 @@ QtObject {
         }
         stats = {
             core: core,
-            conn: "—",
             proxy: live ? proxy : "—",
-            direct: live ? direct : "—",
             uptime: uptime,
             ip: ip,
             country: country,

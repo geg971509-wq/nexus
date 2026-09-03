@@ -10,6 +10,7 @@ Full license texts:
 | License | Path |
 |---------|------|
 | GPLv3 | [`licenses/GPL-3.0.txt`](licenses/GPL-3.0.txt) |
+| LGPLv3 | [`licenses/LGPL-3.0.txt`](licenses/LGPL-3.0.txt) |
 | MPL-2.0 | [`licenses/MPL-2.0.txt`](licenses/MPL-2.0.txt) |
 
 ## How Nexus uses them
@@ -64,7 +65,7 @@ Nexus does not bundle Xray Core.
 
 | Module | License | Notes |
 |--------|---------|--------|
-| `github.com/juju/ratelimit` | LGPLv3 | transitive; dynamic-link style obligations differ—still notice it |
+| `github.com/juju/ratelimit` | LGPLv3 | transitive Go dependency |
 
 ---
 
@@ -117,7 +118,7 @@ Product GUI is Qt Quick (`app/qt`):
 
 | Component | License | Notes |
 |-----------|---------|--------|
-| Qt 6.11 (`Quick`, `QuickControls2`, `Widgets`, `Svg`, `Gui`) | LGPLv3 | Dynamically linked. https://www.qt.io/licensing |
+| Qt 6.11 runtime modules deployed by `macdeployqt` | LGPLv3 | Dynamically linked; the exact frameworks/plugins/QML files are recorded in the build-generated `BUNDLE_INVENTORY.txt`. https://www.qt.io/licensing |
 | `quirc` | ISC-style | QR image decoder; source is vendored under `app/qt/third_party/quirc` |
 
 The Rust engine links directly into the Qt host through its C ABI. Tokio supplies
@@ -146,7 +147,8 @@ THIS SOFTWARE.
 When you give someone `Nexus.app` or `NexusCore`:
 
 1. This file (`THIRD_PARTY_NOTICES.md`) or an equivalent notice.
-2. `licenses/GPL-3.0.txt` and `licenses/MPL-2.0.txt` (or URLs plus offer).
+2. `licenses/GPL-3.0.txt`, `licenses/LGPL-3.0.txt`, and
+   `licenses/MPL-2.0.txt`.
 3. **Corresponding Source** for the exact NexusCore you built (git tag/commit,
    `core/server`, root `build.sh` / documented build steps, and any applied
    patches such as the darwin ProcessID patch).

@@ -27,7 +27,10 @@ pub fn sanitize_dns_bootstrap(raw: &[String]) -> Vec<String> {
         .cloned()
         .collect();
     if v.is_empty() {
-        DEFAULT_DNS_BOOTSTRAP.iter().map(|s| s.to_string()).collect()
+        DEFAULT_DNS_BOOTSTRAP
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
     } else {
         v
     }

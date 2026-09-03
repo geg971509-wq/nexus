@@ -51,6 +51,52 @@ fn wait_helper_ping(budget: Duration) -> bool {
     }
 }
 
+fn sha256_file(path: &Path) -> Result<String, String> {
+    let out = Command::new("/usr/bin/shasum")
+        .args(["-a", "256"])
+        .arg(path)
+        .output()
+        .map_err(|e| format!("hash {}: {e}", path.display()))?;
+    if !out.status.success() {
+        return Err(format!(
+            "hash {}: {}",
+            path.display(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let digest = String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(format!("invalid sha256 for {}", path.display()));
+    }
+    Ok(digest)
+}
+
+fn helper_install_shell(src_bin: &Path, expected_sha256: &str, my_uid: u32) -> String {
+    let q_src = shq(&src_bin.to_string_lossy());
+    let q_dest = shq(HELPER_PATH);
+    let q_plist = shq(PLIST_PATH);
+    let q_plist_body = shq(&plist_body(HELPER_PATH));
+    format!(
+        "/bin/mkdir -p /Library/PrivilegedHelperTools /Library/LaunchDaemons && \
+         /bin/cp -f {q_src} {q_dest}.new && \
+         actual=$(/usr/bin/shasum -a 256 {q_dest}.new | /usr/bin/cut -d ' ' -f 1) && \
+         {{ /bin/test \"$actual\" = {expected_sha256} || {{ /bin/rm -f {q_dest}.new; exit 1; }}; }} && \
+         /usr/sbin/chown root:wheel {q_dest}.new && /bin/chmod 755 {q_dest}.new && \
+         /usr/bin/printf '%s' {q_plist_body} > {q_plist}.new && /usr/sbin/chown root:wheel {q_plist}.new && /bin/chmod 644 {q_plist}.new && \
+         /usr/bin/printf '%s\\n' {my_uid} > /var/run/nexusfwd.allow.new && /usr/sbin/chown root:wheel /var/run/nexusfwd.allow.new && /bin/chmod 644 /var/run/nexusfwd.allow.new && \
+         /usr/bin/touch {LOG_PATH} && /usr/sbin/chown root:wheel {LOG_PATH} && /bin/chmod 600 {LOG_PATH} && \
+         (/bin/launchctl bootout system/{PLIST_LABEL} >/dev/null 2>&1 || true) && \
+         /bin/mv -f {q_dest}.new {q_dest} && /bin/mv -f {q_plist}.new {q_plist} && /bin/mv -f /var/run/nexusfwd.allow.new /var/run/nexusfwd.allow && \
+         /bin/launchctl bootstrap system {q_plist} && \
+         /bin/launchctl enable system/{PLIST_LABEL} && \
+         /bin/launchctl kickstart -k system/{PLIST_LABEL}"
+    )
+}
+
 pub fn ensure_helper_ready() -> Result<(), String> {
     if wait_helper_ping(Duration::from_millis(0)) {
         return Ok(());
@@ -72,34 +118,9 @@ pub fn install_helper(src_bin: &Path) -> Result<(), String> {
     if !src_bin.is_file() {
         return Err(format!("NexusFwD source missing: {}", src_bin.display()));
     }
-    let plist = plist_body(HELPER_PATH);
-    let tmp_plist = crate::paths::data_dir().join("app.nexus.firewall.plist");
-    if let Some(p) = tmp_plist.parent() {
-        let _ = fs::create_dir_all(p);
-    }
-    fs::write(&tmp_plist, plist).map_err(|e| format!("write plist: {e}"))?;
-
-    // L1: installer uid → /var/run/nexusfwd.allow for socket peer allowlist
     let my_uid = unsafe { libc::getuid() };
-    let allow_tmp = crate::paths::data_dir().join("nexusfwd.allow");
-    fs::write(&allow_tmp, format!("{my_uid}\n")).map_err(|e| format!("write allow: {e}"))?;
-
-    let q_src = shq(&src_bin.to_string_lossy());
-    let q_dest = shq(HELPER_PATH);
-    let q_plist_src = shq(&tmp_plist.to_string_lossy());
-    let q_plist = shq(PLIST_PATH);
-    let q_allow_src = shq(&allow_tmp.to_string_lossy());
-    let shell = format!(
-        "/bin/mkdir -p /Library/PrivilegedHelperTools /Library/LaunchDaemons && \
-         /bin/cp -f {q_src} {q_dest} && /usr/sbin/chown root:wheel {q_dest} && /bin/chmod 755 {q_dest} && \
-         /bin/cp -f {q_plist_src} {q_plist} && /usr/sbin/chown root:wheel {q_plist} && /bin/chmod 644 {q_plist} && \
-         /bin/cp -f {q_allow_src} /var/run/nexusfwd.allow && /usr/sbin/chown root:wheel /var/run/nexusfwd.allow && /bin/chmod 644 /var/run/nexusfwd.allow && \
-         /usr/bin/touch {LOG_PATH} && /usr/sbin/chown root:wheel {LOG_PATH} && /bin/chmod 600 {LOG_PATH} && \
-         /bin/launchctl bootout system/{PLIST_LABEL} >/dev/null 2>&1; \
-         /bin/launchctl bootstrap system {q_plist} && \
-         /bin/launchctl enable system/{PLIST_LABEL} && \
-         /bin/launchctl kickstart -k system/{PLIST_LABEL}"
-    );
+    let expected_sha256 = sha256_file(src_bin)?;
+    let shell = helper_install_shell(src_bin, &expected_sha256, my_uid);
     run_admin(&shell)?;
     // Poll sock ready (was fixed 300ms) — first install often answers in <100ms.
     if wait_helper_ping(Duration::from_millis(1500)) {
@@ -150,12 +171,8 @@ fn rpc(req: &Request) -> Result<(), String> {
 
 fn rpc_raw(req: &Request) -> Result<Response, String> {
     let mut stream = UnixStream::connect(SOCK).map_err(|e| format!("connect helper: {e}"))?;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(15)))
-        .ok();
-    stream
-        .set_write_timeout(Some(Duration::from_secs(15)))
-        .ok();
+    stream.set_read_timeout(Some(Duration::from_secs(15))).ok();
+    stream.set_write_timeout(Some(Duration::from_secs(15))).ok();
     let line = serde_json::to_string(req).map_err(|e| e.to_string())?;
     stream
         .write_all(line.as_bytes())
@@ -243,5 +260,42 @@ pub fn helper_binary_stale(src: &Path) -> bool {
     match (smeta.modified(), dmeta.modified()) {
         (Ok(s), Ok(d)) => s > d,
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn helper_install_pins_binary_and_generates_root_metadata() {
+        let digest = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+        let shell = helper_install_shell(Path::new("/tmp/nexusfwd"), digest, 501);
+        let data_dir = crate::paths::data_dir().to_string_lossy().into_owned();
+
+        assert!(
+            shell.contains("/usr/bin/shasum -a 256") && shell.contains(digest),
+            "helper staging copy must be pinned to the pre-auth digest: {shell}"
+        );
+        assert!(
+            shell.contains("/bin/test") && !shell.contains("/usr/bin/test"),
+            "digest compare must use /bin/test (no /usr/bin/test on current macOS): {shell}"
+        );
+        assert!(
+            !shell.contains(&data_dir),
+            "root install must not reopen user-writable staging paths: {shell}"
+        );
+        assert!(
+            shell.contains("<key>ProgramArguments</key>") && shell.contains("501"),
+            "plist and allow UID must be generated by the elevated script: {shell}"
+        );
+        assert!(
+            Command::new("/bin/sh")
+                .args(["-n", "-c", &shell])
+                .status()
+                .unwrap()
+                .success(),
+            "invalid elevated shell: {shell}"
+        );
     }
 }

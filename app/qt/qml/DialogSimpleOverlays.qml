@@ -87,9 +87,7 @@ Item {
                     Repeater {
                         model: [
                             { k: "stats.core", v: "core" },
-                            { k: "dock.conn", v: "conn" },
                             { k: "Proxy", v: "proxy" },
-                            { k: "Direct", v: "direct" },
                             { k: "stats.uptime", v: "uptime" },
                             { k: "stats.exitIp", v: "ip" },
                             { k: "stats.country", v: "country" },

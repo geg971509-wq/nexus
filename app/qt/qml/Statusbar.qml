@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Window
 
 Item {
@@ -15,9 +14,9 @@ Item {
     readonly property var fonts: th ? th.fontFamilies : ["PingFang SC"]
     readonly property var mono: th ? th.monoFamilies : ["Menlo"]
     readonly property color chrome: th ? th.chromeSolid : "#fafafc"
-    readonly property color sep: th ? th.separator : "#1e3c3c43"
     readonly property color tertiary: th ? th.tertiary : "#8e8e93"
     readonly property color secondary: th ? th.secondary : "#6e6e73"
+    readonly property color sep: th ? th.separator : "#1e3c3c43"
 
     function t(k) { return i18 ? i18.t(k) : k }
 
@@ -25,6 +24,7 @@ Item {
         anchors.fill: parent
         color: root.chrome
     }
+
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
@@ -56,8 +56,7 @@ Item {
             font.pixelSize: 11
             font.weight: Font.Medium
             Accessible.name: root.t("title.sbMixed")
-            ToolTip.visible: mixedHover.containsMouse
-            ToolTip.text: root.t("title.sbMixed")
+            Tip { active: mixedHover.containsMouse; text: root.t("title.sbMixed") }
             MouseArea {
                 id: mixedHover
                 anchors.fill: parent
@@ -66,29 +65,16 @@ Item {
             }
         }
 
-        Row {
+        Text {
             anchors.right: parent.right
             anchors.rightMargin: 14
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 14
-            Text {
-                text: root.t("sb.proxy") + "  " + (root.win ? root.win.sbProxy : "—")
-                color: root.tertiary
-                font.family: root.fonts[0]
-                font.pixelSize: 11
-                ToolTip.visible: pHover.containsMouse
-                ToolTip.text: root.t("title.sbProxy")
-                MouseArea { id: pHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
-            }
-            Text {
-                text: root.t("sb.direct") + "  " + (root.win ? root.win.sbDirect : "—")
-                color: root.tertiary
-                font.family: root.fonts[0]
-                font.pixelSize: 11
-                ToolTip.visible: dHover.containsMouse
-                ToolTip.text: root.t("title.sbDirect")
-                MouseArea { id: dHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
-            }
+            text: root.t("sb.proxy") + "  " + (root.win ? root.win.sbProxy : "—")
+            color: root.tertiary
+            font.family: root.fonts[0]
+            font.pixelSize: 11
+            Tip { active: pHover.containsMouse; text: root.t("title.sbProxy") }
+            MouseArea { id: pHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
         }
     }
 }

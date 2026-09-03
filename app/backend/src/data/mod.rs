@@ -1,7 +1,7 @@
 pub mod clash;
 pub mod generate;
-pub mod store;
 pub mod share_link;
+pub mod store;
 pub mod vless_compat;
 
 /// Protocol label for an entry the parsers had to drop, so the import can say

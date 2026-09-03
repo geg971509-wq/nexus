@@ -16,6 +16,8 @@ use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
+#[cfg(test)]
+use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -24,6 +26,14 @@ use std::time::{Duration, Instant};
 /// a later begin_probe_batch() issues a higher id and is live again (no global sticky flag).
 static NEXT_BATCH: AtomicU64 = AtomicU64::new(1);
 static ABORTED_THROUGH: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(test)]
+pub(crate) fn probe_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
 
 /// Start a new probe batch; returns id. Concurrent batches stay live until abort.
 pub fn begin_probe_batch() -> u64 {
@@ -167,7 +177,7 @@ fn physical_ifindex() -> Option<u32> {
                 continue;
             }
             let flags = ifa.ifa_flags as i32;
-            if flags & libc::IFF_UP as i32 == 0 || flags & libc::IFF_LOOPBACK as i32 != 0 {
+            if flags & libc::IFF_UP == 0 || flags & libc::IFF_LOOPBACK != 0 {
                 continue;
             }
             if ifa.ifa_name.is_null() {
@@ -560,7 +570,9 @@ pub fn probe_json(
     concurrency: usize,
 ) -> serde_json::Value {
     let results = probe_batch(&targets, timeout_ms, concurrency);
-    let aborted = results.iter().any(|r| r.error.as_deref() == Some("aborted"));
+    let aborted = results
+        .iter()
+        .any(|r| r.error.as_deref() == Some("aborted"));
     json!({ "results": results, "aborted": aborted })
 }
 
@@ -568,15 +580,6 @@ pub fn probe_json(
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::sync::{Mutex, OnceLock};
-
-    /// Global batch atomics are process-wide; serialize tests that touch them.
-    fn probe_test_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-    }
 
     #[test]
     fn probe_localhost_or_fail_honest() {
@@ -650,7 +653,14 @@ mod tests {
         let _g = probe_test_lock();
         let id = begin_probe_batch();
         abort_probes();
-        let r = one_probe("x".into(), "127.0.0.1".into(), 1, Duration::from_millis(100), None, id);
+        let r = one_probe(
+            "x".into(),
+            "127.0.0.1".into(),
+            1,
+            Duration::from_millis(100),
+            None,
+            id,
+        );
         assert!(!r.ok);
         assert_eq!(r.error.as_deref(), Some("aborted"));
     }
