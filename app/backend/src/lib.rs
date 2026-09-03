@@ -34,6 +34,6 @@ pub(crate) use diagnostics::{
     query_runtime_metrics, query_stats, require_tunnel_idle,
 };
 pub(crate) use preferences::{set_system_proxy_cmd_sync, set_tun_cmd_sync};
-pub(crate) use quit::{prepare_quit, teardown_session, tunnel_is_live};
+pub(crate) use quit::{prepare_quit, teardown_session};
 pub(crate) use subscription_commands::{sub_fetch_sync, sub_parse_clash, sub_parse_share};
 pub(crate) use tunnel_runtime::{connect_selected_sync, disconnect_selected_sync, session_status};
