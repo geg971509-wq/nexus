@@ -1,35 +1,40 @@
-name: Audit refresh Go checksums
+name: Audit normalize Stage 2
 
 on:
   push:
-    branches: [audit/release-hardening-20260903]
+    branches: [audit/network-restore-stage2]
 
 permissions:
   contents: write
 
 jobs:
-  refresh:
+  normalize:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: audit/release-hardening-20260903
+          ref: audit/network-restore-stage2
       - uses: actions/setup-go@v5
         with:
           go-version-file: core/server/go.mod
           cache: false
-      - name: Refresh module checksums
+      - uses: dtolnay/rust-toolchain@1.94.0
+        with:
+          components: rustfmt
+      - name: Refresh complete module checksums
         working-directory: core/server
-        run: go mod download
-      - name: Commit generated go.sum
+        run: go mod download all
+      - name: Format Rust sources
+        working-directory: app/backend
+        run: cargo fmt --all
+      - name: Commit normalized files
         run: |
-          git diff -- core/server/go.sum
-          git add core/server/go.sum
+          git add core/server/go.sum app/backend/src
           if git diff --cached --quiet; then
-            echo "go.sum already current"
+            echo "generated files already normalized"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "deps: refresh Go checksums"
-          git push origin HEAD:audit/release-hardening-20260903
+          git commit -m "chore: normalize stage2 generated files"
+          git push origin HEAD:audit/network-restore-stage2
