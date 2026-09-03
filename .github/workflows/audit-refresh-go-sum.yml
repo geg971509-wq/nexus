@@ -18,9 +18,9 @@ jobs:
         with:
           go-version-file: core/server/go.mod
           cache: false
-      - name: Refresh module checksums
+      - name: Refresh complete module checksums
         working-directory: core/server
-        run: go mod download
+        run: go mod download all
       - name: Commit generated go.sum
         run: |
           git diff -- core/server/go.sum
