@@ -42,9 +42,9 @@ per-network-service values are stored transactionally in
 `~/Library/Application Support/Nexus/network-recovery.json` with mode `0600`.
 The relevant snapshot is removed after a successful disconnect/rollback/quit
 restore. If Nexus terminates abnormally, the next launch repairs the pending
-snapshot before the Qt event loop accepts new connection actions. Authenticated
-manual proxies are not overwritten because macOS does not expose enough
-credential material for an exact restoration.
+snapshot after acquiring the single-instance lock and before loading QML.
+Authenticated manual proxies are not overwritten because macOS does not expose
+enough credential material for an exact restoration.
 
 ## Layout
 
@@ -56,7 +56,7 @@ credential material for an exact restoration.
 - `app/backend/src/network_restore.rs` — transactional Proxy/PAC/DNS snapshot + restore
 - `app/assets/icons/` — application and tray icon assets
 - `core/server/` — Go core (`module NexusCore`, **GPLv3** combined work)
-- `licenses/` — full GPLv3 / MPL-2.0 texts
+- `licenses/` — full GPLv3 / LGPLv3 / MPL-2.0 texts
 - `THIRD_PARTY_NOTICES.md` — third-party inventory
 - `archive/` — former HTML GUI and Windows pack scripts (not built)
 - `bin/` — build outputs (gitignored)
