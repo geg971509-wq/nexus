@@ -127,6 +127,24 @@ int main(int argc, char *argv[]) {
     nexus_set_event_cb(on_event);
     nexus_set_tray_visible_cb(on_tray_visible);
     nexus_set_spinning_cb(on_spinning);
+
+    // Repair a crash-abandoned Proxy/PAC/DNS transaction before normal backend
+    // initialization and before QML Component.onCompleted handlers can run. If
+    // exact recovery fails, do not expose UI that could start another network
+    // transaction on top of the unresolved snapshot.
+    char *recoveryRaw = nexus_recover_startup();
+    const QByteArray recoveryBytes(recoveryRaw ? recoveryRaw : "{}");
+    nexus_free(recoveryRaw);
+    const QJsonObject recovery = QJsonDocument::fromJson(recoveryBytes).object();
+    if (!recovery.value(QLatin1String("ok")).toBool()) {
+        const QString error = recovery.value(QLatin1String("error"))
+                                  .toString(QStringLiteral("unknown startup recovery error"));
+        fprintf(stderr, "nexus: startup network recovery failed: %s\n", qPrintable(error));
+        unregisterBackendCallbacks();
+        g_bridge.store(nullptr, std::memory_order_release);
+        return 1;
+    }
+
     nexus_init();
 
     QQmlApplicationEngine engine;
