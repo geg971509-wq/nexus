@@ -13,6 +13,7 @@
 #include <QWindow>
 #include <atomic>
 #include <cstdio>
+#include <sys/stat.h>
 
 // Rust invokes these callbacks from worker threads. Atomic publication removes
 // the C++ data race on the callback targets; the objects themselves outlive the
@@ -95,6 +96,11 @@ static void unregisterBackendCallbacks() {
 }
 
 int main(int argc, char *argv[]) {
+    // The shell creates the user store and spawns Core, which creates cache/log
+    // files recording network activity. Keep private-by-default permissions even
+    // if a later best-effort chmod of the containing directory cannot be applied.
+    ::umask(0077);
+
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
     NexusApp app(argc, argv);
     app.setApplicationName(QStringLiteral("Nexus"));
