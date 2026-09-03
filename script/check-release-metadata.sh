@@ -55,7 +55,9 @@ grep -Fq '| Bundle ID | `'$identifier'` |' "$README" \
   || { echo "Info.plist minimum system '$plist_min_system' does not match CMake deployment target ($deployment_target)" >&2; exit 1; }
 readme_macos_major="${deployment_target%%.*}"
 grep -Fq '| macOS '"$readme_macos_major"'+ | arm64 |' "$README" \
-  || { echo "README macOS minimum does not match deployment target ($deployment_target)" >&2; exit 1; }
+  || { echo "README platform table does not match deployment target ($deployment_target)" >&2; exit 1; }
+grep -Fq 'Requires: macOS '"$readme_macos_major"' or newer,' "$README" \
+  || { echo "README build requirements do not match deployment target ($deployment_target)" >&2; exit 1; }
 
 printf 'release metadata: version=%s bundle_id=%s macos=%s+\n' \
   "$version" "$identifier" "$deployment_target"
