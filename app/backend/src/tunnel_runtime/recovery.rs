@@ -1,16 +1,20 @@
-use super::side_effects::clear_dns_bootstrap_with;
 use crate::{
     core::session::SESSION,
-    firewall,
+    firewall, network_restore,
     session_access::{
         action_is_current, bump_connect_gen, commit_if_action_current, commit_if_current,
         current_connect_gen,
     },
-    sys, tray_spin, tun_if, tunnel_sm,
+    tray_spin, tun_if, tunnel_sm,
 };
 
-pub(super) fn fail_connecting(gen: u64, p: &tunnel_sm::ConnectParams, msg: String) -> String {
-    let reported = msg.clone();
+pub(super) fn fail_connecting(
+    action_gen: u64,
+    gen: u64,
+    p: &tunnel_sm::ConnectParams,
+    msg: String,
+) -> String {
+    let mut reported = msg.clone();
     let Some((true, mut session)) = commit_if_current(gen, || {
         if tunnel_sm::state() != tunnel_sm::State::Connecting {
             return (false, None);
@@ -27,6 +31,9 @@ pub(super) fn fail_connecting(gen: u64, p: &tunnel_sm::ConnectParams, msg: Strin
     if let Some(s) = session.as_mut() {
         let _ = s.stop_rpc();
         let _ = s.stop_core_process();
+    }
+    if let Some(Err(e)) = network_restore::restore_all_if(|| action_is_current(action_gen)) {
+        reported.push_str(&format!("; restore system network: {e}"));
     }
     reported
 }
@@ -54,13 +61,7 @@ pub(super) fn fail_connected(
         let _ = s.stop_rpc();
         let _ = s.stop_core_process();
     }
-    let _ = sys::with_system_network_change_if(
-        || action_is_current(action_gen),
-        |network| {
-            let _ = network.set_system_proxy(false, p.mixed_port);
-            let _ = clear_dns_bootstrap_with(network);
-        },
-    );
+    let _ = network_restore::restore_all_if(|| action_is_current(action_gen));
     true
 }
 

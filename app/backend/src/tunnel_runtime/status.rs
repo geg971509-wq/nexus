@@ -1,10 +1,9 @@
-use super::side_effects::clear_dns_bootstrap_with;
 use crate::{
     core::session::{CoreSession, SESSION},
     defaults::MIXED_PORT,
-    firewall, runtime,
+    firewall, network_restore, runtime,
     session_access::{commit_if_current, current_connect_gen, reinstall_poll_session},
-    sys, tray_spin, tunnel_sm,
+    tray_spin, tunnel_sm,
 };
 
 pub(crate) async fn session_status() -> Result<serde_json::Value, String> {
@@ -56,16 +55,14 @@ pub(crate) async fn session_status() -> Result<serde_json::Value, String> {
         })
         .unwrap_or(false);
         if core_lost {
-            if let Some((proxy_error, dns_error)) = sys::with_system_network_change_if(
-                || gen != 0 && gen == current_connect_gen(),
-                |network| {
-                    let proxy_error = network.set_system_proxy(false, MIXED_PORT).err();
-                    let dns_error = clear_dns_bootstrap_with(network).err();
-                    (proxy_error, dns_error)
-                },
-            ) {
-                system_proxy_err = proxy_error;
-                system_dns_err = dns_error;
+            if let Some(Err(e)) = network_restore::restore_all_if(|| {
+                gen != 0 && gen == current_connect_gen()
+            }) {
+                // Preserve the existing response fields for UI compatibility.
+                // The recovery transaction is atomic by category, so one shared
+                // error explains why Proxy/PAC and/or DNS still need retrying.
+                system_proxy_err = Some(format!("restore system network: {e}"));
+                system_dns_err = Some(format!("restore system network: {e}"));
             }
         }
         Ok(serde_json::json!({

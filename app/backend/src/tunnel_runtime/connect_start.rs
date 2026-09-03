@@ -51,7 +51,14 @@ pub(super) fn start_core(
     });
     let mut session = match session_setup {
         Some(Ok(session)) => session,
-        Some(Err(e)) => return Err(fail_connecting(prepared.connect_gen, &prepared.params, e)),
+        Some(Err(e)) => {
+            return Err(fail_connecting(
+                action_gen,
+                prepared.connect_gen,
+                &prepared.params,
+                e,
+            ))
+        }
         None => return Err("connect superseded".into()),
     };
 
@@ -59,7 +66,12 @@ pub(super) fn start_core(
         Ok(e) => e,
         Err(e) => {
             let _ = put_session_back(session, prepared.connect_gen);
-            return Err(fail_connecting(prepared.connect_gen, &prepared.params, e));
+            return Err(fail_connecting(
+                action_gen,
+                prepared.connect_gen,
+                &prepared.params,
+                e,
+            ));
         }
     };
     if let Some(ref e) = start_err {
@@ -73,7 +85,12 @@ pub(super) fn start_core(
                 Ok(e) => e,
                 Err(e) => {
                     let _ = put_session_back(session, prepared.connect_gen);
-                    return Err(fail_connecting(prepared.connect_gen, &prepared.params, e));
+                    return Err(fail_connecting(
+                        action_gen,
+                        prepared.connect_gen,
+                        &prepared.params,
+                        e,
+                    ));
                 }
             };
         }
@@ -81,7 +98,7 @@ pub(super) fn start_core(
     if let Some(msg) = start_err {
         let _ = put_session_back(session, prepared.connect_gen);
         return Ok(StartOutcome::Failed {
-            error: fail_connecting(prepared.connect_gen, &prepared.params, msg),
+            error: fail_connecting(action_gen, prepared.connect_gen, &prepared.params, msg),
         });
     }
 
@@ -94,6 +111,7 @@ pub(super) fn start_core(
     }
     if current_connect_gen() == prepared.connect_gen {
         let _ = fail_connecting(
+            action_gen,
             prepared.connect_gen,
             &prepared.params,
             "session not owned after start".into(),

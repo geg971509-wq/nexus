@@ -3,33 +3,75 @@
 use crate::{
     core::session::{CoreSession, SESSION},
     defaults::MIXED_PORT,
-    sys,
+    network_restore, tunnel_sm,
 };
 
-/// Persist chip intent; OS apply only when Core is running (or always on disable).
+/// Persist the system-proxy chip. The OS is changed only while a Core profile is
+/// stably Connected; an idle preference toggle must never disable or overwrite
+/// unrelated proxy/PAC configuration owned by the user or another application.
 pub(crate) fn set_system_proxy_cmd_sync(enabled: bool) -> Result<String, String> {
-    use crate::core::session::SESSION;
     use crate::data::store::Store;
-    // set_spmode_system_proxy: always persist intent; OS write only if profile running.
-    Store::update(|st| {
+
+    let prev = Store::update(|st| {
+        let prev = st.system_proxy;
         st.system_proxy = enabled;
-        Ok(())
+        Ok(prev)
     })?;
     let port = MIXED_PORT;
-    // Short lock: query only — never hold across networksetup.
+    let tunnel_gen = tunnel_sm::current_gen();
+    if tunnel_sm::state() != tunnel_sm::State::Connected {
+        return Ok(format!(
+            "system_proxy intent={} (OS unchanged until a profile is stably connected)",
+            if enabled { "on" } else { "off" }
+        ));
+    }
+
+    // Short lock: query only — never hold SESSION across networksetup.
     let core_running = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         g.as_mut()
             .and_then(|s| s.query_state().ok().map(|(r, _)| r))
             .unwrap_or(false)
     };
-    if enabled && !core_running {
+    if !core_running {
         return Ok(format!(
-            "system_proxy intent=on (OS apply on Start · mixed 127.0.0.1:{port})"
+            "system_proxy intent={} (OS unchanged because Core is not running)",
+            if enabled { "on" } else { "off" }
         ));
     }
-    // enable+running → point OS at mixed; disable → clear OS always (upstream ClearSystemProxy)
-    sys::set_system_proxy(enabled, port)
+
+    let still_same_tunnel = || {
+        tunnel_sm::state() == tunnel_sm::State::Connected
+            && tunnel_sm::current_gen() == tunnel_gen
+    };
+    let result = if enabled {
+        network_restore::apply_proxy_if(still_same_tunnel, port)
+    } else {
+        network_restore::restore_proxy_if(still_same_tunnel).map(|result| {
+            result.map(|note| {
+                note.unwrap_or_else(|| {
+                    "system proxy intent=off · no Nexus-owned proxy state".into()
+                })
+            })
+        })
+    };
+
+    match result {
+        None => Ok(format!(
+            "system_proxy intent={} (OS unchanged because tunnel lifecycle changed)",
+            if enabled { "on" } else { "off" }
+        )),
+        Some(Ok(note)) => Ok(note),
+        Some(Err(e)) => match Store::update(|st| {
+            st.system_proxy = prev;
+            Ok(())
+        }) {
+            Ok(()) => Err(e),
+            Err(store_err) => Err(format!(
+                "{e}; system_proxy preference rollback failed: {store_err}"
+            )),
+        },
+    }
 }
 
 /// Persist Tun chip + elevate Core (osascript password sheet).

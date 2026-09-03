@@ -4,7 +4,10 @@
 extern "C" {
 #endif
 
+// nexus_invoke and nexus_recover_startup return owned UTF-8 strings. Release
+// every non-null returned pointer exactly once with nexus_free.
 char *nexus_invoke(const char *cmd, const char *json);
+char *nexus_recover_startup(void);
 void nexus_free(char *ptr);
 void nexus_teardown(void);
 void nexus_init(void);
