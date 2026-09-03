@@ -37,25 +37,32 @@ pub(super) fn apply_post_start_side_effects(
         || gen != 0 && gen == current_connect_gen(),
         |network| -> Result<Vec<String>, String> {
             let mut notes = Vec::new();
-            let proxy_note = if use_sys_proxy {
-                network
-                    .set_system_proxy(true, port)
-                    .map_err(|e| format!("system proxy failed: {e}"))?
+            if use_sys_proxy {
+                notes.push(
+                    network
+                        .set_system_proxy(true, port)
+                        .map_err(|e| format!("system proxy failed: {e}"))?,
+                );
             } else {
-                match network.set_system_proxy(false, port) {
-                    Ok(m) => m,
-                    Err(e) => format!("clear system proxy: {e}"),
-                }
-            };
-            notes.push(proxy_note);
+                // `false` is ownership-aware: it restores only a proxy/PAC
+                // snapshot Nexus previously captured, and otherwise is a no-op.
+                // This is required when a live connection is restarted from
+                // system-proxy=on to system-proxy=off.
+                notes.push(
+                    network
+                        .set_system_proxy(false, port)
+                        .map_err(|e| format!("restore system proxy: {e}"))?,
+                );
+            }
             if use_tun {
                 DNS_BOOTSTRAP_SET.store(true, Ordering::SeqCst);
-                let dns_note = network
-                    .set_system_dns_bootstrap(true, dns_bootstrap)
-                    .map_err(|e| format!("system dns failed: {e}"))?;
-                notes.push(dns_note);
+                notes.push(
+                    network
+                        .set_system_dns_bootstrap(true, dns_bootstrap)
+                        .map_err(|e| format!("system dns failed: {e}"))?,
+                );
             } else if let Some(dns_note) =
-                clear_dns_bootstrap_with(network).map_err(|e| format!("clear system dns: {e}"))?
+                clear_dns_bootstrap_with(network).map_err(|e| format!("restore system dns: {e}"))?
             {
                 notes.push(dns_note);
             }

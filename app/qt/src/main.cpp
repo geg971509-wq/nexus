@@ -4,43 +4,55 @@
 #include "tray.h"
 
 #include <QApplication>
+#include <QDir>
 #include <QEvent>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
+#include <QStandardPaths>
 #include <QWindow>
+#include <atomic>
 #include <cstdio>
+#include <sys/stat.h>
 
-static Tray *g_tray = nullptr;
-static NexusBridge *g_bridge = nullptr;
+// Rust invokes these callbacks from worker threads. Atomic publication removes
+// the C++ data race on the callback targets; the objects themselves outlive the
+// backend teardown below, so a callback that was already in flight still points
+// at a valid QObject.
+static std::atomic<Tray *> g_tray{nullptr};
+static std::atomic<NexusBridge *> g_bridge{nullptr};
 
 extern "C" {
 static void on_event(const char *name, const char *json) {
-    if (!g_bridge) {
+    NexusBridge *bridge = g_bridge.load(std::memory_order_acquire);
+    if (!bridge) {
         return;
     }
     const QString n = QString::fromUtf8(name ? name : "");
     const QString j = QString::fromUtf8(json ? json : "{}");
     QMetaObject::invokeMethod(
-        g_bridge, [n, j]() { emit g_bridge->event(n, j); }, Qt::QueuedConnection);
+        bridge, [bridge, n, j]() { emit bridge->event(n, j); }, Qt::QueuedConnection);
 }
 
 static void on_tray_visible(bool visible) {
-    if (!g_tray) {
+    Tray *tray = g_tray.load(std::memory_order_acquire);
+    if (!tray) {
         return;
     }
     QMetaObject::invokeMethod(
-        g_tray, [visible]() { g_tray->setVisible(visible); }, Qt::QueuedConnection);
+        tray, [tray, visible]() { tray->setVisible(visible); }, Qt::QueuedConnection);
 }
 
 static void on_spinning(bool spinning) {
-    if (!g_tray) {
+    Tray *tray = g_tray.load(std::memory_order_acquire);
+    if (!tray) {
         return;
     }
     QMetaObject::invokeMethod(
-        g_tray, [spinning]() { g_tray->setSpinning(spinning); }, Qt::QueuedConnection);
+        tray, [tray, spinning]() { tray->setSpinning(spinning); }, Qt::QueuedConnection);
 }
 }
 
@@ -57,8 +69,9 @@ public:
             m_mainWindow->raise();
             m_mainWindow->requestActivate();
         }
-        if (e->type() == QEvent::Quit && g_bridge && !m_allowQuit) {
-            const QString raw = g_bridge->invoke(QStringLiteral("app_quit"), QStringLiteral("{}"));
+        NexusBridge *bridge = g_bridge.load(std::memory_order_acquire);
+        if (e->type() == QEvent::Quit && bridge && !m_allowQuit) {
+            const QString raw = bridge->invoke(QStringLiteral("app_quit"), QStringLiteral("{}"));
             const QJsonObject o = QJsonDocument::fromJson(raw.toUtf8()).object();
             if (!o.value(QLatin1String("quit")).toBool()) {
                 if (m_mainWindow) {
@@ -66,7 +79,7 @@ public:
                     m_mainWindow->raise();
                     m_mainWindow->requestActivate();
                 }
-                g_bridge->requestQuitConfirmation();
+                bridge->requestQuitConfirmation();
                 return true;
             }
             m_allowQuit = true;
@@ -79,20 +92,48 @@ private:
     bool m_allowQuit = false;
 };
 
+static void unregisterBackendCallbacks() {
+    nexus_set_event_cb(nullptr);
+    nexus_set_tray_visible_cb(nullptr);
+    nexus_set_spinning_cb(nullptr);
+}
+
 int main(int argc, char *argv[]) {
+    // The shell creates the user store and spawns Core, which creates cache/log
+    // files recording network activity. Keep private-by-default permissions even
+    // if a later best-effort chmod of the containing directory cannot be applied.
+    ::umask(0077);
+
     qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
     NexusApp app(argc, argv);
     app.setApplicationName(QStringLiteral("Nexus"));
     app.setOrganizationName(QStringLiteral("Nexus"));
     app.setQuitOnLastWindowClosed(false);
 
+    // The recovery journal represents exclusive ownership of the user's system
+    // Proxy/PAC/DNS state. A second process must be rejected before nexus_init()
+    // can inspect or restore that journal. Disable age-only stale detection: a
+    // healthy long-running instance must never lose its lock merely due to age;
+    // QLockFile still detects a dead owning process on the same host.
+    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!QDir().mkpath(appData)) {
+        fprintf(stderr, "nexus: cannot create app data directory for instance lock\n");
+        return 1;
+    }
+    QLockFile instanceLock(QDir(appData).filePath(QStringLiteral("instance.lock")));
+    instanceLock.setStaleLockTime(0);
+    if (!instanceLock.tryLock()) {
+        fprintf(stderr, "nexus: another instance already owns system network state\n");
+        return 0;
+    }
+
+    NexusBridge bridge;
+    g_bridge.store(&bridge, std::memory_order_release);
     nexus_set_event_cb(on_event);
     nexus_set_tray_visible_cb(on_tray_visible);
     nexus_set_spinning_cb(on_spinning);
     nexus_init();
 
-    NexusBridge bridge;
-    g_bridge = &bridge;
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("nexus"), &bridge);
 
@@ -107,7 +148,9 @@ int main(int argc, char *argv[]) {
     engine.load(qml);
     if (engine.rootObjects().isEmpty()) {
         fprintf(stderr, "qml: failed to load %s\n", qPrintable(qml.toString()));
-        g_bridge = nullptr;
+        unregisterBackendCallbacks();
+        nexus_teardown();
+        g_bridge.store(nullptr, std::memory_order_release);
         return 1;
     }
 
@@ -115,7 +158,7 @@ int main(int argc, char *argv[]) {
     app.setMainWindow(win);
     Host host(win);
     Tray tray(win, &bridge);
-    g_tray = &tray;
+    g_tray.store(&tray, std::memory_order_release);
 
     const QString snap = bridge.invoke(QStringLiteral("store_snapshot"), QStringLiteral("{}"));
     const QJsonObject st = QJsonDocument::fromJson(snap.toUtf8()).object();
@@ -124,8 +167,9 @@ int main(int argc, char *argv[]) {
     }
 
     const int rc = app.exec();
-    g_tray = nullptr;
-    g_bridge = nullptr;
+    unregisterBackendCallbacks();
     nexus_teardown();
+    g_tray.store(nullptr, std::memory_order_release);
+    g_bridge.store(nullptr, std::memory_order_release);
     return rc;
 }

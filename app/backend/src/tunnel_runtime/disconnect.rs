@@ -1,4 +1,3 @@
-use super::side_effects::clear_dns_bootstrap_with;
 use crate::{
     core::session::{CoreSession, SESSION},
     defaults::MIXED_PORT,
@@ -44,18 +43,9 @@ pub(crate) fn disconnect_selected_sync(action_gen: u64) -> Result<serde_json::Va
             tunnel_sm::state() == tunnel_sm::State::Disconnecting
                 && tunnel_sm::state_revision_is(disconnect_state_revision)
         },
-        |network| {
-            let mut notes = Vec::new();
-            match network.set_system_proxy(false, MIXED_PORT) {
-                Ok(m) => notes.push(m),
-                Err(e) => notes.push(format!("clear system proxy: {e}")),
-            }
-            match clear_dns_bootstrap_with(network) {
-                Ok(Some(m)) => notes.push(m),
-                Ok(None) => {}
-                Err(e) => notes.push(format!("clear system dns: {e}")),
-            }
-            notes
+        |network| match network.restore_all() {
+            Ok(note) => vec![note],
+            Err(e) => vec![format!("restore system network state: {e}")],
         },
     )
     .unwrap_or_default();

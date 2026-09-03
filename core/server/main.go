@@ -59,13 +59,6 @@ func RunCore() {
 }
 
 func main() {
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Println("Core panicked:")
-			fmt.Println(err)
-			os.Exit(0)
-		}
-	}()
 	fmt.Println("sing-box:", C.Version)
 	fmt.Println()
 	runtimeDebug.SetMemoryLimit(2 * 1024 * 1024 * 1024) // 2GB
@@ -80,6 +73,8 @@ func main() {
 		}
 	}()
 
+	// Do not recover process-level panics as a successful exit. Request-handler
+	// panics are contained by runDispatch; anything escaping to the process is a
+	// real Core failure and must retain a non-zero status for diagnostics.
 	RunCore()
-	return
 }

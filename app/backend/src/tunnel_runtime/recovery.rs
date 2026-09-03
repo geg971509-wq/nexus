@@ -1,4 +1,3 @@
-use super::side_effects::clear_dns_bootstrap_with;
 use crate::{
     core::session::SESSION,
     firewall,
@@ -56,10 +55,7 @@ pub(super) fn fail_connected(
     }
     let _ = sys::with_system_network_change_if(
         || action_is_current(action_gen),
-        |network| {
-            let _ = network.set_system_proxy(false, p.mixed_port);
-            let _ = clear_dns_bootstrap_with(network);
-        },
+        |network| network.restore_all(),
     );
     true
 }

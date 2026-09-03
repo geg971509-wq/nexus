@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 if(CMAKE_HOST_APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum macOS version")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version")
 endif()
 project(nexus-qt LANGUAGES C CXX)
 if(NOT APPLE)
@@ -9,8 +9,8 @@ endif()
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
     message(FATAL_ERROR "Nexus supports Apple Silicon only (got ${CMAKE_SYSTEM_PROCESSOR})")
 endif()
-if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "26.0")
-    message(FATAL_ERROR "Nexus requires CMAKE_OSX_DEPLOYMENT_TARGET 26.0 or newer")
+if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "13.0")
+    message(FATAL_ERROR "Nexus requires CMAKE_OSX_DEPLOYMENT_TARGET 13.0 or newer")
 endif()
 enable_language(OBJCXX)
 
@@ -24,8 +24,9 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-list(PREPEND CMAKE_PREFIX_PATH /opt/homebrew /opt/homebrew/opt/qtbase /opt/homebrew/opt/qtdeclarative /opt/homebrew/opt/qtsvg)
-
+# Keep Qt discovery caller-owned. build.sh passes its selected Qt prefix through
+# CMAKE_PREFIX_PATH, and CI's Qt setup does the same. Hard-coding Homebrew here
+# would silently override NEXUS_QT_HOME when both installations are present.
 find_package(Qt6 6.11 REQUIRED COMPONENTS Quick Widgets Svg Gui QuickControls2)
 
 set(NEXUS_BACKEND_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../backend")

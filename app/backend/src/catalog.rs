@@ -5,8 +5,20 @@ use crate::{
     defaults::{APP_IDENTIFIER, APP_NAME, APP_VERSION, MIXED_PORT},
     runtime,
 };
+use std::sync::OnceLock;
+
+static STARTUP_NETWORK_RECOVERY: OnceLock<Result<(), String>> = OnceLock::new();
 
 pub(crate) fn app_identity() -> serde_json::Value {
+    // app_identity is part of the first UI bootstrap. Recover an abnormal prior
+    // run before the user can start a new tunnel. Failure remains retryable at
+    // the first network write, where ensure_snapshot refuses to overwrite the
+    // stale journal unless restoration succeeds.
+    let _ = STARTUP_NETWORK_RECOVERY.get_or_init(|| {
+        crate::sys::recover_stale_network_state()
+            .map(|_| ())
+            .map_err(|e| format!("startup network recovery: {e}"))
+    });
     serde_json::json!({
         "name": APP_NAME,
         "identifier": APP_IDENTIFIER,
@@ -14,6 +26,7 @@ pub(crate) fn app_identity() -> serde_json::Value {
         "mixed_port": MIXED_PORT,
     })
 }
+
 /// Share-link → SVG QR (offline; for the share-QR dialog).
 pub(crate) fn qr_svg(text: String) -> Result<serde_json::Value, String> {
     let t = text.trim();
@@ -39,14 +52,12 @@ pub(crate) async fn store_snapshot() -> Result<serde_json::Value, String> {
     runtime::spawn_blocking(|| {
         use crate::data::store::Store;
         let st = Store::load();
-        // read-only — never upsert Direct demo (UI catalog is truth)
         serde_json::to_value(&st).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| format!("store_snapshot join: {e}"))?
 }
 
-/// Persist hide_tray. Qt paints the menu-bar icon; this only writes store.json.
 pub(crate) fn persist_hide_tray(hide: bool) -> Result<String, String> {
     use crate::data::store::Store;
     Store::update(|st| {
@@ -60,7 +71,6 @@ pub(crate) fn persist_hide_tray(hide: bool) -> Result<String, String> {
     })
 }
 
-/// Export config for selected node — same input shape as connect_selected.
 pub(crate) async fn generate_preview(
     link: Option<String>,
     outbound: Option<serde_json::Value>,
@@ -91,7 +101,6 @@ pub(crate) async fn generate_preview(
     .map_err(|e| format!("generate_preview join: {e}"))?
 }
 
-/// UI catalog blob (groups + nodes). Replaces localStorage nexus.catalog.v1 as source of truth.
 pub(crate) async fn catalog_get() -> Result<serde_json::Value, String> {
     runtime::spawn_blocking(|| {
         use crate::data::store::Store;
@@ -99,9 +108,6 @@ pub(crate) async fn catalog_get() -> Result<serde_json::Value, String> {
         if let Some(catalog) = st.catalog {
             return Ok(catalog);
         }
-        // First launch / pre-catalog migration: persist one real empty group.
-        // Store::update rechecks under the exclusive lock so it cannot overwrite
-        // a catalog another caller created after the read above.
         Store::update(|locked| {
             if locked.catalog.is_none() {
                 locked.catalog = Some(data::store::default_catalog());

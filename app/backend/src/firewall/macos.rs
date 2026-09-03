@@ -242,24 +242,28 @@ pub fn resolve_fwd_binary() -> PathBuf {
     PathBuf::from("nexusfwd")
 }
 
-/// 7A: true when installed helper is missing or differs from staged (size or mtime).
+/// True when the installed helper is absent or not byte-for-byte the staged
+/// helper. Size/mtime alone misses same-size rebuilds and older staged binaries.
 pub fn helper_binary_stale(src: &Path) -> bool {
     let dest = Path::new(HELPER_PATH);
-    if !dest.is_file() {
+    if !src.is_file() || !dest.is_file() {
         return true;
     }
-    let Ok(smeta) = fs::metadata(src) else {
-        return false;
-    };
-    let Ok(dmeta) = fs::metadata(dest) else {
-        return true;
-    };
-    if smeta.len() != dmeta.len() {
-        return true;
-    }
-    match (smeta.modified(), dmeta.modified()) {
-        (Ok(s), Ok(d)) => s > d,
+
+    let size_matches = match (fs::metadata(src), fs::metadata(dest)) {
+        (Ok(s), Ok(d)) => s.len() == d.len(),
         _ => false,
+    };
+    if !size_matches {
+        return true;
+    }
+
+    match (sha256_file(src), sha256_file(dest)) {
+        (Ok(src_hash), Ok(dest_hash)) => src_hash != dest_hash,
+        // Hashing is part of the install integrity contract. If it cannot be
+        // established, force the install path to return a concrete error rather
+        // than treating an unverifiable privileged helper as current.
+        _ => true,
     }
 }
 

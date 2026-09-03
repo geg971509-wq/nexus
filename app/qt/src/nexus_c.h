@@ -4,6 +4,8 @@
 extern "C" {
 #endif
 
+// nexus_invoke returns an owned UTF-8 string. Release every non-null returned
+// pointer exactly once with nexus_free.
 char *nexus_invoke(const char *cmd, const char *json);
 void nexus_free(char *ptr);
 void nexus_teardown(void);
