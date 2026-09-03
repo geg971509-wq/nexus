@@ -378,7 +378,7 @@ fn restore_proxy(services: &[ProxyServiceState]) -> Result<(), String> {
                     &service.auto_proxy.url,
                 ])?;
             } else if service.auto_proxy.enabled {
-                return Err("enabled PAC snapshot has no URL".into());
+                return Err("enabled PAC snapshot has no URL".to_string());
             }
             run(&[
                 "-setautoproxystate",
