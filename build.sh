@@ -72,12 +72,12 @@ if ! xcode-select -p >/dev/null 2>&1; then
   die "Xcode CLT not configured (xcode-select -p)"
 fi
 
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.0}"
 DEPLOYMENT_MAJOR="${MACOSX_DEPLOYMENT_TARGET%%.*}"
 [[ "$DEPLOYMENT_MAJOR" =~ ^[0-9]+$ ]] \
   || die "invalid MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
-(( DEPLOYMENT_MAJOR >= 26 )) \
-  || die "Nexus release builds require macOS 26+ (got MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET)"
+(( DEPLOYMENT_MAJOR >= 13 )) \
+  || die "Nexus release builds require macOS 13+ (got MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET)"
 TRIPLE="$(target_triple)"
 log "root=$ROOT triple=$TRIPLE (mac release rebuild)"
 
