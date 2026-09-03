@@ -236,7 +236,13 @@ fn set_system_proxy_inner(enabled: bool, port: u16) -> Result<String, String> {
         }
     }
     if !failures.is_empty() {
-        return Err(format!("system proxy on failed: {}", failures.join(" · ")));
+        let apply_error = failures.join(" · ");
+        return match crate::network_recovery::restore_proxy_only() {
+            Ok(_) => Err(format!("system proxy on failed and was rolled back: {apply_error}")),
+            Err(rollback) => Err(format!(
+                "system proxy on failed: {apply_error} · rollback failed: {rollback}"
+            )),
+        };
     }
     let rest_n = services.len().saturating_sub(1);
     Ok(format!(
@@ -276,7 +282,13 @@ fn set_system_dns_bootstrap_inner(enabled: bool, servers: &[String]) -> Result<S
         }
     }
     if !failures.is_empty() {
-        return Err(format!("system dns on failed: {}", failures.join(" · ")));
+        let apply_error = failures.join(" · ");
+        return match crate::network_recovery::restore_dns_only() {
+            Ok(_) => Err(format!("system dns on failed and was rolled back: {apply_error}")),
+            Err(rollback) => Err(format!(
+                "system dns on failed: {apply_error} · rollback failed: {rollback}"
+            )),
+        };
     }
     let rest_n = services.len().saturating_sub(1);
     Ok(format!(
