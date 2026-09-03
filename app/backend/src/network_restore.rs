@@ -56,9 +56,8 @@ fn apply_proxy_locked(network: &sys::SystemNetworkChange, port: u16) -> Result<S
         save_state(&path, &state)?;
     }
     let snapshot = state.proxy.clone().unwrap_or_default();
-    let applied = disable_automatic_proxy(&current).and_then(|_| {
-        network.set_system_proxy_for_services(true, port, &services)
-    });
+    let applied = disable_automatic_proxy(&current)
+        .and_then(|_| network.set_system_proxy_for_services(true, port, &services));
     match applied {
         Ok(note) => Ok(note),
         Err(e) => {
@@ -226,12 +225,20 @@ pub(crate) fn reconcile_if(
     })
 }
 
-pub(crate) fn apply_proxy(port: u16) -> Result<String, String> {
-    sys::with_system_network_change(|| apply_proxy_locked(&sys::SystemNetworkChange))
+/// A live preference mutation must revalidate tunnel ownership after obtaining
+/// the serialized system-network lock. If Disconnect/Connect changed lifecycle
+/// while this caller waited, return None and leave OS state to that lifecycle.
+pub(crate) fn apply_proxy_if(
+    is_current: impl FnOnce() -> bool,
+    port: u16,
+) -> Option<Result<String, String>> {
+    sys::with_system_network_change_if(is_current, |network| apply_proxy_locked(network, port))
 }
 
-pub(crate) fn restore_proxy() -> Result<Option<String>, String> {
-    sys::with_system_network_change(restore_proxy_locked)
+pub(crate) fn restore_proxy_if(
+    is_current: impl FnOnce() -> bool,
+) -> Option<Result<Option<String>, String>> {
+    sys::with_system_network_change_if(is_current, |_| restore_proxy_locked())
 }
 
 pub(crate) fn restore_all_if(
