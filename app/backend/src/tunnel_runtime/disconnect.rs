@@ -2,8 +2,7 @@ use crate::{
     core::session::{CoreSession, SESSION},
     defaults::MIXED_PORT,
     diagnostics::firewall_status_json,
-    firewall,
-    network_restore,
+    firewall, network_restore,
     session_access::{
         action_is_current, commit_if_action_current, current_connect_gen, lifecycle_commit,
     },

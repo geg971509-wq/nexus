@@ -1,7 +1,6 @@
 use crate::{
     core::session::SESSION,
-    firewall,
-    network_restore,
+    firewall, network_restore,
     session_access::{
         action_is_current, bump_connect_gen, commit_if_action_current, commit_if_current,
         current_connect_gen,

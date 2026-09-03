@@ -98,12 +98,7 @@ pub(super) fn start_core(
     if let Some(msg) = start_err {
         let _ = put_session_back(session, prepared.connect_gen);
         return Ok(StartOutcome::Failed {
-            error: fail_connecting(
-                action_gen,
-                prepared.connect_gen,
-                &prepared.params,
-                msg,
-            ),
+            error: fail_connecting(action_gen, prepared.connect_gen, &prepared.params, msg),
         });
     }
 

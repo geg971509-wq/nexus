@@ -109,11 +109,8 @@ fn capture_proxy_service(service: &str) -> Result<ProxyServiceState, String> {
         ));
     }
     let auto_proxy_enabled = parse_switch(
-        field(
-            &run_ns_capture(&["-getautoproxyurl", service])?,
-            "Enabled",
-        )
-        .ok_or_else(|| format!("auto proxy output missing Enabled for `{service}`"))?,
+        field(&run_ns_capture(&["-getautoproxyurl", service])?, "Enabled")
+            .ok_or_else(|| format!("auto proxy output missing Enabled for `{service}`"))?,
     )?;
     let discovery = run_ns_capture(&["-getproxyautodiscovery", service])?;
     let auto_discovery_enabled = parse_switch(
@@ -179,11 +176,7 @@ fn restore_manual_proxy(service: &str, kind: &str, state: &ManualProxyState) -> 
         _ => return Err(format!("unknown proxy kind: {kind}")),
     };
     run_ns(&[set_cmd, service, state.server.as_str(), port.as_str()])?;
-    run_ns(&[
-        state_cmd,
-        service,
-        if state.enabled { "on" } else { "off" },
-    ])
+    run_ns(&[state_cmd, service, if state.enabled { "on" } else { "off" }])
 }
 
 pub(super) fn restore_proxy_snapshot(snapshot: &[ProxyServiceState]) -> Result<String, String> {
@@ -196,7 +189,11 @@ pub(super) fn restore_proxy_snapshot(snapshot: &[ProxyServiceState]) -> Result<S
             run_ns(&[
                 "-setautoproxystate",
                 state.service.as_str(),
-                if state.auto_proxy_enabled { "on" } else { "off" },
+                if state.auto_proxy_enabled {
+                    "on"
+                } else {
+                    "off"
+                },
             ])?;
             run_ns(&[
                 "-setproxyautodiscovery",
@@ -214,9 +211,15 @@ pub(super) fn restore_proxy_snapshot(snapshot: &[ProxyServiceState]) -> Result<S
         }
     }
     if failures.is_empty() {
-        Ok(format!("restored system proxy/PAC · {} service(s)", snapshot.len()))
+        Ok(format!(
+            "restored system proxy/PAC · {} service(s)",
+            snapshot.len()
+        ))
     } else {
-        Err(format!("restore system proxy/PAC failed: {}", failures.join(" · ")))
+        Err(format!(
+            "restore system proxy/PAC failed: {}",
+            failures.join(" · ")
+        ))
     }
 }
 
@@ -236,9 +239,15 @@ pub(super) fn restore_dns_snapshot(snapshot: &[DnsServiceState]) -> Result<Strin
         }
     }
     if failures.is_empty() {
-        Ok(format!("restored system DNS · {} service(s)", snapshot.len()))
+        Ok(format!(
+            "restored system DNS · {} service(s)",
+            snapshot.len()
+        ))
     } else {
-        Err(format!("restore system DNS failed: {}", failures.join(" · ")))
+        Err(format!(
+            "restore system DNS failed: {}",
+            failures.join(" · ")
+        ))
     }
 }
 
@@ -257,7 +266,10 @@ pub(super) fn disable_automatic_proxy(snapshot: &[ProxyServiceState]) -> Result<
     if failures.is_empty() {
         Ok(())
     } else {
-        Err(format!("disable automatic proxy failed: {}", failures.join(" · ")))
+        Err(format!(
+            "disable automatic proxy failed: {}",
+            failures.join(" · ")
+        ))
     }
 }
 
@@ -267,10 +279,9 @@ mod tests {
 
     #[test]
     fn proxy_parser_reads_disabled_empty_state() {
-        let p = parse_manual_proxy(
-            "Enabled: No\nServer: \nPort: 0\nAuthenticated Proxy Enabled: 0\n",
-        )
-        .unwrap();
+        let p =
+            parse_manual_proxy("Enabled: No\nServer: \nPort: 0\nAuthenticated Proxy Enabled: 0\n")
+                .unwrap();
         assert!(!p.enabled);
         assert_eq!(p.server, "");
         assert_eq!(p.port, 0);

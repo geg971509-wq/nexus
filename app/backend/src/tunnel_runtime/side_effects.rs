@@ -1,8 +1,5 @@
 use crate::{
-    core::session::SESSION,
-    network_restore,
-    session_access::current_connect_gen,
-    tray_spin,
+    core::session::SESSION, network_restore, session_access::current_connect_gen, tray_spin,
 };
 
 pub(super) fn apply_post_start_side_effects(

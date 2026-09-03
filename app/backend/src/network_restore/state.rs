@@ -164,14 +164,20 @@ mod tests {
         let mut state = sample_state();
         save_state(&path, &state).unwrap();
         assert!(path.is_file());
-        assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         let loaded = load_state(&path).unwrap();
         assert!(loaded.proxy.is_some() && loaded.dns.is_some());
 
         state.proxy = None;
         state.dns = None;
         save_state(&path, &state).unwrap();
-        assert!(!path.exists(), "empty recovery transaction must remove its file");
+        assert!(
+            !path.exists(),
+            "empty recovery transaction must remove its file"
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 }

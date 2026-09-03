@@ -53,8 +53,7 @@ pub(crate) fn recover_pending_network_state() -> Result<(), String> {
     }
     if other_nexus_gui_alive() {
         return Err(
-            "pending network recovery deferred because another Nexus GUI process is running"
-                .into(),
+            "pending network recovery deferred because another Nexus GUI process is running".into(),
         );
     }
 

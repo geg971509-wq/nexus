@@ -27,8 +27,8 @@ fn apply_proxy_locked(network: &sys::SystemNetworkChange, port: u16) -> Result<S
         save_state(&path, &state)?;
     }
     let snapshot = state.proxy.clone().unwrap_or_default();
-    let applied = disable_automatic_proxy(&snapshot)
-        .and_then(|_| network.set_system_proxy(true, port));
+    let applied =
+        disable_automatic_proxy(&snapshot).and_then(|_| network.set_system_proxy(true, port));
     match applied {
         Ok(note) => Ok(note),
         Err(e) => match restore_proxy_snapshot(&snapshot) {
