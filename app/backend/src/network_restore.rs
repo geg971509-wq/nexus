@@ -8,45 +8,81 @@ mod state;
 
 use crate::sys;
 use macos::{
-    capture_dns, capture_proxy, disable_automatic_proxy, restore_dns_snapshot,
-    restore_proxy_snapshot,
+    capture_dns, capture_proxy, current_service_names, disable_automatic_proxy,
+    restore_dns_snapshot, restore_proxy_snapshot,
 };
-use state::{load_state, recovery_path, save_state};
+use state::{
+    load_state, merge_dns_snapshot, merge_proxy_snapshot, recovery_path,
+    retain_existing_dns_services, retain_existing_proxy_services, save_state, RecoveryState,
+};
 use std::sync::Mutex;
 
 static RECOVERY_LOCK: Mutex<()> = Mutex::new(());
+
+fn prune_deleted_services(state: &mut RecoveryState) -> bool {
+    let Some(existing) = current_service_names() else {
+        // Discovery failure is not proof that a service disappeared. Retain the
+        // snapshot and retry later instead of deleting the user's only original.
+        return false;
+    };
+    let proxy_changed = state
+        .proxy
+        .as_mut()
+        .map(|snapshot| retain_existing_proxy_services(snapshot, &existing))
+        .unwrap_or(false);
+    let dns_changed = state
+        .dns
+        .as_mut()
+        .map(|snapshot| retain_existing_dns_services(snapshot, &existing))
+        .unwrap_or(false);
+    proxy_changed || dns_changed
+}
 
 fn apply_proxy_locked(network: &sys::SystemNetworkChange, port: u16) -> Result<String, String> {
     let _guard = RECOVERY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let path = recovery_path();
     let mut state = load_state(&path)?;
-    if state.proxy.is_none() {
-        state.proxy = Some(capture_proxy()?);
-        // Persist before the first OS mutation. If the process dies on the next
-        // instruction, startup recovery still has the original values.
+
+    // Capture the exact set that will be mutated. If a USB/Ethernet service is
+    // attached while Nexus is already connected, only append that newly seen
+    // service; never overwrite an existing entry with Nexus's current values.
+    let current = capture_proxy()?;
+    let services: Vec<String> = current.iter().map(|item| item.service.clone()).collect();
+    let was_none = state.proxy.is_none();
+    let stored = state.proxy.get_or_insert_with(Vec::new);
+    let changed = merge_proxy_snapshot(stored, &current);
+    if was_none || changed {
+        // Persist before the first OS mutation for every newly observed service.
         save_state(&path, &state)?;
     }
     let snapshot = state.proxy.clone().unwrap_or_default();
-    let applied =
-        disable_automatic_proxy(&snapshot).and_then(|_| network.set_system_proxy(true, port));
+    let applied = disable_automatic_proxy(&current).and_then(|_| {
+        network.set_system_proxy_for_services(true, port, &services)
+    });
     match applied {
         Ok(note) => Ok(note),
-        Err(e) => match restore_proxy_snapshot(&snapshot) {
-            Ok(_) => {
-                state.proxy = None;
-                if let Err(save_err) = save_state(&path, &state) {
-                    return Err(format!(
-                        "apply system proxy failed: {e}; rollback succeeded but recovery cleanup failed: {save_err}"
-                    ));
-                }
-                Err(format!(
-                    "apply system proxy failed: {e}; original proxy/PAC restored"
-                ))
+        Err(e) => {
+            if prune_deleted_services(&mut state) {
+                save_state(&path, &state)?;
             }
-            Err(restore_err) => Err(format!(
-                "apply system proxy failed: {e}; rollback also failed: {restore_err}"
-            )),
-        },
+            let rollback = state.proxy.clone().unwrap_or(snapshot);
+            match restore_proxy_snapshot(&rollback) {
+                Ok(_) => {
+                    state.proxy = None;
+                    if let Err(save_err) = save_state(&path, &state) {
+                        return Err(format!(
+                            "apply system proxy failed: {e}; rollback succeeded but recovery cleanup failed: {save_err}"
+                        ));
+                    }
+                    Err(format!(
+                        "apply system proxy failed: {e}; original proxy/PAC restored"
+                    ))
+                }
+                Err(restore_err) => Err(format!(
+                    "apply system proxy failed: {e}; rollback also failed: {restore_err}"
+                )),
+            }
+        }
     }
 }
 
@@ -57,29 +93,40 @@ fn apply_dns_locked(
     let _guard = RECOVERY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let path = recovery_path();
     let mut state = load_state(&path)?;
-    if state.dns.is_none() {
-        state.dns = Some(capture_dns()?);
+
+    let current = capture_dns()?;
+    let services: Vec<String> = current.iter().map(|item| item.service.clone()).collect();
+    let was_none = state.dns.is_none();
+    let stored = state.dns.get_or_insert_with(Vec::new);
+    let changed = merge_dns_snapshot(stored, &current);
+    if was_none || changed {
         save_state(&path, &state)?;
     }
     let snapshot = state.dns.clone().unwrap_or_default();
-    match network.set_system_dns_bootstrap(true, servers) {
+    match network.set_system_dns_bootstrap_for_services(true, servers, &services) {
         Ok(note) => Ok(note),
-        Err(e) => match restore_dns_snapshot(&snapshot) {
-            Ok(_) => {
-                state.dns = None;
-                if let Err(save_err) = save_state(&path, &state) {
-                    return Err(format!(
-                        "apply system DNS failed: {e}; rollback succeeded but recovery cleanup failed: {save_err}"
-                    ));
-                }
-                Err(format!(
-                    "apply system DNS failed: {e}; original DNS restored"
-                ))
+        Err(e) => {
+            if prune_deleted_services(&mut state) {
+                save_state(&path, &state)?;
             }
-            Err(restore_err) => Err(format!(
-                "apply system DNS failed: {e}; rollback also failed: {restore_err}"
-            )),
-        },
+            let rollback = state.dns.clone().unwrap_or(snapshot);
+            match restore_dns_snapshot(&rollback) {
+                Ok(_) => {
+                    state.dns = None;
+                    if let Err(save_err) = save_state(&path, &state) {
+                        return Err(format!(
+                            "apply system DNS failed: {e}; rollback succeeded but recovery cleanup failed: {save_err}"
+                        ));
+                    }
+                    Err(format!(
+                        "apply system DNS failed: {e}; original DNS restored"
+                    ))
+                }
+                Err(restore_err) => Err(format!(
+                    "apply system DNS failed: {e}; rollback also failed: {restore_err}"
+                )),
+            }
+        }
     }
 }
 
@@ -87,6 +134,9 @@ fn restore_proxy_locked() -> Result<Option<String>, String> {
     let _guard = RECOVERY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let path = recovery_path();
     let mut state = load_state(&path)?;
+    if prune_deleted_services(&mut state) {
+        save_state(&path, &state)?;
+    }
     let Some(snapshot) = state.proxy.clone() else {
         return Ok(None);
     };
@@ -100,6 +150,9 @@ fn restore_dns_locked() -> Result<Option<String>, String> {
     let _guard = RECOVERY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let path = recovery_path();
     let mut state = load_state(&path)?;
+    if prune_deleted_services(&mut state) {
+        save_state(&path, &state)?;
+    }
     let Some(snapshot) = state.dns.clone() else {
         return Ok(None);
     };
@@ -113,6 +166,9 @@ fn restore_all_locked() -> Result<Vec<String>, String> {
     let _guard = RECOVERY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let path = recovery_path();
     let mut state = load_state(&path)?;
+    if prune_deleted_services(&mut state) {
+        save_state(&path, &state)?;
+    }
     let mut notes = Vec::new();
     let mut failures = Vec::new();
 
