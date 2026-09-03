@@ -9,6 +9,7 @@ mod diagnostics;
 mod exit_ip;
 pub mod firewall;
 mod net;
+mod network_restore;
 mod paths;
 mod preferences;
 pub mod qt_api;
