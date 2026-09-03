@@ -39,9 +39,11 @@ install and removed on uninstall.
 
 Before Nexus changes macOS Web/HTTPS/SOCKS/PAC or DNS settings it writes a private
 `network-recovery.json` journal in the data directory. Normal disconnect, rollback,
-and quit restore the saved per-service settings and remove the journal. If Nexus
-exits abnormally, the next launch restores the stale journal before a new network
-ownership period can replace it.
+and quit restore only the per-service settings Nexus took ownership of and remove
+those journal entries. If Nexus exits abnormally, the next launch restores the
+stale journal before new network ownership can begin. Existing authenticated
+system proxies are not overwritten because `networksetup` does not expose the
+credentials required for exact restoration; Tun remains available in that case.
 
 ## Layout
 
@@ -111,7 +113,7 @@ cmake --build app/qt/build --target nexus && app/qt/build/nexus
 ## Capabilities (0.2.3)
 
 - Connect: selected node → generate → Core `Start` (share link or outbound JSON)
-- Tun chip + system proxy; Nexus restores the user's original Proxy/PAC/DNS state on disconnect, rollback, quit, and next-launch crash recovery
+- Tun chip + system proxy; Nexus restores only the Proxy/PAC/DNS settings it took ownership of on disconnect, rollback, quit, and next-launch crash recovery; authenticated system proxies are detected and left untouched
 - Catalog (groups/nodes) in store via `catalog_get` / `catalog_put`
 - Node **Traffic** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only Reset traffic zeros)
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled Connectivity (not a proxy-path test)
