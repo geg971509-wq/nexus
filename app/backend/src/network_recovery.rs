@@ -332,7 +332,7 @@ pub(crate) fn recover_stale_and_clear() -> Result<bool, String> {
             Err(e) => failures.push(e),
         }
     }
-    persist_or_remove(&p, &snapshot)?;
+    mark_stale(persist_or_remove(&p, &snapshot))?;
     if failures.is_empty() {
         Ok(true)
     } else {
@@ -452,7 +452,7 @@ pub(crate) fn restore_all_and_clear() -> Result<bool, String> {
             Err(e) => failures.push(e),
         }
     }
-    persist_or_remove(&p, &snapshot)?;
+    mark_stale(persist_or_remove(&p, &snapshot))?;
     if failures.is_empty() {
         Ok(restored_any)
     } else {
