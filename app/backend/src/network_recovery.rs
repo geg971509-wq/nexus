@@ -247,11 +247,12 @@ fn restore(snapshot: &Snapshot, proxy: bool, dns: bool) -> Result<(), String> {
     }
 }
 
+/// Idempotent within one Nexus ownership period. An existing journal is the
+/// original pre-Nexus state and must never be overwritten by later side effects.
 pub(crate) fn ensure_snapshot(services: &[String]) -> Result<(), String> {
     let p = path();
-    if let Some(stale) = load_snapshot(&p)? {
-        restore(&stale, true, true)?;
-        fs::remove_file(&p).map_err(|e| format!("remove recovered network snapshot: {e}"))?;
+    if load_snapshot(&p)?.is_some() {
+        return Ok(());
     }
     let mut states = Vec::with_capacity(services.len());
     for service in services {
@@ -313,7 +314,13 @@ mod tests {
                 url: "https://example/pac".into()
             }
         );
-        assert_eq!(parse_dns("1.1.1.1\n9.9.9.9\n"), Some(vec!["1.1.1.1".into(), "9.9.9.9".into()]));
-        assert_eq!(parse_dns("There aren't any DNS Servers set on Wi-Fi."), None);
+        assert_eq!(
+            parse_dns("1.1.1.1\n9.9.9.9\n"),
+            Some(vec!["1.1.1.1".into(), "9.9.9.9".into()])
+        );
+        assert_eq!(
+            parse_dns("There aren't any DNS Servers set on Wi-Fi."),
+            None
+        );
     }
 }
