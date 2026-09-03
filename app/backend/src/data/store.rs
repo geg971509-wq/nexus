@@ -127,16 +127,30 @@ fn quarantine_unreadable(p: &std::path::Path) {
 }
 
 fn save_unlocked(p: &std::path::Path, st: &Store) -> Result<(), String> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
     let s = serde_json::to_string_pretty(st).map_err(|e| e.to_string())?;
     let tmp = p.with_extension("json.tmp");
     {
-        let mut f = fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)
+            .map_err(|e| e.to_string())?;
+        // `.mode(0600)` only applies on creation. A crash may have left a temp
+        // file with older permissions, so restrict the inode before any new
+        // catalog/proxy data is written into it.
+        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))
+            .map_err(|e| e.to_string())?;
         f.write_all(s.as_bytes()).map_err(|e| e.to_string())?;
         f.sync_all().map_err(|e| e.to_string())?;
     }
     fs::rename(&tmp, p).map_err(|e| e.to_string())?;
-    use std::os::unix::fs::PermissionsExt;
-    let _ = fs::set_permissions(p, fs::Permissions::from_mode(0o600));
+    // Keep the on-disk contract explicit even if a future save path stops using
+    // the temp file above.
+    fs::set_permissions(p, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -185,6 +199,7 @@ impl Drop for StoreLock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     /// A corrupt store must be moved aside, not silently replaced in place: the
     /// next Store::update writes the whole struct back, so defaults-in-place
@@ -218,6 +233,8 @@ mod tests {
             "valid store round-trips"
         );
         assert!(p.exists(), "valid store must not be quarantined");
+        let mode = fs::metadata(&p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "store must stay private");
 
         let _ = fs::remove_dir_all(&dir);
     }
