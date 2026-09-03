@@ -142,8 +142,7 @@ fn save_unlocked(p: &std::path::Path, st: &Store) -> Result<(), String> {
         // `.mode(0600)` only applies on creation. A crash may have left a temp
         // file with older permissions, so restrict the inode before any new
         // catalog/proxy data is written into it.
-        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))
-            .map_err(|e| e.to_string())?;
+        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
         f.write_all(s.as_bytes()).map_err(|e| e.to_string())?;
         f.sync_all().map_err(|e| e.to_string())?;
     }
