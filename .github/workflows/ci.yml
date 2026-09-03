@@ -108,3 +108,37 @@ jobs:
         run: |
           cargo install cargo-audit --locked
           cargo audit
+
+  release:
+    name: Release bundle (macOS)
+    needs: [ui, core, shell]
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require Apple Silicon
+        run: test "$(uname -m)" = arm64
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/server/go.mod
+          cache-dependency-path: core/server/go.sum
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@1.94.0
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.11.0'
+          cache: 'true'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/backend
+      # build.sh is the shipping path. It builds NexusCore + Rust + Qt, deploys
+      # Qt runtime files, audits Mach-O loader paths/minimum macOS versions, and
+      # verifies the final nested-code signing structure.
+      - name: Full release bundle
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '13.0'
+        run: |
+          export NEXUS_QT_HOME="$QT_ROOT_DIR"
+          export CMAKE_BUILD_PARALLEL_LEVEL=2
+          ./build.sh
