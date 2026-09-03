@@ -178,8 +178,25 @@ pub(super) fn capture_dns() -> Result<Vec<DnsServiceState>, String> {
         .collect()
 }
 
-pub(super) fn current_service_names() -> HashSet<String> {
-    sys::list_network_services().into_iter().collect()
+/// Existence differs from `sys::hot_services`: networksetup prefixes a disabled
+/// but still configured service with `*`. Such a service must remain in the
+/// recovery transaction, or re-enabling it later could reveal Nexus's old proxy
+/// or DNS values. Return None on discovery failure so callers keep all snapshots.
+pub(super) fn current_service_names() -> Option<HashSet<String>> {
+    let out = run_ns_capture(&["-listallnetworkservices"]).ok()?;
+    let names = out
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let raw = line.trim();
+            if raw.is_empty() {
+                return None;
+            }
+            let name = raw.strip_prefix('*').unwrap_or(raw).trim();
+            (!name.is_empty()).then(|| name.to_string())
+        })
+        .collect();
+    Some(names)
 }
 
 fn restore_manual_proxy(service: &str, kind: &str, state: &ManualProxyState) -> Result<(), String> {
