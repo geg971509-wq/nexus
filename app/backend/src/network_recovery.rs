@@ -250,7 +250,10 @@ fn prune_deleted_services(snapshot: &mut Snapshot) {
     }
 }
 
-fn merge_proxy_states(stored: &mut Vec<ProxyServiceState>, current: Vec<ProxyServiceState>) -> bool {
+fn merge_proxy_states(
+    stored: &mut Vec<ProxyServiceState>,
+    current: Vec<ProxyServiceState>,
+) -> bool {
     let mut known: HashSet<String> = stored.iter().map(|item| item.service.clone()).collect();
     let mut changed = false;
     for item in current {
@@ -380,7 +383,11 @@ fn restore_proxy(services: &[ProxyServiceState]) -> Result<(), String> {
             run(&[
                 "-setautoproxystate",
                 &service.service,
-                if service.auto_proxy.enabled { "on" } else { "off" },
+                if service.auto_proxy.enabled {
+                    "on"
+                } else {
+                    "off"
+                },
             ])?;
             if let Some(enabled) = service.auto_discovery_enabled {
                 run(&[
@@ -641,10 +648,12 @@ mod tests {
                 authenticated: false,
             }
         );
-        assert!(parse_proxy(
-            "Enabled: Yes\nServer: proxy.example\nPort: 8080\nAuthenticated Proxy Enabled: 1\n"
-        )
-        .authenticated);
+        assert!(
+            parse_proxy(
+                "Enabled: Yes\nServer: proxy.example\nPort: 8080\nAuthenticated Proxy Enabled: 1\n"
+            )
+            .authenticated
+        );
         assert_eq!(
             parse_dns("1.1.1.1\n9.9.9.9\n"),
             Some(vec!["1.1.1.1".into(), "9.9.9.9".into()])
