@@ -1,8 +1,9 @@
 # Nexus Design System
 
-Reference contract: `/Volumes/work/ios2/iDescriptor`, especially
-`src/ui/Theme.qml`, `src/ui/AppSidebar.qml`, `src/ui/SidebarDestinationButton.qml`,
-and the shipped macOS screenshots in `resources/repo/`.
+Reference contract: this document, `app/qt/qml/Theme.qml`, the shared shell/sidebar
+components, and the checked-in product screenshot under `assets/`. Historical
+visual references used during the initial alignment are not repository or build
+dependencies; release decisions must be reproducible from files kept in this repo.
 
 ## 1. Atmosphere & Identity
 
