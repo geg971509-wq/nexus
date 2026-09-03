@@ -19,6 +19,8 @@ pub(super) struct ProxyServiceState {
     pub(super) web: ManualProxyState,
     pub(super) secure_web: ManualProxyState,
     pub(super) socks: ManualProxyState,
+    #[serde(default)]
+    pub(super) auto_proxy_url: String,
     pub(super) auto_proxy_enabled: bool,
     pub(super) auto_discovery_enabled: bool,
 }
@@ -70,12 +72,25 @@ pub(super) fn load_state(path: &Path) -> Result<RecoveryState, String> {
     Ok(state)
 }
 
+fn sync_parent(path: &Path) -> Result<(), String> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    let directory = fs::File::open(parent).map_err(|e| format!("open recovery directory: {e}"))?;
+    directory
+        .sync_all()
+        .map_err(|e| format!("sync recovery directory: {e}"))
+}
+
 pub(super) fn save_state(path: &Path, state: &RecoveryState) -> Result<(), String> {
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
     if state.proxy.is_none() && state.dns.is_none() {
         match fs::remove_file(path) {
-            Ok(()) => return Ok(()),
+            Ok(()) => {
+                sync_parent(path)?;
+                return Ok(());
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             Err(e) => return Err(format!("remove network recovery: {e}")),
         }
@@ -98,6 +113,7 @@ pub(super) fn save_state(path: &Path, state: &RecoveryState) -> Result<(), Strin
     fs::rename(&tmp, path).map_err(|e| format!("install network recovery: {e}"))?;
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))
         .map_err(|e| format!("chmod network recovery: {e}"))?;
+    sync_parent(path)?;
     Ok(())
 }
 
@@ -129,6 +145,7 @@ mod tests {
                     port: 0,
                     authenticated: false,
                 },
+                auto_proxy_url: "https://pac.example/proxy.pac".into(),
                 auto_proxy_enabled: true,
                 auto_discovery_enabled: false,
             }]),
@@ -144,7 +161,9 @@ mod tests {
         let state = sample_state();
         let body = serde_json::to_string(&state).unwrap();
         let decoded: RecoveryState = serde_json::from_str(&body).unwrap();
-        assert_eq!(decoded.proxy.unwrap()[0].service, "Wi-Fi");
+        let proxy = decoded.proxy.unwrap();
+        assert_eq!(proxy[0].service, "Wi-Fi");
+        assert_eq!(proxy[0].auto_proxy_url, "https://pac.example/proxy.pac");
         assert_eq!(decoded.dns.unwrap()[0].servers.as_ref().unwrap().len(), 2);
     }
 
