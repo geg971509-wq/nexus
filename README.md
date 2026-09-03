@@ -37,13 +37,23 @@ traffic went. `core.log` rolls to `core.log.1` past 16 MB at spawn. The macOS
 firewall daemon logs separately to `/var/log/nexusfwd.log`, created `0600` at
 install and removed on uninstall.
 
+When Nexus takes ownership of macOS Proxy/PAC or DNS settings, the original
+per-network-service values are stored transactionally in
+`~/Library/Application Support/Nexus/network-recovery.json` with mode `0600`.
+The relevant snapshot is removed after a successful disconnect/rollback/quit
+restore. If Nexus terminates abnormally, the next launch repairs the pending
+snapshot before the Qt event loop accepts new connection actions. Authenticated
+manual proxies are not overwritten because macOS does not expose enough
+credential material for an exact restoration.
+
 ## Layout
 
 - `app/qt/` — Qt Quick GUI (C++ host + QML)
 - `app/backend/` — Rust backend + JSON C ABI (`nexus_invoke`) linked by the Qt host
 - `app/backend/src/core/` — framed IPC + Core session lifecycle
 - `app/backend/src/data/` — JSON store + pure configuration generation
-- `app/backend/src/sys.rs` — macOS system proxy integration
+- `app/backend/src/sys.rs` — serialized macOS `networksetup` mutation boundary
+- `app/backend/src/network_restore.rs` — transactional Proxy/PAC/DNS snapshot + restore
 - `app/assets/icons/` — application and tray icon assets
 - `core/server/` — Go core (`module NexusCore`, **GPLv3** combined work)
 - `licenses/` — full GPLv3 / MPL-2.0 texts
@@ -104,7 +114,7 @@ cmake --build app/qt/build --target nexus && app/qt/build/nexus
 ## Capabilities (0.2.3)
 
 - Connect: selected node → generate → Core `Start` (share link or outbound JSON)
-- Tun chip + system proxy; exit clears OS proxy on `:2080` and stops Core
+- Tun chip + system proxy; Nexus snapshots and restores the user's original per-service Proxy/PAC/DNS state on disconnect, rollback and quit, with next-launch recovery after an abnormal exit
 - Catalog (groups/nodes) in store via `catalog_get` / `catalog_put`
 - Node **Traffic** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only Reset traffic zeros)
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled Connectivity (not a proxy-path test)
