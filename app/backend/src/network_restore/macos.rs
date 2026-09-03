@@ -1,5 +1,6 @@
 use super::state::{DnsServiceState, ManualProxyState, ProxyServiceState};
 use crate::sys;
+use std::collections::HashSet;
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -99,6 +100,17 @@ fn parse_manual_proxy(text: &str) -> Result<ManualProxyState, String> {
     })
 }
 
+fn parse_auto_proxy(text: &str) -> Result<(String, bool), String> {
+    let url = field(text, "URL").unwrap_or_default().to_string();
+    let enabled = parse_switch(
+        field(text, "Enabled").ok_or_else(|| "auto proxy output missing Enabled".to_string())?,
+    )?;
+    if enabled && url.is_empty() {
+        return Err("enabled auto proxy has no URL".into());
+    }
+    Ok((url, enabled))
+}
+
 fn capture_proxy_service(service: &str) -> Result<ProxyServiceState, String> {
     let web = parse_manual_proxy(&run_ns_capture(&["-getwebproxy", service])?)?;
     let secure_web = parse_manual_proxy(&run_ns_capture(&["-getsecurewebproxy", service])?)?;
@@ -108,10 +120,8 @@ fn capture_proxy_service(service: &str) -> Result<ProxyServiceState, String> {
             "cannot safely replace authenticated proxy settings on `{service}` without access to the user's credentials"
         ));
     }
-    let auto_proxy_enabled = parse_switch(
-        field(&run_ns_capture(&["-getautoproxyurl", service])?, "Enabled")
-            .ok_or_else(|| format!("auto proxy output missing Enabled for `{service}`"))?,
-    )?;
+    let (auto_proxy_url, auto_proxy_enabled) =
+        parse_auto_proxy(&run_ns_capture(&["-getautoproxyurl", service])?)?;
     let discovery = run_ns_capture(&["-getproxyautodiscovery", service])?;
     let auto_discovery_enabled = parse_switch(
         field(&discovery, "Auto Proxy Discovery")
@@ -123,6 +133,7 @@ fn capture_proxy_service(service: &str) -> Result<ProxyServiceState, String> {
         web,
         secure_web,
         socks,
+        auto_proxy_url,
         auto_proxy_enabled,
         auto_discovery_enabled,
     })
@@ -167,15 +178,23 @@ pub(super) fn capture_dns() -> Result<Vec<DnsServiceState>, String> {
         .collect()
 }
 
+pub(super) fn current_service_names() -> HashSet<String> {
+    sys::list_network_services().into_iter().collect()
+}
+
 fn restore_manual_proxy(service: &str, kind: &str, state: &ManualProxyState) -> Result<(), String> {
-    let port = state.port.to_string();
     let (set_cmd, state_cmd) = match kind {
         "web" => ("-setwebproxy", "-setwebproxystate"),
         "secure" => ("-setsecurewebproxy", "-setsecurewebproxystate"),
         "socks" => ("-setsocksfirewallproxy", "-setsocksfirewallproxystate"),
         _ => return Err(format!("unknown proxy kind: {kind}")),
     };
-    run_ns(&[set_cmd, service, state.server.as_str(), port.as_str()])?;
+    if !state.server.is_empty() && state.port > 0 {
+        let port = state.port.to_string();
+        run_ns(&[set_cmd, service, state.server.as_str(), port.as_str()])?;
+    } else if state.enabled {
+        return Err(format!("enabled {kind} proxy snapshot has no server/port"));
+    }
     run_ns(&[state_cmd, service, if state.enabled { "on" } else { "off" }])
 }
 
@@ -186,6 +205,15 @@ pub(super) fn restore_proxy_snapshot(snapshot: &[ProxyServiceState]) -> Result<S
             restore_manual_proxy(&state.service, "web", &state.web)?;
             restore_manual_proxy(&state.service, "secure", &state.secure_web)?;
             restore_manual_proxy(&state.service, "socks", &state.socks)?;
+            if !state.auto_proxy_url.is_empty() {
+                run_ns(&[
+                    "-setautoproxyurl",
+                    state.service.as_str(),
+                    state.auto_proxy_url.as_str(),
+                ])?;
+            } else if state.auto_proxy_enabled {
+                return Err("enabled PAC snapshot has no URL".into());
+            }
             run_ns(&[
                 "-setautoproxystate",
                 state.service.as_str(),
@@ -297,6 +325,14 @@ mod tests {
         assert!(p.enabled);
         assert_eq!(p.server, "proxy.example");
         assert_eq!(p.port, 8080);
+    }
+
+    #[test]
+    fn auto_proxy_parser_keeps_url_and_state() {
+        let (url, enabled) =
+            parse_auto_proxy("URL: https://pac.example/proxy.pac\nEnabled: Yes\n").unwrap();
+        assert_eq!(url, "https://pac.example/proxy.pac");
+        assert!(enabled);
     }
 
     #[test]
