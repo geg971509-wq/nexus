@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -50,6 +51,57 @@ impl Default for RecoveryState {
             dns: None,
         }
     }
+}
+
+/// Add only services that Nexus has never owned in this transaction. Existing
+/// entries are the original pre-Nexus values and must never be overwritten by a
+/// later capture after Nexus has already changed that service.
+pub(super) fn merge_proxy_snapshot(
+    stored: &mut Vec<ProxyServiceState>,
+    current: &[ProxyServiceState],
+) -> bool {
+    let mut known: HashSet<String> = stored.iter().map(|item| item.service.clone()).collect();
+    let mut changed = false;
+    for item in current {
+        if known.insert(item.service.clone()) {
+            stored.push(item.clone());
+            changed = true;
+        }
+    }
+    changed
+}
+
+pub(super) fn merge_dns_snapshot(
+    stored: &mut Vec<DnsServiceState>,
+    current: &[DnsServiceState],
+) -> bool {
+    let mut known: HashSet<String> = stored.iter().map(|item| item.service.clone()).collect();
+    let mut changed = false;
+    for item in current {
+        if known.insert(item.service.clone()) {
+            stored.push(item.clone());
+            changed = true;
+        }
+    }
+    changed
+}
+
+pub(super) fn retain_existing_proxy_services(
+    snapshot: &mut Vec<ProxyServiceState>,
+    existing: &HashSet<String>,
+) -> bool {
+    let before = snapshot.len();
+    snapshot.retain(|item| existing.contains(&item.service));
+    snapshot.len() != before
+}
+
+pub(super) fn retain_existing_dns_services(
+    snapshot: &mut Vec<DnsServiceState>,
+    existing: &HashSet<String>,
+) -> bool {
+    let before = snapshot.len();
+    snapshot.retain(|item| existing.contains(&item.service));
+    snapshot.len() != before
 }
 
 pub(super) fn recovery_path() -> PathBuf {
@@ -122,29 +174,35 @@ mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
+    fn manual(enabled: bool, server: &str, port: u16) -> ManualProxyState {
+        ManualProxyState {
+            enabled,
+            server: server.into(),
+            port,
+            authenticated: false,
+        }
+    }
+
+    fn proxy(service: &str, server: &str) -> ProxyServiceState {
+        ProxyServiceState {
+            service: service.into(),
+            web: manual(!server.is_empty(), server, if server.is_empty() { 0 } else { 8080 }),
+            secure_web: manual(false, "", 0),
+            socks: manual(false, "", 0),
+            auto_proxy_url: String::new(),
+            auto_proxy_enabled: false,
+            auto_discovery_enabled: false,
+        }
+    }
+
     fn sample_state() -> RecoveryState {
         RecoveryState {
             version: RECOVERY_VERSION,
             proxy: Some(vec![ProxyServiceState {
                 service: "Wi-Fi".into(),
-                web: ManualProxyState {
-                    enabled: false,
-                    server: String::new(),
-                    port: 0,
-                    authenticated: false,
-                },
-                secure_web: ManualProxyState {
-                    enabled: true,
-                    server: "secure.example".into(),
-                    port: 8443,
-                    authenticated: false,
-                },
-                socks: ManualProxyState {
-                    enabled: false,
-                    server: String::new(),
-                    port: 0,
-                    authenticated: false,
-                },
+                web: manual(false, "", 0),
+                secure_web: manual(true, "secure.example", 8443),
+                socks: manual(false, "", 0),
                 auto_proxy_url: "https://pac.example/proxy.pac".into(),
                 auto_proxy_enabled: true,
                 auto_discovery_enabled: false,
@@ -165,6 +223,28 @@ mod tests {
         assert_eq!(proxy[0].service, "Wi-Fi");
         assert_eq!(proxy[0].auto_proxy_url, "https://pac.example/proxy.pac");
         assert_eq!(decoded.dns.unwrap()[0].servers.as_ref().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn merge_keeps_first_seen_original_and_adds_new_service() {
+        let mut stored = vec![proxy("Wi-Fi", "original.example")];
+        let current = vec![
+            proxy("Wi-Fi", "nexus-overwrite.example"),
+            proxy("USB 10/100/1000 LAN", "user-usb.example"),
+        ];
+        assert!(merge_proxy_snapshot(&mut stored, &current));
+        assert_eq!(stored.len(), 2);
+        assert_eq!(stored[0].web.server, "original.example");
+        assert_eq!(stored[1].web.server, "user-usb.example");
+    }
+
+    #[test]
+    fn restore_filter_drops_only_services_that_no_longer_exist() {
+        let mut stored = vec![proxy("Wi-Fi", "one"), proxy("Old USB", "two")];
+        let existing = HashSet::from(["Wi-Fi".to_string()]);
+        assert!(retain_existing_proxy_services(&mut stored, &existing));
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].service, "Wi-Fi");
     }
 
     #[test]
