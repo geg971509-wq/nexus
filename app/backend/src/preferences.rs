@@ -3,33 +3,40 @@
 use crate::{
     core::session::{CoreSession, SESSION},
     defaults::MIXED_PORT,
-    sys,
+    network_restore,
 };
 
-/// Persist chip intent; OS apply only when Core is running (or always on disable).
+/// Persist the system-proxy chip. The OS is changed only while a Core profile is
+/// live; an idle preference toggle must never disable or overwrite unrelated
+/// proxy/PAC configuration owned by the user or another application.
 pub(crate) fn set_system_proxy_cmd_sync(enabled: bool) -> Result<String, String> {
-    use crate::core::session::SESSION;
     use crate::data::store::Store;
-    // set_spmode_system_proxy: always persist intent; OS write only if profile running.
+
     Store::update(|st| {
         st.system_proxy = enabled;
         Ok(())
     })?;
     let port = MIXED_PORT;
-    // Short lock: query only — never hold across networksetup.
+    // Short lock: query only — never hold SESSION across networksetup.
     let core_running = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
         g.as_mut()
             .and_then(|s| s.query_state().ok().map(|(r, _)| r))
             .unwrap_or(false)
     };
-    if enabled && !core_running {
+    if !core_running {
         return Ok(format!(
-            "system_proxy intent=on (OS apply on Start · mixed 127.0.0.1:{port})"
+            "system_proxy intent={} (OS unchanged until a profile is running)",
+            if enabled { "on" } else { "off" }
         ));
     }
-    // enable+running → point OS at mixed; disable → clear OS always (upstream ClearSystemProxy)
-    sys::set_system_proxy(enabled, port)
+
+    if enabled {
+        network_restore::apply_proxy(port)
+    } else {
+        Ok(network_restore::restore_proxy()?
+            .unwrap_or_else(|| "system proxy intent=off · no Nexus-owned proxy state".into()))
+    }
 }
 
 /// Persist Tun chip + elevate Core (osascript password sheet).
