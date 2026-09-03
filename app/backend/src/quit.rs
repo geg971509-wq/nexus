@@ -7,7 +7,8 @@ use crate::{
     tunnel_runtime::disconnect_selected_sync,
 };
 
-/// Single quit/teardown path: stop Core + always best-effort clear OS proxy at MIXED_PORT.
+/// Single quit/teardown path: stop Core and restore the user's saved macOS
+/// Proxy/PAC/DNS state through the normal disconnect lifecycle.
 /// Used by app_quit, tray quit, and Exit (after confirm). Idempotent.
 /// 3A: quit → Reset (session kill-switch ends with app; not post-quit lockdown).
 pub(crate) fn teardown_session() {
