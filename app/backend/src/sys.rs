@@ -64,9 +64,9 @@ pub(crate) fn with_system_network_change_if<T>(
 
 #[cfg(target_os = "macos")]
 pub(crate) fn recover_stale_network_state() -> Result<String, String> {
-    with_system_network_change(|| {
-        let network = SystemNetworkChange;
-        network.restore_all()
+    with_system_network_change(|| match crate::network_recovery::recover_stale_and_clear()? {
+        true => Ok("restored stale Nexus-owned proxy/PAC/DNS state".into()),
+        false => Ok("no stale system network state".into()),
     })
 }
 
