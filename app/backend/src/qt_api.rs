@@ -441,15 +441,15 @@ pub extern "C" fn nexus_teardown() {
 #[no_mangle]
 pub extern "C" fn nexus_init() {
     crate::core::session::CoreSession::warm_binary_cache();
-    std::thread::spawn(|| {
-        // QLockFile is acquired by the Qt host before nexus_init(), so any Core
-        // found here is an orphan from an abnormal previous Nexus process.
-        crate::core::session::CoreSession::kill_stray_cores(None);
-        if let Err(e) = crate::sys::recover_stale_network_state() {
-            eprintln!("nexus: stale system network recovery failed: {e}");
-        }
-        crate::firewall::reset_best_effort();
-    });
+    // The Qt host acquires the per-user QLockFile before nexus_init(), so any
+    // NexusCore found here is an orphan from an abnormal previous process. Keep
+    // crash recovery synchronous: the UI must not expose a new connect action
+    // until stale Proxy/PAC/DNS and firewall state have been reconciled.
+    crate::core::session::CoreSession::kill_stray_cores(None);
+    if let Err(e) = crate::sys::recover_stale_network_state() {
+        eprintln!("nexus: stale system network recovery failed: {e}");
+    }
+    crate::firewall::reset_best_effort();
 }
 
 #[no_mangle]
