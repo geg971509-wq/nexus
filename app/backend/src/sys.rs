@@ -64,10 +64,12 @@ pub(crate) fn with_system_network_change_if<T>(
 
 #[cfg(target_os = "macos")]
 pub(crate) fn recover_stale_network_state() -> Result<String, String> {
-    with_system_network_change(|| match crate::network_recovery::recover_stale_and_clear()? {
-        true => Ok("restored stale Nexus-owned proxy/PAC/DNS state".into()),
-        false => Ok("no stale system network state".into()),
-    })
+    with_system_network_change(
+        || match crate::network_recovery::recover_stale_and_clear()? {
+            true => Ok("restored stale Nexus-owned proxy/PAC/DNS state".into()),
+            false => Ok("no stale system network state".into()),
+        },
+    )
 }
 
 #[cfg(target_os = "macos")]
@@ -238,7 +240,9 @@ fn set_system_proxy_inner(enabled: bool, port: u16) -> Result<String, String> {
     if !failures.is_empty() {
         let apply_error = failures.join(" · ");
         return match crate::network_recovery::restore_proxy_only() {
-            Ok(_) => Err(format!("system proxy on failed and was rolled back: {apply_error}")),
+            Ok(_) => Err(format!(
+                "system proxy on failed and was rolled back: {apply_error}"
+            )),
             Err(rollback) => Err(format!(
                 "system proxy on failed: {apply_error} · rollback failed: {rollback}"
             )),
@@ -284,7 +288,9 @@ fn set_system_dns_bootstrap_inner(enabled: bool, servers: &[String]) -> Result<S
     if !failures.is_empty() {
         let apply_error = failures.join(" · ");
         return match crate::network_recovery::restore_dns_only() {
-            Ok(_) => Err(format!("system dns on failed and was rolled back: {apply_error}")),
+            Ok(_) => Err(format!(
+                "system dns on failed and was rolled back: {apply_error}"
+            )),
             Err(rollback) => Err(format!(
                 "system dns on failed: {apply_error} · rollback failed: {rollback}"
             )),

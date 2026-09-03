@@ -274,7 +274,11 @@ fn restore_proxy(services: &[ProxyServiceState]) -> Result<(), String> {
             run(&[
                 "-setautoproxystate",
                 &service.service,
-                if service.auto_proxy.enabled { "on" } else { "off" },
+                if service.auto_proxy.enabled {
+                    "on"
+                } else {
+                    "off"
+                },
             ])
         })();
         if let Err(e) = result {
@@ -284,7 +288,10 @@ fn restore_proxy(services: &[ProxyServiceState]) -> Result<(), String> {
     if failures.is_empty() {
         Ok(())
     } else {
-        Err(format!("restore system proxy/PAC failed: {}", failures.join(" · ")))
+        Err(format!(
+            "restore system proxy/PAC failed: {}",
+            failures.join(" · ")
+        ))
     }
 }
 
@@ -305,7 +312,10 @@ fn restore_dns(services: &[DnsServiceState]) -> Result<(), String> {
     if failures.is_empty() {
         Ok(())
     } else {
-        Err(format!("restore system DNS failed: {}", failures.join(" · ")))
+        Err(format!(
+            "restore system DNS failed: {}",
+            failures.join(" · ")
+        ))
     }
 }
 
@@ -481,10 +491,12 @@ mod tests {
                 authenticated: false,
             }
         );
-        assert!(parse_proxy(
-            "Enabled: Yes\nServer: proxy.example\nPort: 8080\nAuthenticated Proxy Enabled: 1\n"
-        )
-        .authenticated);
+        assert!(
+            parse_proxy(
+                "Enabled: Yes\nServer: proxy.example\nPort: 8080\nAuthenticated Proxy Enabled: 1\n"
+            )
+            .authenticated
+        );
         assert_eq!(
             parse_auto_proxy("URL: https://example/pac\nEnabled: Yes\n"),
             AutoProxyState {
