@@ -32,12 +32,30 @@ impl SystemNetworkChange {
         set_system_proxy_inner(enabled, port)
     }
 
+    pub(crate) fn set_system_proxy_for_services(
+        &self,
+        enabled: bool,
+        port: u16,
+        services: &[String],
+    ) -> Result<String, String> {
+        set_system_proxy_for_services_inner(enabled, port, services)
+    }
+
     pub(crate) fn set_system_dns_bootstrap(
         &self,
         enabled: bool,
         servers: &[String],
     ) -> Result<String, String> {
         set_system_dns_bootstrap_inner(enabled, servers)
+    }
+
+    pub(crate) fn set_system_dns_bootstrap_for_services(
+        &self,
+        enabled: bool,
+        servers: &[String],
+        services: &[String],
+    ) -> Result<String, String> {
+        set_system_dns_bootstrap_for_services_inner(enabled, servers, services)
     }
 }
 
@@ -217,12 +235,21 @@ pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
 
 #[cfg(target_os = "macos")]
 fn set_system_proxy_inner(enabled: bool, port: u16) -> Result<String, String> {
+    let services = hot_services(enabled);
+    set_system_proxy_for_services_inner(enabled, port, &services)
+}
+
+#[cfg(target_os = "macos")]
+fn set_system_proxy_for_services_inner(
+    enabled: bool,
+    port: u16,
+    services: &[String],
+) -> Result<String, String> {
     let host = "127.0.0.1";
     let port_s = port.to_string();
-    let services = hot_services(enabled);
     let primary = services.first().cloned().unwrap_or_else(|| "Wi-Fi".into());
     let mut failures = Vec::new();
-    for service in &services {
+    for service in services {
         if let Err(e) = apply_one(service, enabled, host, &port_s) {
             failures.push(format!("`{service}`: {e}"));
         }
@@ -266,14 +293,24 @@ pub fn dns_servers_for_os(servers: &[String]) -> Vec<String> {
 
 /// Tun + fail-closed blocks bare DNS to LAN resolvers (router :53).
 /// Point primary services at the same bootstrap list PF already passes.
-/// `enabled=false` restores DHCP (`Empty`); `servers` is ignored then.
+/// `enabled=false` is retained as a low-level primitive for callers that
+/// explicitly request DHCP; Nexus lifecycle restoration uses exact snapshots.
 #[cfg(target_os = "macos")]
 fn set_system_dns_bootstrap_inner(enabled: bool, servers: &[String]) -> Result<String, String> {
-    let ips = dns_servers_for_os(servers);
     let services = hot_services(true);
+    set_system_dns_bootstrap_for_services_inner(enabled, servers, &services)
+}
+
+#[cfg(target_os = "macos")]
+fn set_system_dns_bootstrap_for_services_inner(
+    enabled: bool,
+    servers: &[String],
+    services: &[String],
+) -> Result<String, String> {
+    let ips = dns_servers_for_os(servers);
     let primary = services.first().cloned().unwrap_or_else(|| "Wi-Fi".into());
     let mut failures = Vec::new();
-    for service in &services {
+    for service in services {
         let result = if enabled {
             let mut argv: Vec<&str> = vec!["-setdnsservers", service];
             for ip in &ips {
