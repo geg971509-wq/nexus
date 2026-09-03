@@ -12,9 +12,10 @@ use crate::{
 pub(crate) fn set_system_proxy_cmd_sync(enabled: bool) -> Result<String, String> {
     use crate::data::store::Store;
 
-    Store::update(|st| {
+    let prev = Store::update(|st| {
+        let prev = st.system_proxy;
         st.system_proxy = enabled;
-        Ok(())
+        Ok(prev)
     })?;
     let port = MIXED_PORT;
     // Short lock: query only — never hold SESSION across networksetup.
@@ -31,11 +32,24 @@ pub(crate) fn set_system_proxy_cmd_sync(enabled: bool) -> Result<String, String>
         ));
     }
 
-    if enabled {
+    let result = if enabled {
         network_restore::apply_proxy(port)
     } else {
-        Ok(network_restore::restore_proxy()?
-            .unwrap_or_else(|| "system proxy intent=off · no Nexus-owned proxy state".into()))
+        network_restore::restore_proxy().map(|note| {
+            note.unwrap_or_else(|| "system proxy intent=off · no Nexus-owned proxy state".into())
+        })
+    };
+    match result {
+        Ok(note) => Ok(note),
+        Err(e) => match Store::update(|st| {
+            st.system_proxy = prev;
+            Ok(())
+        }) {
+            Ok(()) => Err(e),
+            Err(store_err) => Err(format!(
+                "{e}; system_proxy preference rollback failed: {store_err}"
+            )),
+        },
     }
 }
 
