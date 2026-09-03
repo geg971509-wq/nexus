@@ -37,13 +37,20 @@ traffic went. `core.log` rolls to `core.log.1` past 16 MB at spawn. The macOS
 firewall daemon logs separately to `/var/log/nexusfwd.log`, created `0600` at
 install and removed on uninstall.
 
+Before Nexus changes macOS Web/HTTPS/SOCKS/PAC or DNS settings it writes a private
+`network-recovery.json` journal in the data directory. Normal disconnect, rollback,
+and quit restore the saved per-service settings and remove the journal. If Nexus
+exits abnormally, the next launch restores the stale journal before a new network
+ownership period can replace it.
+
 ## Layout
 
 - `app/qt/` — Qt Quick GUI (C++ host + QML)
 - `app/backend/` — Rust backend + JSON C ABI (`nexus_invoke`) linked by the Qt host
 - `app/backend/src/core/` — framed IPC + Core session lifecycle
 - `app/backend/src/data/` — JSON store + pure configuration generation
-- `app/backend/src/sys.rs` — macOS system proxy integration
+- `app/backend/src/sys.rs` — serialized macOS system network integration
+- `app/backend/src/network_recovery.rs` — crash-safe Proxy/PAC/DNS recovery journal
 - `app/assets/icons/` — application and tray icon assets
 - `core/server/` — Go core (`module NexusCore`, **GPLv3** combined work)
 - `licenses/` — full GPLv3 / MPL-2.0 texts
@@ -104,7 +111,7 @@ cmake --build app/qt/build --target nexus && app/qt/build/nexus
 ## Capabilities (0.2.3)
 
 - Connect: selected node → generate → Core `Start` (share link or outbound JSON)
-- Tun chip + system proxy; exit clears OS proxy on `:2080` and stops Core
+- Tun chip + system proxy; Nexus restores the user's original Proxy/PAC/DNS state on disconnect, rollback, quit, and next-launch crash recovery
 - Catalog (groups/nodes) in store via `catalog_get` / `catalog_put`
 - Node **Traffic** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only Reset traffic zeros)
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled Connectivity (not a proxy-path test)
