@@ -184,7 +184,10 @@ fn ordered_services() -> Vec<String> {
 
 #[cfg(target_os = "macos")]
 fn apply_proxy(service: &str, host: &str, port_s: &str) -> Result<(), String> {
+    // Nexus owns the complete automatic-proxy surface while its manual proxy is
+    // active. Both PAC and WPAD were snapshotted before this function is called.
     run_ns(&["-setautoproxystate", service, "off"])?;
+    run_ns(&["-setproxyautodiscovery", service, "off"])?;
     run_ns(&["-setwebproxy", service, host, port_s])?;
     run_ns(&["-setsecurewebproxy", service, host, port_s])?;
     run_ns(&["-setwebproxystate", service, "on"])?;
