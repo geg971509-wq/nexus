@@ -4,12 +4,15 @@
 #include "tray.h"
 
 #include <QApplication>
+#include <QDir>
 #include <QEvent>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
+#include <QStandardPaths>
 #include <QWindow>
 #include <atomic>
 #include <cstdio>
@@ -106,6 +109,23 @@ int main(int argc, char *argv[]) {
     app.setApplicationName(QStringLiteral("Nexus"));
     app.setOrganizationName(QStringLiteral("Nexus"));
     app.setQuitOnLastWindowClosed(false);
+
+    // The recovery journal represents exclusive ownership of the user's system
+    // Proxy/PAC/DNS state. A second process must be rejected before nexus_init()
+    // can inspect or restore that journal. Disable age-only stale detection: a
+    // healthy long-running instance must never lose its lock merely due to age;
+    // QLockFile still detects a dead owning process on the same host.
+    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!QDir().mkpath(appData)) {
+        fprintf(stderr, "nexus: cannot create app data directory for instance lock\n");
+        return 1;
+    }
+    QLockFile instanceLock(QDir(appData).filePath(QStringLiteral("instance.lock")));
+    instanceLock.setStaleLockTime(0);
+    if (!instanceLock.tryLock()) {
+        fprintf(stderr, "nexus: another instance already owns system network state\n");
+        return 0;
+    }
 
     NexusBridge bridge;
     g_bridge.store(&bridge, std::memory_order_release);
