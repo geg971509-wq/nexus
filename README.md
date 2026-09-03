@@ -13,7 +13,6 @@ macOS VPN / proxy client. GUI: Qt Quick (`app/qt`). Engine: Go core (**sing-box*
 | Product | Nexus |
 | Version | 0.2.3 |
 | Bundle ID | `app.nexus.desktop` |
-| Deeplink | `nexus://` |
 | Core binary | `NexusCore` (framed IPC) |
 | Socket env | `NEXUS_CORE_SOCKET` / `NEXUS_CORE_DEBUG` |
 
@@ -21,7 +20,7 @@ macOS VPN / proxy client. GUI: Qt Quick (`app/qt`). Engine: Go core (**sing-box*
 
 | Target | Arch | Shell / install | Core |
 |--------|------|-----------------|------|
-| macOS 26+ | arm64 | self-contained `.app` | `NexusCore` (CGO) |
+| macOS 13+ | arm64 | self-contained `.app` | `NexusCore` (CGO) |
 
 Nexus does not ship non-macOS targets. Historical HTML GUI and platform pack
 scripts live under [`archive/`](archive/) and are excluded from the product build.
@@ -38,13 +37,22 @@ traffic went. `core.log` rolls to `core.log.1` past 16 MB at spawn. The macOS
 firewall daemon logs separately to `/var/log/nexusfwd.log`, created `0600` at
 install and removed on uninstall.
 
+Before Nexus changes macOS Web/HTTPS/SOCKS/PAC or DNS settings it writes a private
+`network-recovery.json` journal in the data directory. Normal disconnect, rollback,
+and quit restore only the per-service settings Nexus took ownership of and remove
+those journal entries. If Nexus exits abnormally, the next launch restores the
+stale journal before new network ownership can begin. Existing authenticated
+system proxies are not overwritten because `networksetup` does not expose the
+credentials required for exact restoration; Tun remains available in that case.
+
 ## Layout
 
 - `app/qt/` — Qt Quick GUI (C++ host + QML)
 - `app/backend/` — Rust backend + JSON C ABI (`nexus_invoke`) linked by the Qt host
 - `app/backend/src/core/` — framed IPC + Core session lifecycle
 - `app/backend/src/data/` — JSON store + pure configuration generation
-- `app/backend/src/sys.rs` — macOS system proxy integration
+- `app/backend/src/sys.rs` — serialized macOS system network integration
+- `app/backend/src/network_recovery.rs` — crash-safe Proxy/PAC/DNS recovery journal
 - `app/assets/icons/` — application and tray icon assets
 - `core/server/` — Go core (`module NexusCore`, **GPLv3** combined work)
 - `licenses/` — full GPLv3 / MPL-2.0 texts
@@ -76,7 +84,7 @@ listed in `THIRD_PARTY_NOTICES.md`. This is an engineering layout, not legal adv
 
 Produces `bin/NexusCore` and `bin/Nexus.app` (Qt host).
 
-Requires: macOS 26 or newer, Xcode CLT, `go`, `cargo`/`rustc`, `cmake`, `protoc`, and Qt 6.11.
+Requires: macOS 13 or newer, Xcode CLT, `go`, `cargo`/`rustc`, `cmake`, `protoc`, and Qt 6.11.
 Homebrew Qt is detected automatically; set `NEXUS_QT_HOME` for another Qt prefix.
 
 The build embeds Nexus QML and tray assets, deploys the required Qt frameworks
@@ -105,7 +113,7 @@ cmake --build app/qt/build --target nexus && app/qt/build/nexus
 ## Capabilities (0.2.3)
 
 - Connect: selected node → generate → Core `Start` (share link or outbound JSON)
-- Tun chip + system proxy; exit clears OS proxy on `:2080` and stops Core
+- Tun chip + system proxy; Nexus restores only the Proxy/PAC/DNS settings it took ownership of on disconnect, rollback, quit, and next-launch crash recovery; authenticated system proxies are detected and left untouched
 - Catalog (groups/nodes) in store via `catalog_get` / `catalog_put`
 - Node **Traffic** column: Core `QueryStats` deltas accumulated **per node** (survives node switch / Tun re-Start; only Reset traffic zeros)
 - Honest UI: tunnel ≠ selected shows mismatch; TCP probe labeled Connectivity (not a proxy-path test)

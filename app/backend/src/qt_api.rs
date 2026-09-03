@@ -85,12 +85,16 @@ where
     result_json(crate::runtime::block_on(f))
 }
 
-fn obj(json: &str) -> Value {
+fn obj(json: &str) -> Result<Value, String> {
     let t = json.trim();
     if t.is_empty() {
-        return json!({});
+        return Ok(json!({}));
     }
-    serde_json::from_str(t).unwrap_or_else(|_| json!({}))
+    let value: Value = serde_json::from_str(t).map_err(|e| format!("invalid json: {e}"))?;
+    if !value.is_object() {
+        return Err("json args must be an object".into());
+    }
+    Ok(value)
 }
 
 fn get_bool(v: &Value, snake: &str, camel: &str) -> Option<bool> {
@@ -110,7 +114,7 @@ fn get_i32(v: &Value, snake: &str, camel: &str) -> Option<i32> {
     v.get(snake)
         .or_else(|| v.get(camel))
         .and_then(|x| x.as_i64())
-        .map(|n| n as i32)
+        .and_then(|n| i32::try_from(n).ok())
 }
 
 fn get_val(v: &Value, snake: &str, camel: &str) -> Option<Value> {
@@ -319,7 +323,10 @@ fn qt_runtime_metrics() -> String {
 }
 
 pub(crate) fn dispatch(cmd: &str, json: &str) -> String {
-    let v = obj(json);
+    let v = match obj(json) {
+        Ok(v) => v,
+        Err(e) => return json!({"error": e}).to_string(),
+    };
     match cmd {
         "app_identity" => crate::app_identity().to_string(),
         "store_snapshot" => await_json(crate::store_snapshot()),
@@ -434,11 +441,15 @@ pub extern "C" fn nexus_teardown() {
 #[no_mangle]
 pub extern "C" fn nexus_init() {
     crate::core::session::CoreSession::warm_binary_cache();
-    std::thread::spawn(|| {
-        if !crate::tunnel_is_live() {
-            crate::firewall::reset_best_effort();
-        }
-    });
+    // The Qt host acquires the per-user QLockFile before nexus_init(), so any
+    // NexusCore found here is an orphan from an abnormal previous process. Keep
+    // crash recovery synchronous: the UI must not expose a new connect action
+    // until stale Proxy/PAC/DNS and firewall state have been reconciled.
+    crate::core::session::CoreSession::kill_stray_cores(None);
+    if let Err(e) = crate::sys::recover_stale_network_state() {
+        eprintln!("nexus: stale system network recovery failed: {e}");
+    }
+    crate::firewall::reset_best_effort();
 }
 
 #[no_mangle]
@@ -474,6 +485,27 @@ mod tests {
         let s = dispatch("app_identity", "{}");
         assert!(s.contains("mixed_port"), "{s}");
         assert!(s.contains("Nexus"), "{s}");
+    }
+
+    #[test]
+    fn invalid_json_is_rejected() {
+        let s = dispatch("set_tun_cmd", "{");
+        assert!(s.contains("invalid json"), "{s}");
+        assert!(!s.contains("missing enabled"), "{s}");
+    }
+
+    #[test]
+    fn non_object_json_is_rejected() {
+        let s = dispatch("app_identity", "[]");
+        assert!(s.contains("json args must be an object"), "{s}");
+    }
+
+    #[test]
+    fn i32_input_does_not_wrap() {
+        let v = json!({"n": i64::MAX});
+        assert_eq!(get_i32(&v, "n", "n"), None);
+        let v = json!({"n": i32::MAX});
+        assert_eq!(get_i32(&v, "n", "n"), Some(i32::MAX));
     }
 
     #[test]

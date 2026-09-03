@@ -109,13 +109,15 @@ pub fn ensure_setuid_core(src: &Path) -> Result<PathBuf, String> {
         }
         let dest = privileged_core_path();
         if dest.is_file() && path_has_setuid(&dest) {
-            if let (Ok(s), Ok(d)) = (fs::metadata(src), fs::metadata(&dest)) {
-                let src_newer = match (s.modified(), d.modified()) {
-                    (Ok(sm), Ok(dm)) => sm > dm,
-                    _ => true,
-                };
-                if s.len() == d.len() && !src_newer {
-                    return Ok(dest);
+            let same_size = match (fs::metadata(src), fs::metadata(&dest)) {
+                (Ok(s), Ok(d)) => s.len() == d.len(),
+                _ => false,
+            };
+            if same_size {
+                if let (Ok(src_hash), Ok(dest_hash)) = (sha256_file(src), sha256_file(&dest)) {
+                    if src_hash == dest_hash {
+                        return Ok(dest);
+                    }
                 }
             }
         }

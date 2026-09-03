@@ -46,21 +46,44 @@ impl CoreSession {
     pub fn socket_path() -> PathBuf {
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
             let dir = std::env::temp_dir().join("nexus");
-            let _ = std::fs::create_dir_all(&dir);
-            // 0700 explicitly. create_dir_all leaves 0755, and Core's peer check
-            // documents this directory as the primary control with its own pid
-            // check as defence in depth. On macOS $TMPDIR is per-user 0700 so the
-            // property held by accident; on any other unix /tmp is world-listable
-            // and it did not. This also closes the bind-then-chmod window on the
-            // socket itself: nobody else can reach the path to begin with.
-            let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
             let seq = CORE_SOCKET_SEQ
                 .fetch_add(1, Ordering::Relaxed)
                 .wrapping_add(1);
             dir.join(format!("nexus-core-{}-{seq}.sock", std::process::id()))
         }
+    }
+
+    /// Create and verify the private parent directory before a socket is bound.
+    /// Core's parent-PID check is defense in depth; this 0700 directory is the
+    /// first boundary and must not silently degrade to a shared path.
+    #[cfg(unix)]
+    fn prepare_socket_dir(path: &Path) -> io::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = path.parent().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "core socket has no parent directory",
+            )
+        })?;
+        std::fs::create_dir_all(dir)?;
+        let meta = std::fs::symlink_metadata(dir)?;
+        if !meta.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("core socket parent is not a directory: {}", dir.display()),
+            ));
+        }
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        let mode = std::fs::metadata(dir)?.permissions().mode() & 0o777;
+        if mode != 0o700 {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("core socket parent mode is {mode:o}, expected 700"),
+            ));
+        }
+        Ok(())
     }
 
     fn core_bin_name() -> &'static str {
@@ -277,17 +300,20 @@ impl CoreSession {
 
     #[cfg(unix)]
     pub fn start(core_bin: &Path) -> io::Result<Self> {
+        use std::os::unix::fs::PermissionsExt;
         use std::os::unix::net::UnixListener;
 
         Self::kill_stray_cores(None);
 
         let path = Self::socket_path();
+        Self::prepare_socket_dir(&path)?;
         let env_socket = path.to_string_lossy().into_owned();
         let _ = std::fs::remove_file(&path);
         let listener = UnixListener::bind(&path)?;
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        if let Err(e) = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)) {
+            drop(listener);
+            let _ = std::fs::remove_file(&path);
+            return Err(e);
         }
         listener.set_nonblocking(true)?;
 
@@ -494,6 +520,7 @@ fn parse_core_pids(ps_output: &str) -> Vec<u32> {
 #[cfg(all(test, unix))]
 mod stray_tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     /// Verbatim shape of `ps -axo pid=,comm=` on macOS, including the setuid copy
     /// under its own name and the decoys that `pgrep -f NexusCore` used to hit.
@@ -536,6 +563,24 @@ mod stray_tests {
         let first = CoreSession::socket_path();
         let second = CoreSession::socket_path();
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn socket_parent_is_restricted_before_bind() {
+        let dir = std::env::temp_dir().join(format!(
+            "nexus-socket-perm-test-{}-{}",
+            std::process::id(),
+            CORE_SOCKET_SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        let path = dir.join("core.sock");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        CoreSession::prepare_socket_dir(&path).unwrap();
+
+        let mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
