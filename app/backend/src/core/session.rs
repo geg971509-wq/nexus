@@ -62,7 +62,10 @@ impl CoreSession {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = path.parent().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "core socket has no parent directory")
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "core socket has no parent directory",
+            )
         })?;
         std::fs::create_dir_all(dir)?;
         let meta = std::fs::symlink_metadata(dir)?;
@@ -307,9 +310,7 @@ impl CoreSession {
         let env_socket = path.to_string_lossy().into_owned();
         let _ = std::fs::remove_file(&path);
         let listener = UnixListener::bind(&path)?;
-        if let Err(e) =
-            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
-        {
+        if let Err(e) = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)) {
             drop(listener);
             let _ = std::fs::remove_file(&path);
             return Err(e);
