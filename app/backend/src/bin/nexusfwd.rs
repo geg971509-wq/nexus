@@ -2,6 +2,45 @@
 //! Socket: /var/run/nexusfwd.sock mode 0666 + mandatory getpeereid allowlist (L1).
 
 #[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(target_os = "macos")]
+const MAX_ACTIVE_CLIENTS: usize = 32;
+#[cfg(target_os = "macos")]
+static ACTIVE_CLIENTS: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(target_os = "macos")]
+struct ActiveClient;
+
+#[cfg(target_os = "macos")]
+impl ActiveClient {
+    fn try_acquire() -> Option<Self> {
+        let mut current = ACTIVE_CLIENTS.load(Ordering::Relaxed);
+        loop {
+            if current >= MAX_ACTIVE_CLIENTS {
+                return None;
+            }
+            match ACTIVE_CLIENTS.compare_exchange_weak(
+                current,
+                current + 1,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return Some(Self),
+                Err(observed) => current = observed,
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for ActiveClient {
+    fn drop(&mut self) {
+        ACTIVE_CLIENTS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn main() {
     if let Err(e) = run() {
         eprintln!("nexusfwd fatal: {e}");
@@ -11,6 +50,7 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn run() -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
     use std::os::unix::net::UnixListener;
 
     const SOCK: &str = "/var/run/nexusfwd.sock";
@@ -24,30 +64,45 @@ fn run() -> Result<(), String> {
     // Seed allowlist with console user if file missing (install writes this too).
     if !std::path::Path::new(ALLOW_PATH).is_file() {
         if let Some(cu) = console_uid() {
-            let _ = std::fs::write(ALLOW_PATH, format!("{cu}\n"));
-            unsafe {
-                let c = std::ffi::CString::new(ALLOW_PATH).unwrap();
-                libc::chmod(c.as_ptr(), 0o644);
-            }
+            std::fs::write(ALLOW_PATH, format!("{cu}\n"))
+                .map_err(|e| format!("write {ALLOW_PATH}: {e}"))?;
+            std::fs::set_permissions(ALLOW_PATH, std::fs::Permissions::from_mode(0o644))
+                .map_err(|e| format!("chmod {ALLOW_PATH}: {e}"))?;
         }
     }
 
     let _ = std::fs::remove_file(SOCK);
     let listener = UnixListener::bind(SOCK).map_err(|e| format!("bind {SOCK}: {e}"))?;
-    // L1: 0666 + peer UID allowlist (not bare open).
-    unsafe {
-        let c = std::ffi::CString::new(SOCK).unwrap();
-        libc::chmod(c.as_ptr(), 0o666);
-    }
+    // L1: 0666 + peer UID allowlist (not bare open). If the documented socket
+    // mode cannot be established, do not leave a partially configured daemon.
+    std::fs::set_permissions(SOCK, std::fs::Permissions::from_mode(0o666))
+        .map_err(|e| format!("chmod {SOCK}: {e}"))?;
     eprintln!("nexusfwd listening on {SOCK}");
 
     for conn in listener.incoming() {
         match conn {
-            // One thread per connection: handling inline means a peer that
-            // connects and never writes wedges the accept loop, and with it every
-            // later policy apply. The socket is 0666, so any local process can.
-            Ok(stream) => {
+            Ok(mut stream) => {
+                // Authenticate before allocating a worker. The socket is 0666 so
+                // any local account can connect; doing getpeereid inside the new
+                // thread let an unauthorized account create unbounded workers.
+                let euid = match peer_uid(&stream) {
+                    Ok(uid) => uid,
+                    Err(e) => {
+                        eprintln!("peer auth: {}", clamp_log(&e));
+                        continue;
+                    }
+                };
+                if !allowed_uids().contains(&euid) {
+                    let _ = write_denied(&mut stream, euid);
+                    continue;
+                }
+                let Some(client_slot) = ActiveClient::try_acquire() else {
+                    // An authorized but wedged client must not exhaust root daemon
+                    // threads. Dropping the socket is the backpressure signal.
+                    continue;
+                };
                 std::thread::spawn(move || {
+                    let _slot = client_slot;
                     if let Err(e) = handle_client(stream) {
                         eprintln!("client: {}", clamp_log(&e));
                     }
@@ -61,10 +116,10 @@ fn run() -> Result<(), String> {
 
 /// Cap on any one line reaching this process's stderr.
 ///
-/// launchd points that at /var/log/nexusfwd.log and never rotates it, so every
-/// byte written here is unbounded growth on the root filesystem, driven by
-/// whoever is connecting. Bounding at the sink means no future log line can
-/// reopen that hole by accident.
+/// launchd points stderr at a root-owned persistent log. Bounding each diagnostic
+/// prevents request contents or parser errors from expanding one event into a
+/// very large write; connection admission separately prevents unauthenticated
+/// peers from turning that sink into a high-rate denial log.
 #[cfg(target_os = "macos")]
 fn clamp_log(msg: &str) -> String {
     const MAX: usize = 200;
@@ -118,6 +173,44 @@ fn allowed_uids() -> Vec<u32> {
     v
 }
 
+#[cfg(target_os = "macos")]
+fn peer_uid(stream: &std::os::unix::net::UnixStream) -> Result<u32, String> {
+    use std::os::unix::io::AsRawFd;
+
+    let mut euid: libc::uid_t = 0;
+    let mut egid: libc::gid_t = 0;
+    let rc = unsafe { libc::getpeereid(stream.as_raw_fd(), &mut euid, &mut egid) };
+    if rc != 0 {
+        return Err(format!("getpeereid: {}", std::io::Error::last_os_error()));
+    }
+    let _ = egid;
+    Ok(euid)
+}
+
+#[cfg(target_os = "macos")]
+fn write_denied(
+    stream: &mut std::os::unix::net::UnixStream,
+    euid: u32,
+) -> Result<(), String> {
+    use nexus_lib::firewall::wire;
+    use std::io::Write;
+    use std::time::Duration;
+
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
+    let body = serde_json::to_string(&wire::Response {
+        ok: false,
+        err: Some(format!("peer uid {euid} not allowed")),
+        helper: None,
+    })
+    .unwrap_or_else(|_| r#"{"ok":false,"err":"denied"}"#.into());
+    stream
+        .write_all(body.as_bytes())
+        .map_err(|e| format!("deny write: {e}"))?;
+    stream
+        .write_all(b"\n")
+        .map_err(|e| format!("deny write: {e}"))
+}
+
 /// A policy request is a few hundred bytes. Without a ceiling, a peer that never
 /// sends a newline grows this root process until the machine suffers.
 #[cfg(target_os = "macos")]
@@ -146,7 +239,6 @@ fn read_request_line<R: std::io::BufRead>(reader: R) -> Result<String, String> {
 fn handle_client(stream: std::os::unix::net::UnixStream) -> Result<(), String> {
     use nexus_lib::firewall::{macos_pf, wire, Policy};
     use std::io::{BufReader, Write};
-    use std::os::unix::io::AsRawFd;
     use std::time::Duration;
 
     /// The shell already bounds its side at 15s (firewall/macos.rs); the
@@ -155,29 +247,6 @@ fn handle_client(stream: std::os::unix::net::UnixStream) -> Result<(), String> {
 
     let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
     let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
-
-    let fd = stream.as_raw_fd();
-    let mut euid: libc::uid_t = 0;
-    let mut egid: libc::gid_t = 0;
-    let rc = unsafe { libc::getpeereid(fd, &mut euid, &mut egid) };
-    if rc != 0 {
-        return Err("getpeereid failed".into());
-    }
-    let allow = allowed_uids();
-    if !allow.contains(&euid) {
-        // Refuse without applying PF.
-        let mut stream = stream;
-        let body = serde_json::to_string(&wire::Response {
-            ok: false,
-            err: Some(format!("peer uid {euid} not allowed")),
-            helper: None,
-        })
-        .unwrap_or_else(|_| r#"{"ok":false,"err":"denied"}"#.into());
-        let _ = stream.write_all(body.as_bytes());
-        let _ = stream.write_all(b"\n");
-        return Err(format!("denied uid {euid}"));
-    }
-    let _ = egid;
 
     let line = read_request_line(BufReader::new(
         stream.try_clone().map_err(|e| e.to_string())?,
@@ -188,9 +257,7 @@ fn handle_client(stream: std::os::unix::net::UnixStream) -> Result<(), String> {
     }
 
     // Never echo the request. It carries peer IPs, the resolver list and the tun
-    // ifname, and the sink is a world-readable root-owned file that nothing
-    // rotates — so echoing let any allowed caller write 64 KiB per connection
-    // into it. The parse error and a length are what a bug report actually needs.
+    // ifname; the parse error and a length are what a bug report actually needs.
     let req: wire::Request = serde_json::from_str(line)
         .map_err(|e| format!("bad json ({e}) in {} byte request", line.len()))?;
     let resp = match req {
@@ -275,14 +342,25 @@ mod tests {
         under.push(b'\n');
         assert!(read_request_line(&under[..]).is_ok());
     }
+
+    #[test]
+    fn active_client_limit_is_bounded() {
+        ACTIVE_CLIENTS.store(0, Ordering::SeqCst);
+        let slots: Vec<_> = (0..MAX_ACTIVE_CLIENTS)
+            .map(|_| ActiveClient::try_acquire().expect("slot"))
+            .collect();
+        assert!(ActiveClient::try_acquire().is_none());
+        drop(slots);
+        assert_eq!(ACTIVE_CLIENTS.load(Ordering::SeqCst), 0);
+    }
 }
 
 #[cfg(all(test, target_os = "macos"))]
 mod log_tests {
     use super::*;
 
-    /// launchd never rotates this file, so a caller must not be able to choose how
-    /// many bytes land in it.
+    /// One client diagnostic must stay bounded even when the parser error carries
+    /// a very long input-derived message.
     #[test]
     fn long_input_is_clamped_and_counted() {
         let huge = "x".repeat(64 * 1024);
