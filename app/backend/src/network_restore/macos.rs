@@ -101,7 +101,12 @@ fn parse_manual_proxy(text: &str) -> Result<ManualProxyState, String> {
 }
 
 fn parse_auto_proxy(text: &str) -> Result<(String, bool), String> {
-    let url = field(text, "URL").unwrap_or_default().to_string();
+    let raw_url = field(text, "URL").unwrap_or_default().trim();
+    let url = if raw_url.eq_ignore_ascii_case("(null)") {
+        String::new()
+    } else {
+        raw_url.to_string()
+    };
     let enabled = parse_switch(
         field(text, "Enabled").ok_or_else(|| "auto proxy output missing Enabled".to_string())?,
     )?;
@@ -350,6 +355,13 @@ mod tests {
             parse_auto_proxy("URL: https://pac.example/proxy.pac\nEnabled: Yes\n").unwrap();
         assert_eq!(url, "https://pac.example/proxy.pac");
         assert!(enabled);
+    }
+
+    #[test]
+    fn auto_proxy_parser_normalizes_networksetup_null() {
+        let (url, enabled) = parse_auto_proxy("URL: (null)\nEnabled: No\n").unwrap();
+        assert!(url.is_empty());
+        assert!(!enabled);
     }
 
     #[test]
