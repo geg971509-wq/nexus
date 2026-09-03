@@ -28,10 +28,6 @@ pub(crate) struct SystemNetworkChange;
 
 #[cfg(target_os = "macos")]
 impl SystemNetworkChange {
-    pub(crate) fn ensure_recovery_snapshot(&self) -> Result<(), String> {
-        crate::network_recovery::ensure_snapshot(&hot_services(true))
-    }
-
     pub(crate) fn set_system_proxy(&self, enabled: bool, port: u16) -> Result<String, String> {
         set_system_proxy_inner(enabled, port)
     }
@@ -46,7 +42,7 @@ impl SystemNetworkChange {
 
     pub(crate) fn restore_all(&self) -> Result<String, String> {
         match crate::network_recovery::restore_all_and_clear()? {
-            true => Ok("restored original proxy/PAC/DNS".into()),
+            true => Ok("restored original Nexus-owned proxy/PAC/DNS state".into()),
             false => Ok("no saved system network state".into()),
         }
     }
@@ -68,7 +64,10 @@ pub(crate) fn with_system_network_change_if<T>(
 
 #[cfg(target_os = "macos")]
 pub(crate) fn recover_stale_network_state() -> Result<String, String> {
-    with_system_network_change(|| SystemNetworkChange.restore_all())
+    with_system_network_change(|| {
+        let network = SystemNetworkChange;
+        network.restore_all()
+    })
 }
 
 #[cfg(target_os = "macos")]
@@ -222,13 +221,13 @@ fn set_system_proxy_inner(enabled: bool, port: u16) -> Result<String, String> {
     if !enabled {
         return match crate::network_recovery::restore_proxy_only()? {
             true => Ok("restored original system proxy/PAC".into()),
-            false => Ok("system proxy unchanged (no Nexus recovery snapshot)".into()),
+            false => Ok("system proxy unchanged (not owned by Nexus)".into()),
         };
     }
     let host = "127.0.0.1";
     let port_s = port.to_string();
     let services = hot_services(true);
-    crate::network_recovery::ensure_snapshot(&services)?;
+    crate::network_recovery::ensure_proxy_snapshot(&services)?;
     let primary = services.first().cloned().unwrap_or_else(|| "Wi-Fi".into());
     let mut failures = Vec::new();
     for service in &services {
@@ -259,12 +258,12 @@ fn set_system_dns_bootstrap_inner(enabled: bool, servers: &[String]) -> Result<S
     if !enabled {
         return match crate::network_recovery::restore_dns_only()? {
             true => Ok("restored original system DNS".into()),
-            false => Ok("system DNS unchanged (no Nexus recovery snapshot)".into()),
+            false => Ok("system DNS unchanged (not owned by Nexus)".into()),
         };
     }
     let ips = dns_servers_for_os(servers);
     let services = hot_services(true);
-    crate::network_recovery::ensure_snapshot(&services)?;
+    crate::network_recovery::ensure_dns_snapshot(&services)?;
     let primary = services.first().cloned().unwrap_or_else(|| "Wi-Fi".into());
     let mut failures = Vec::new();
     for service in &services {
