@@ -104,10 +104,10 @@ pub(super) fn save_state(path: &Path, state: &RecoveryState) -> Result<(), Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
-    #[test]
-    fn recovery_state_round_trips_without_network_calls() {
-        let state = RecoveryState {
+    fn sample_state() -> RecoveryState {
+        RecoveryState {
             version: RECOVERY_VERSION,
             proxy: Some(vec![ProxyServiceState {
                 service: "Wi-Fi".into(),
@@ -136,10 +136,42 @@ mod tests {
                 service: "Wi-Fi".into(),
                 servers: Some(vec!["9.9.9.9".into(), "2620:fe::fe".into()]),
             }]),
-        };
+        }
+    }
+
+    #[test]
+    fn recovery_state_round_trips_without_network_calls() {
+        let state = sample_state();
         let body = serde_json::to_string(&state).unwrap();
         let decoded: RecoveryState = serde_json::from_str(&body).unwrap();
         assert_eq!(decoded.proxy.unwrap()[0].service, "Wi-Fi");
         assert_eq!(decoded.dns.unwrap()[0].servers.as_ref().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn recovery_file_is_private_and_removed_when_empty() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "nexus-network-recovery-test-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("network-recovery.json");
+
+        let mut state = sample_state();
+        save_state(&path, &state).unwrap();
+        assert!(path.is_file());
+        assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        let loaded = load_state(&path).unwrap();
+        assert!(loaded.proxy.is_some() && loaded.dns.is_some());
+
+        state.proxy = None;
+        state.dns = None;
+        save_state(&path, &state).unwrap();
+        assert!(!path.exists(), "empty recovery transaction must remove its file");
+        let _ = fs::remove_dir_all(&dir);
     }
 }
