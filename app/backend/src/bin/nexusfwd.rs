@@ -188,10 +188,7 @@ fn peer_uid(stream: &std::os::unix::net::UnixStream) -> Result<u32, String> {
 }
 
 #[cfg(target_os = "macos")]
-fn write_denied(
-    stream: &mut std::os::unix::net::UnixStream,
-    euid: u32,
-) -> Result<(), String> {
+fn write_denied(stream: &mut std::os::unix::net::UnixStream, euid: u32) -> Result<(), String> {
     use nexus_lib::firewall::wire;
     use std::io::Write;
     use std::time::Duration;
