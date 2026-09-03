@@ -1,10 +1,10 @@
 //! Startup-only repair for network settings left by an abnormal Nexus exit.
 //!
-//! The Qt host acquires its QLockFile before calling `nexus_init`, so this module
-//! can treat a pending recovery file as abandoned by a previous process without
-//! duplicating process-discovery heuristics here.
+//! The Qt host acquires its QLockFile before calling this module, so a pending
+//! recovery file belongs to an abandoned previous process.
 
 use crate::{core::session::CoreSession, network_restore};
+use std::ffi::{c_char, CString};
 
 /// Repair any Proxy/PAC/DNS transaction left by an abnormal exit before QML is
 /// loaded. Failure is fatal to startup: accepting new connection actions while
@@ -29,4 +29,23 @@ pub(crate) fn recover_pending_network_state() -> Result<Vec<String>, String> {
     let notes = network_restore::restore_all()?;
     crate::firewall::reset_best_effort();
     Ok(notes)
+}
+
+fn into_c_string(body: String) -> *mut c_char {
+    let bytes: Vec<u8> = body.into_bytes().into_iter().filter(|&b| b != 0).collect();
+    CString::new(bytes)
+        .unwrap_or_else(|_| CString::from_vec_with_nul(b"{\"error\":\"json\"}\0".to_vec()).unwrap())
+        .into_raw()
+}
+
+/// The host calls this after acquiring the single-instance lock and before
+/// `nexus_init`/QML. The returned pointer follows the same ownership convention
+/// as `nexus_invoke` and must be released with `nexus_free`.
+#[no_mangle]
+pub extern "C" fn nexus_recover_startup() -> *mut c_char {
+    let body = match recover_pending_network_state() {
+        Ok(notes) => serde_json::json!({"ok": true, "notes": notes}).to_string(),
+        Err(e) => serde_json::json!({"ok": false, "error": e}).to_string(),
+    };
+    into_c_string(body)
 }
