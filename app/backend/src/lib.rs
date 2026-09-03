@@ -16,6 +16,7 @@ pub mod qt_api;
 mod quit;
 mod runtime;
 mod session_access;
+mod startup_recovery;
 mod sub;
 mod subscription_commands;
 mod sys;
