@@ -125,9 +125,13 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: dtolnay/rust-toolchain@1.94.0
+      # build.sh stages the Qt Quick Timeline runtime when macdeployqt does not.
+      # The Qt online installer ships Timeline as a separate module, unlike a
+      # full Homebrew Qt installation, so CI must request it explicitly.
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.11.0'
+          modules: 'qtquicktimeline'
           cache: 'true'
       - uses: Swatinem/rust-cache@v2
         with:
