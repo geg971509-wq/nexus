@@ -88,7 +88,11 @@ pub(crate) fn put_session_back(mut session: CoreSession, gen: u64) -> bool {
 /// After OS proxy write, re-check gen — disconnect can win during the call; undo enable.
 /// Reinstall a short-poll session only if gen still current and slot empty.
 pub(crate) fn reinstall_poll_session(mut session: CoreSession, gen: u64) {
-    if session.client_broken() {
+    // Poll RPCs use the same reuse contract as every other long call. A Core can
+    // exit cleanly between the RPC and this point without the client latching a
+    // protocol error; putting that child back would make the next poll treat a
+    // dead process as a live session.
+    if session.child_exited() || session.client_broken() {
         let _ = session.stop_core_process();
         return;
     }
