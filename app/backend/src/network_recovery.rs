@@ -236,6 +236,13 @@ fn persist_or_remove(p: &Path, snapshot: &Snapshot) -> Result<(), String> {
     }
 }
 
+fn mark_stale<T>(result: Result<T, String>) -> Result<T, String> {
+    if result.is_err() {
+        CURRENT_OWNERSHIP.store(false, Ordering::SeqCst);
+    }
+    result
+}
+
 fn restore_proxy_state(service: &str, kind: &str, state: &ProxyState) -> Result<(), String> {
     let (set_value, set_state) = match kind {
         "web" => ("-setwebproxy", "-setwebproxystate"),
@@ -399,9 +406,9 @@ pub(crate) fn restore_proxy_only() -> Result<bool, String> {
     let Some(proxy) = snapshot.proxy.as_ref() else {
         return Ok(false);
     };
-    restore_proxy(proxy)?;
+    mark_stale(restore_proxy(proxy))?;
     snapshot.proxy = None;
-    persist_or_remove(&p, &snapshot)?;
+    mark_stale(persist_or_remove(&p, &snapshot))?;
     Ok(true)
 }
 
@@ -413,9 +420,9 @@ pub(crate) fn restore_dns_only() -> Result<bool, String> {
     let Some(dns) = snapshot.dns.as_ref() else {
         return Ok(false);
     };
-    restore_dns(dns)?;
+    mark_stale(restore_dns(dns))?;
     snapshot.dns = None;
-    persist_or_remove(&p, &snapshot)?;
+    mark_stale(persist_or_remove(&p, &snapshot))?;
     Ok(true)
 }
 
