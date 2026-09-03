@@ -458,13 +458,53 @@ NOTARY_PROFILE="${NEXUS_NOTARY_PROFILE:-}"
 if [[ -n "$NOTARY_PROFILE" && "$SIGN_IDENTITY" == "-" ]]; then
   die "NEXUS_NOTARY_PROFILE requires NEXUS_SIGN_IDENTITY (Developer ID Application)"
 fi
+
+sign_code_item() {
+  local path="$1"
+  if [[ "$SIGN_IDENTITY" == "-" ]]; then
+    codesign --force --sign - "$path"
+  else
+    codesign --force --options runtime --timestamp \
+      --sign "$SIGN_IDENTITY" "$path"
+  fi
+}
+
+# Apple requires nested code to be signed from the inside out; --deep is a
+# verification aid, not a release signing strategy. Sign standalone Mach-O
+# leaves first, then nested code bundles deepest-first, and the .app last.
+while IFS= read -r -d '' file; do
+  /usr/bin/file -b "$file" | grep -q 'Mach-O' || continue
+  rel="${file#"$DEST_APP/Contents/"}"
+  case "$rel" in
+    *.framework/*|*.bundle/*|*.plugin/*|*.xpc/*|*.appex/*|*.app/*) continue ;;
+  esac
+  sign_code_item "$file"
+done < <(find "$DEST_APP/Contents" -type f -print0)
+
+while IFS= read -r -d '' bundle; do
+  sign_code_item "$bundle"
+done < <(
+  python3 - "$DEST_APP/Contents" <<'PY'
+import os
+import sys
+
+root = sys.argv[1]
+suffixes = (".framework", ".bundle", ".plugin", ".xpc", ".appex", ".app")
+paths = []
+for directory, dirs, _ in os.walk(root):
+    for name in dirs:
+        if name.endswith(suffixes):
+            paths.append(os.path.join(directory, name))
+for path in sorted(paths, key=lambda p: p.count(os.sep), reverse=True):
+    sys.stdout.buffer.write(os.fsencode(path) + b"\0")
+PY
+)
+
+sign_code_item "$DEST_APP"
 if [[ "$SIGN_IDENTITY" == "-" ]]; then
-  codesign --force --deep --sign - "$DEST_APP"
-  ok "ad-hoc signed (local testing; set NEXUS_SIGN_IDENTITY for distribution)"
+  ok "ad-hoc signed inside-out (local testing; set NEXUS_SIGN_IDENTITY for distribution)"
 else
-  codesign --force --deep --options runtime --timestamp \
-    --sign "$SIGN_IDENTITY" "$DEST_APP"
-  ok "signed with Developer ID: $SIGN_IDENTITY"
+  ok "signed inside-out with Developer ID: $SIGN_IDENTITY"
 fi
 codesign --verify --deep --strict --verbose=2 "$DEST_APP"
 
