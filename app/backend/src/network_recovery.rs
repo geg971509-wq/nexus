@@ -27,6 +27,10 @@ struct ProxyState {
     enabled: bool,
     server: String,
     port: u16,
+    // networksetup's getter exposes only whether authentication is enabled, not
+    // credentials. Keep a default for journals written by earlier audit builds.
+    #[serde(default)]
+    authenticated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -128,17 +132,22 @@ fn value<'a>(text: &'a str, key: &str) -> &'a str {
         .unwrap_or("")
 }
 
+fn bool_value(text: &str, key: &str) -> bool {
+    matches!(value(text, key), "Yes" | "yes" | "On" | "on" | "1")
+}
+
 fn parse_proxy(text: &str) -> ProxyState {
     ProxyState {
-        enabled: matches!(value(text, "Enabled"), "Yes" | "yes" | "1"),
+        enabled: bool_value(text, "Enabled"),
         server: value(text, "Server").to_string(),
         port: value(text, "Port").parse::<u16>().unwrap_or(0),
+        authenticated: bool_value(text, "Authenticated Proxy Enabled"),
     }
 }
 
 fn parse_auto_proxy(text: &str) -> AutoProxyState {
     AutoProxyState {
-        enabled: matches!(value(text, "Enabled"), "Yes" | "yes" | "1"),
+        enabled: bool_value(text, "Enabled"),
         url: value(text, "URL").to_string(),
     }
 }
@@ -334,12 +343,32 @@ fn prepare_current_snapshot() -> Result<(PathBuf, Snapshot), String> {
     Ok((p, snapshot))
 }
 
+fn authenticated_proxy_description(states: &[ProxyServiceState]) -> Option<String> {
+    for service in states {
+        for (kind, proxy) in [
+            ("Web", &service.web),
+            ("Secure Web", &service.secure_web),
+            ("SOCKS", &service.socks),
+        ] {
+            if proxy.authenticated {
+                return Some(format!("{kind} proxy on `{}`", service.service));
+            }
+        }
+    }
+    None
+}
+
 pub(crate) fn ensure_proxy_snapshot(services: &[String]) -> Result<(), String> {
     let (p, mut snapshot) = prepare_current_snapshot()?;
     if snapshot.proxy.is_none() {
         let mut states = Vec::with_capacity(services.len());
         for service in services {
             states.push(capture_proxy_service(service)?);
+        }
+        if let Some(found) = authenticated_proxy_description(&states) {
+            return Err(format!(
+                "authenticated {found} is configured; Nexus will not overwrite authenticated system proxies because networksetup cannot read the credentials needed for exact restoration"
+            ));
         }
         snapshot.proxy = Some(states);
         save_snapshot(&p, &snapshot)?;
@@ -420,6 +449,10 @@ pub(crate) fn restore_all_and_clear() -> Result<bool, String> {
     if failures.is_empty() {
         Ok(restored_any)
     } else {
+        // A full teardown that could not restore every owned component leaves a
+        // recovery journal, but that journal must be treated as stale before any
+        // future mutation—even inside this process.
+        CURRENT_OWNERSHIP.store(false, Ordering::SeqCst);
         Err(failures.join(" · "))
     }
 }
@@ -431,13 +464,20 @@ mod tests {
     #[test]
     fn parsers_preserve_proxy_and_dns_shapes() {
         assert_eq!(
-            parse_proxy("Enabled: Yes\nServer: proxy.example\nPort: 8080\n"),
+            parse_proxy(
+                "Enabled: Yes\nServer: proxy.example\nPort: 8080\nAuthenticated Proxy Enabled: 0\n"
+            ),
             ProxyState {
                 enabled: true,
                 server: "proxy.example".into(),
-                port: 8080
+                port: 8080,
+                authenticated: false,
             }
         );
+        assert!(parse_proxy(
+            "Enabled: Yes\nServer: proxy.example\nPort: 8080\nAuthenticated Proxy Enabled: 1\n"
+        )
+        .authenticated);
         assert_eq!(
             parse_auto_proxy("URL: https://example/pac\nEnabled: Yes\n"),
             AutoProxyState {
@@ -453,6 +493,38 @@ mod tests {
             parse_dns("There aren't any DNS Servers set on Wi-Fi."),
             None
         );
+    }
+
+    #[test]
+    fn authenticated_proxy_is_not_safe_to_take_over() {
+        let mut state = ProxyServiceState {
+            service: "Wi-Fi".into(),
+            web: ProxyState {
+                enabled: true,
+                server: "proxy.example".into(),
+                port: 8080,
+                authenticated: true,
+            },
+            secure_web: ProxyState {
+                enabled: false,
+                server: String::new(),
+                port: 0,
+                authenticated: false,
+            },
+            socks: ProxyState {
+                enabled: false,
+                server: String::new(),
+                port: 0,
+                authenticated: false,
+            },
+            auto_proxy: AutoProxyState {
+                enabled: false,
+                url: String::new(),
+            },
+        };
+        assert!(authenticated_proxy_description(&[state.clone()]).is_some());
+        state.web.authenticated = false;
+        assert!(authenticated_proxy_description(&[state]).is_none());
     }
 
     #[test]
