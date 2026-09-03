@@ -4,9 +4,11 @@
 #include "tray.h"
 
 #include <QApplication>
+#include <QDir>
 #include <QEvent>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
@@ -106,6 +108,19 @@ int main(int argc, char *argv[]) {
     app.setApplicationName(QStringLiteral("Nexus"));
     app.setOrganizationName(QStringLiteral("Nexus"));
     app.setQuitOnLastWindowClosed(false);
+
+    // The product owns one fixed mixed port and one set of macOS Proxy/DNS
+    // settings. A second GUI cannot be made independent and would be able to
+    // restore the first instance's recovery transaction, so reject it before
+    // the Rust backend can mutate any shared state. QLockFile validates stale
+    // owner PIDs; disabling age-only staleness avoids evicting a healthy long
+    // running Nexus instance.
+    QLockFile instanceLock(QDir(QDir::tempPath()).filePath(QStringLiteral("app.nexus.desktop.lock")));
+    instanceLock.setStaleLockTime(0);
+    if (!instanceLock.tryLock(0)) {
+        fprintf(stderr, "nexus: another GUI instance is already running\n");
+        return 0;
+    }
 
     NexusBridge bridge;
     g_bridge.store(&bridge, std::memory_order_release);
