@@ -55,6 +55,7 @@ pub(super) fn finish_connect(
         }
         Some(Err(e)) => {
             let start_error = fail_connecting(
+                prepared.action_gen,
                 prepared.connect_gen,
                 &params_connected,
                 format!("firewall connected: {e}"),
