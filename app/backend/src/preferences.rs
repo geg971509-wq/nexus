@@ -3,12 +3,12 @@
 use crate::{
     core::session::{CoreSession, SESSION},
     defaults::MIXED_PORT,
-    network_restore,
+    network_restore, tunnel_sm,
 };
 
 /// Persist the system-proxy chip. The OS is changed only while a Core profile is
-/// live; an idle preference toggle must never disable or overwrite unrelated
-/// proxy/PAC configuration owned by the user or another application.
+/// stably Connected; an idle preference toggle must never disable or overwrite
+/// unrelated proxy/PAC configuration owned by the user or another application.
 pub(crate) fn set_system_proxy_cmd_sync(enabled: bool) -> Result<String, String> {
     use crate::data::store::Store;
 
@@ -18,6 +18,14 @@ pub(crate) fn set_system_proxy_cmd_sync(enabled: bool) -> Result<String, String>
         Ok(prev)
     })?;
     let port = MIXED_PORT;
+    let tunnel_gen = tunnel_sm::current_gen();
+    if tunnel_sm::state() != tunnel_sm::State::Connected {
+        return Ok(format!(
+            "system_proxy intent={} (OS unchanged until a profile is stably connected)",
+            if enabled { "on" } else { "off" }
+        ));
+    }
+
     // Short lock: query only — never hold SESSION across networksetup.
     let core_running = {
         let mut g = SESSION.lock().map_err(|e| e.to_string())?;
@@ -27,21 +35,34 @@ pub(crate) fn set_system_proxy_cmd_sync(enabled: bool) -> Result<String, String>
     };
     if !core_running {
         return Ok(format!(
-            "system_proxy intent={} (OS unchanged until a profile is running)",
+            "system_proxy intent={} (OS unchanged because Core is not running)",
             if enabled { "on" } else { "off" }
         ));
     }
 
+    let still_same_tunnel = || {
+        tunnel_sm::state() == tunnel_sm::State::Connected
+            && tunnel_sm::current_gen() == tunnel_gen
+    };
     let result = if enabled {
-        network_restore::apply_proxy(port)
+        network_restore::apply_proxy_if(still_same_tunnel, port)
     } else {
-        network_restore::restore_proxy().map(|note| {
-            note.unwrap_or_else(|| "system proxy intent=off · no Nexus-owned proxy state".into())
+        network_restore::restore_proxy_if(still_same_tunnel).map(|result| {
+            result.map(|note| {
+                note.unwrap_or_else(|| {
+                    "system proxy intent=off · no Nexus-owned proxy state".into()
+                })
+            })
         })
     };
+
     match result {
-        Ok(note) => Ok(note),
-        Err(e) => match Store::update(|st| {
+        None => Ok(format!(
+            "system_proxy intent={} (OS unchanged because tunnel lifecycle changed)",
+            if enabled { "on" } else { "off" }
+        )),
+        Some(Ok(note)) => Ok(note),
+        Some(Err(e)) => match Store::update(|st| {
             st.system_proxy = prev;
             Ok(())
         }) {
