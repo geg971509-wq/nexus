@@ -13,7 +13,6 @@ macOS VPN / proxy client. GUI: Qt Quick (`app/qt`). Engine: Go core (**sing-box*
 | Product | Nexus |
 | Version | 0.2.3 |
 | Bundle ID | `app.nexus.desktop` |
-| Deeplink | `nexus://` |
 | Core binary | `NexusCore` (framed IPC) |
 | Socket env | `NEXUS_CORE_SOCKET` / `NEXUS_CORE_DEBUG` |
 
