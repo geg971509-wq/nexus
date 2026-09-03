@@ -1,0 +1,44 @@
+name: Audit autofix formatting and Go modules
+
+on:
+  push:
+    branches: [audit/release-hardening-20260903]
+
+permissions:
+  contents: write
+
+jobs:
+  autofix:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/release-hardening-20260903
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/server/go.mod
+          cache: false
+      - uses: dtolnay/rust-toolchain@1.94.0
+        with:
+          components: rustfmt
+      - name: Format Rust
+        working-directory: app/backend
+        run: cargo fmt --all
+      - name: Tidy Go module
+        working-directory: core/server
+        run: go mod tidy
+      - name: Verify Go module
+        working-directory: core/server
+        run: go mod verify
+      - name: Commit generated fixes
+        run: |
+          git diff -- app/backend core/server/go.mod core/server/go.sum
+          git add app/backend core/server/go.mod core/server/go.sum
+          if git diff --cached --quiet; then
+            echo "No generated changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: apply rustfmt and Go module tidy"
+          git push origin HEAD:audit/release-hardening-20260903
