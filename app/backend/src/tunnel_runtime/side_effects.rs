@@ -43,9 +43,17 @@ pub(super) fn apply_post_start_side_effects(
                         .set_system_proxy(true, port)
                         .map_err(|e| format!("system proxy failed: {e}"))?,
                 );
+            } else {
+                // `false` is ownership-aware: it restores only a proxy/PAC
+                // snapshot Nexus previously captured, and otherwise is a no-op.
+                // This is required when a live connection is restarted from
+                // system-proxy=on to system-proxy=off.
+                notes.push(
+                    network
+                        .set_system_proxy(false, port)
+                        .map_err(|e| format!("restore system proxy: {e}"))?,
+                );
             }
-            // When system proxy is disabled Nexus must not clear a user's
-            // pre-existing manual/PAC proxy configuration.
             if use_tun {
                 DNS_BOOTSTRAP_SET.store(true, Ordering::SeqCst);
                 notes.push(
