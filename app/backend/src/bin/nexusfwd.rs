@@ -101,12 +101,17 @@ fn run() -> Result<(), String> {
                     // threads. Dropping the socket is the backpressure signal.
                     continue;
                 };
-                std::thread::spawn(move || {
-                    let _slot = client_slot;
-                    if let Err(e) = handle_client(stream) {
-                        eprintln!("client: {}", clamp_log(&e));
-                    }
-                });
+                let worker = std::thread::Builder::new()
+                    .name("nexusfwd-client".into())
+                    .spawn(move || {
+                        let _slot = client_slot;
+                        if let Err(e) = handle_client(stream) {
+                            eprintln!("client: {}", clamp_log(&e));
+                        }
+                    });
+                if let Err(e) = worker {
+                    eprintln!("spawn client: {}", clamp_log(&e.to_string()));
+                }
             }
             Err(e) => eprintln!("accept: {}", clamp_log(&e.to_string())),
         }
