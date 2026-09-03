@@ -7,7 +7,7 @@ on:
 
 jobs:
   ui:
-    name: UI (i18n, metadata)
+    name: UI (i18n, metadata, scripts)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,6 +15,8 @@ jobs:
       # in the English UI without any error. The checker also rejects missing packs.
       - run: bash script/check-i18n.sh
       - run: bash script/check-release-metadata.sh
+      - name: Shell syntax
+        run: bash -n build.sh script/*.sh
 
   core:
     name: Core (Go)
@@ -32,6 +34,14 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       # Generated *.pb.go are gitignored, so nothing compiles without this.
       - run: bash script/gen-proto.sh
+      - name: Go format
+        working-directory: core/server
+        run: |
+          unformatted="$(find . -name '*.go' -type f -print0 | xargs -0 gofmt -l)"
+          if [[ -n "$unformatted" ]]; then
+            printf 'gofmt required:\n%s\n' "$unformatted" >&2
+            exit 1
+          fi
       - run: go vet ./...
         working-directory: core/server
       # -race only: it is a superset of the plain run, and the suite is seconds.
@@ -60,6 +70,8 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       # repo-root rust-toolchain.toml pins 1.94.0; install that, not stable.
       - uses: dtolnay/rust-toolchain@1.94.0
+        with:
+          components: rustfmt
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.11.0'
@@ -67,6 +79,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/backend
+      - run: cargo fmt --all -- --check
+        working-directory: app/backend
       - run: cargo test --locked --lib
         working-directory: app/backend
       # qt_add_resources embeds QML but does not parse it. Lint every source so
