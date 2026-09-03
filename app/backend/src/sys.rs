@@ -1,4 +1,4 @@
-//! System proxy: macOS networksetup.
+//! System proxy/DNS integration for macOS networksetup.
 
 #[cfg(target_os = "macos")]
 use std::process::{Command, Stdio};
@@ -28,6 +28,10 @@ pub(crate) struct SystemNetworkChange;
 
 #[cfg(target_os = "macos")]
 impl SystemNetworkChange {
+    pub(crate) fn ensure_recovery_snapshot(&self) -> Result<(), String> {
+        crate::network_recovery::ensure_snapshot(&hot_services(true))
+    }
+
     pub(crate) fn set_system_proxy(&self, enabled: bool, port: u16) -> Result<String, String> {
         set_system_proxy_inner(enabled, port)
     }
@@ -38,6 +42,13 @@ impl SystemNetworkChange {
         servers: &[String],
     ) -> Result<String, String> {
         set_system_dns_bootstrap_inner(enabled, servers)
+    }
+
+    pub(crate) fn restore_all(&self) -> Result<String, String> {
+        match crate::network_recovery::restore_all_and_clear()? {
+            true => Ok("restored original proxy/PAC/DNS".into()),
+            false => Ok("no saved system network state".into()),
+        }
     }
 }
 
@@ -53,6 +64,11 @@ pub(crate) fn with_system_network_change_if<T>(
         return None;
     }
     Some(f(&SystemNetworkChange))
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn recover_stale_network_state() -> Result<String, String> {
+    with_system_network_change(|| SystemNetworkChange.restore_all())
 }
 
 #[cfg(target_os = "macos")]
@@ -147,10 +163,6 @@ fn is_secondary_service(name: &str) -> bool {
         || n.contains("virtual")
 }
 
-/// Listed fresh on every call, not cached for the process lifetime: a dock or
-/// USB NIC attached after launch would otherwise never receive the proxy, and
-/// traffic over it would leave unproxied. This runs only on connect/disconnect,
-/// so one `networksetup` listing is not on any hot path.
 #[cfg(target_os = "macos")]
 fn ordered_services() -> Vec<String> {
     let mut svcs = list_network_services();
@@ -170,18 +182,8 @@ fn ordered_services() -> Vec<String> {
 }
 
 #[cfg(target_os = "macos")]
-fn apply_one(service: &str, enabled: bool, host: &str, port_s: &str) -> Result<(), String> {
-    if !enabled {
-        for args in [
-            ["-setautoproxystate", service, "off"],
-            ["-setwebproxystate", service, "off"],
-            ["-setsecurewebproxystate", service, "off"],
-            ["-setsocksfirewallproxystate", service, "off"],
-        ] {
-            run_ns(&args)?;
-        }
-        return Ok(());
-    }
+fn apply_proxy(service: &str, host: &str, port_s: &str) -> Result<(), String> {
+    run_ns(&["-setautoproxystate", service, "off"])?;
     run_ns(&["-setwebproxy", service, host, port_s])?;
     run_ns(&["-setsecurewebproxy", service, host, port_s])?;
     run_ns(&["-setwebproxystate", service, "on"])?;
@@ -217,104 +219,76 @@ pub fn set_system_proxy(enabled: bool, port: u16) -> Result<String, String> {
 
 #[cfg(target_os = "macos")]
 fn set_system_proxy_inner(enabled: bool, port: u16) -> Result<String, String> {
+    if !enabled {
+        return match crate::network_recovery::restore_proxy_only()? {
+            true => Ok("restored original system proxy/PAC".into()),
+            false => Ok("system proxy unchanged (no Nexus recovery snapshot)".into()),
+        };
+    }
     let host = "127.0.0.1";
     let port_s = port.to_string();
-    let services = hot_services(enabled);
+    let services = hot_services(true);
+    crate::network_recovery::ensure_snapshot(&services)?;
     let primary = services.first().cloned().unwrap_or_else(|| "Wi-Fi".into());
     let mut failures = Vec::new();
     for service in &services {
-        if let Err(e) = apply_one(service, enabled, host, &port_s) {
+        if let Err(e) = apply_proxy(service, host, &port_s) {
             failures.push(format!("`{service}`: {e}"));
         }
     }
     if !failures.is_empty() {
-        return Err(format!(
-            "system proxy {} failed: {}",
-            if enabled { "on" } else { "off" },
-            failures.join(" · ")
-        ));
+        return Err(format!("system proxy on failed: {}", failures.join(" · ")));
     }
     let rest_n = services.len().saturating_sub(1);
-    if enabled {
-        Ok(format!(
-            "system proxy on {host}:{port} · primary {primary}{}",
-            if rest_n > 0 {
-                format!(" · +{rest_n}")
-            } else {
-                String::new()
-            }
-        ))
-    } else {
-        Ok(format!(
-            "system proxy off · primary {primary}{}",
-            if rest_n > 0 {
-                format!(" · +{rest_n}")
-            } else {
-                String::new()
-            }
-        ))
-    }
+    Ok(format!(
+        "system proxy on {host}:{port} · primary {primary}{}",
+        if rest_n > 0 {
+            format!(" · +{rest_n}")
+        } else {
+            String::new()
+        }
+    ))
 }
 
-/// IPs that `networksetup -setdnsservers` will receive.
-/// Same validation as store/PF: a hostname is neither a resolver nor safe argv.
-/// Empty / all-invalid falls back to the product default so OS, config, and PF
-/// stay on one list.
 pub fn dns_servers_for_os(servers: &[String]) -> Vec<String> {
     crate::defaults::sanitize_dns_bootstrap(servers)
 }
 
-/// Tun + fail-closed blocks bare DNS to LAN resolvers (router :53).
-/// Point primary services at the same bootstrap list PF already passes.
-/// `enabled=false` restores DHCP (`Empty`); `servers` is ignored then.
 #[cfg(target_os = "macos")]
 fn set_system_dns_bootstrap_inner(enabled: bool, servers: &[String]) -> Result<String, String> {
+    if !enabled {
+        return match crate::network_recovery::restore_dns_only()? {
+            true => Ok("restored original system DNS".into()),
+            false => Ok("system DNS unchanged (no Nexus recovery snapshot)".into()),
+        };
+    }
     let ips = dns_servers_for_os(servers);
     let services = hot_services(true);
+    crate::network_recovery::ensure_snapshot(&services)?;
     let primary = services.first().cloned().unwrap_or_else(|| "Wi-Fi".into());
     let mut failures = Vec::new();
     for service in &services {
-        let result = if enabled {
-            let mut argv: Vec<&str> = vec!["-setdnsservers", service];
-            for ip in &ips {
-                argv.push(ip.as_str());
-            }
-            run_ns(&argv)
-        } else {
-            run_ns(&["-setdnsservers", service, "Empty"])
-        };
-        if let Err(e) = result {
+        let mut argv: Vec<&str> = vec!["-setdnsservers", service];
+        for ip in &ips {
+            argv.push(ip.as_str());
+        }
+        if let Err(e) = run_ns(&argv) {
             failures.push(format!("`{service}`: {e}"));
         }
     }
     if !failures.is_empty() {
-        return Err(format!(
-            "system dns {} failed: {}",
-            if enabled { "on" } else { "off" },
-            failures.join(" · ")
-        ));
+        return Err(format!("system dns on failed: {}", failures.join(" · ")));
     }
     let rest_n = services.len().saturating_sub(1);
-    if enabled {
-        Ok(format!(
-            "system dns {} · primary {primary}{}",
-            ips.join(","),
-            if rest_n > 0 {
-                format!(" · +{rest_n}")
-            } else {
-                String::new()
-            }
-        ))
-    } else {
-        Ok(format!(
-            "system dns dhcp · primary {primary}{}",
-            if rest_n > 0 {
-                format!(" · +{rest_n}")
-            } else {
-                String::new()
-            }
-        ))
-    }
+    Ok(format!(
+        "system dns {} · primary {primary}{}",
+        ips.join(","),
+        if rest_n > 0 {
+            format!(" · +{rest_n}")
+        } else {
+            String::new()
+        }
+    ))
 }
 
 #[cfg(test)]
@@ -355,7 +329,6 @@ mod tests {
         let active = Arc::new(AtomicUsize::new(0));
         let overlaps = Arc::new(AtomicUsize::new(0));
         let mut workers = Vec::new();
-
         for _ in 0..2 {
             let start = Arc::clone(&start);
             let active = Arc::clone(&active);
@@ -371,7 +344,6 @@ mod tests {
                 });
             }));
         }
-
         start.wait();
         for worker in workers {
             worker.join().unwrap();
@@ -399,11 +371,9 @@ mod tests {
                 )
             })
         };
-
         started.wait();
         generation.store(2, Ordering::SeqCst);
         drop(guard);
-
         assert!(worker.join().unwrap().is_none());
         assert!(!ran.load(Ordering::SeqCst));
     }
