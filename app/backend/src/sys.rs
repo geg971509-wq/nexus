@@ -16,7 +16,7 @@ const NS_TIMEOUT: Duration = Duration::from_secs(5);
 static SYSTEM_NETWORK_CHANGE: Mutex<()> = Mutex::new(());
 
 #[cfg(target_os = "macos")]
-fn with_system_network_change<T>(f: impl FnOnce() -> T) -> T {
+pub(crate) fn with_system_network_change<T>(f: impl FnOnce() -> T) -> T {
     let _guard = SYSTEM_NETWORK_CHANGE
         .lock()
         .unwrap_or_else(|e| e.into_inner());
@@ -192,7 +192,7 @@ fn apply_one(service: &str, enabled: bool, host: &str, port_s: &str) -> Result<(
 }
 
 #[cfg(target_os = "macos")]
-fn hot_services(enabled: bool) -> Vec<String> {
+pub(crate) fn hot_services(enabled: bool) -> Vec<String> {
     let services = ordered_services();
     if enabled {
         let real: Vec<String> = services
