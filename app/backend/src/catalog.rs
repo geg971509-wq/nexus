@@ -38,6 +38,10 @@ pub(crate) fn qr_svg(text: String) -> Result<serde_json::Value, String> {
 pub(crate) async fn store_snapshot() -> Result<serde_json::Value, String> {
     runtime::spawn_blocking(|| {
         use crate::data::store::Store;
+        // main.cpp calls store_snapshot before app.exec(). That makes this the
+        // last synchronous startup gate before the user can initiate a new
+        // connection, so repair any Proxy/PAC/DNS transaction left by a crash.
+        crate::startup_recovery::recover_pending_network_state()?;
         let st = Store::load();
         // read-only — never upsert Direct demo (UI catalog is truth)
         serde_json::to_value(&st).map_err(|e| e.to_string())
