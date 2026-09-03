@@ -1,13 +1,13 @@
-use super::side_effects::clear_dns_bootstrap_with;
 use crate::{
     core::session::{CoreSession, SESSION},
     defaults::MIXED_PORT,
     diagnostics::firewall_status_json,
     firewall,
+    network_restore,
     session_access::{
         action_is_current, commit_if_action_current, current_connect_gen, lifecycle_commit,
     },
-    sys, tray_spin, tunnel_sm,
+    tray_spin, tunnel_sm,
 };
 
 pub(crate) fn disconnect_selected_sync(action_gen: u64) -> Result<serde_json::Value, String> {
@@ -39,26 +39,14 @@ pub(crate) fn disconnect_selected_sync(action_gen: u64) -> Result<serde_json::Va
         (None, -1i32)
     };
 
-    let mut notes = sys::with_system_network_change_if(
-        || {
-            tunnel_sm::state() == tunnel_sm::State::Disconnecting
-                && tunnel_sm::state_revision_is(disconnect_state_revision)
-        },
-        |network| {
-            let mut notes = Vec::new();
-            match network.set_system_proxy(false, MIXED_PORT) {
-                Ok(m) => notes.push(m),
-                Err(e) => notes.push(format!("clear system proxy: {e}")),
-            }
-            match clear_dns_bootstrap_with(network) {
-                Ok(Some(m)) => notes.push(m),
-                Ok(None) => {}
-                Err(e) => notes.push(format!("clear system dns: {e}")),
-            }
-            notes
-        },
-    )
-    .unwrap_or_default();
+    let mut notes = match network_restore::restore_all_if(|| {
+        tunnel_sm::state() == tunnel_sm::State::Disconnecting
+            && tunnel_sm::state_revision_is(disconnect_state_revision)
+    }) {
+        Some(Ok(notes)) => notes,
+        Some(Err(e)) => vec![format!("restore system network: {e}")],
+        None => Vec::new(),
+    };
     if let Some(e) = &blocked_err {
         notes.push(format!("firewall blocked: {e}"));
     }
