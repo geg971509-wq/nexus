@@ -7,8 +7,9 @@ use crate::{
     tunnel_runtime::disconnect_selected_sync,
 };
 
-/// Single quit/teardown path: stop Core + always best-effort clear OS proxy at MIXED_PORT.
-/// Used by app_quit, tray quit, and Exit (after confirm). Idempotent.
+/// Single quit/teardown path: stop Core, restore Nexus-owned Proxy/PAC/DNS state,
+/// and reset the session firewall policy. Used by app_quit, tray quit, and Exit
+/// (after confirm). Idempotent.
 /// 3A: quit → Reset (session kill-switch ends with app; not post-quit lockdown).
 pub(crate) fn teardown_session() {
     let action_gen = admit_lifecycle_action();
