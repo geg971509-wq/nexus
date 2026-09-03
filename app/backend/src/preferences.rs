@@ -6,7 +6,8 @@ use crate::{
     sys,
 };
 
-/// Persist chip intent; OS apply only when Core is running (or always on disable).
+/// Persist chip intent. Enabling applies to the OS only while Core is running;
+/// disabling restores the saved pre-Nexus Proxy/PAC state when a recovery journal exists.
 pub(crate) fn set_system_proxy_cmd_sync(enabled: bool) -> Result<String, String> {
     use crate::core::session::SESSION;
     use crate::data::store::Store;
@@ -28,7 +29,7 @@ pub(crate) fn set_system_proxy_cmd_sync(enabled: bool) -> Result<String, String>
             "system_proxy intent=on (OS apply on Start · mixed 127.0.0.1:{port})"
         ));
     }
-    // enable+running → point OS at mixed; disable → clear OS always (upstream ClearSystemProxy)
+    // enable+running → point OS at Nexus mixed; disable → restore the pre-Nexus snapshot.
     sys::set_system_proxy(enabled, port)
 }
 
