@@ -10,11 +10,16 @@ use std::io::{Read, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 const NETWORKSETUP: &str = "/usr/sbin/networksetup";
 const TIMEOUT: Duration = Duration::from_secs(5);
 const SNAPSHOT_VERSION: u32 = 1;
+
+// False at process start means any on-disk journal is from an abnormal previous
+// run. True means the journal belongs to this process's current ownership period.
+static CURRENT_OWNERSHIP: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct ProxyState {
@@ -104,12 +109,10 @@ fn value<'a>(text: &'a str, key: &str) -> &'a str {
 
 fn parse_proxy(text: &str) -> ProxyState {
     let enabled = matches!(value(text, "Enabled"), "Yes" | "yes" | "1");
-    let server = value(text, "Server").to_string();
-    let port = value(text, "Port").parse::<u16>().unwrap_or(0);
     ProxyState {
         enabled,
-        server,
-        port,
+        server: value(text, "Server").to_string(),
+        port: value(text, "Port").parse::<u16>().unwrap_or(0),
     }
 }
 
@@ -243,15 +246,38 @@ fn restore(snapshot: &Snapshot, proxy: bool, dns: bool) -> Result<(), String> {
     if failures.is_empty() {
         Ok(())
     } else {
-        Err(format!("restore system network state failed: {}", failures.join(" · ")))
+        Err(format!(
+            "restore system network state failed: {}",
+            failures.join(" · ")
+        ))
     }
 }
 
-/// Idempotent within one Nexus ownership period. An existing journal is the
-/// original pre-Nexus state and must never be overwritten by later side effects.
+/// Restore a journal left by a previous process. Safe to call repeatedly before
+/// this process starts owning system network state.
+pub(crate) fn recover_stale_and_clear() -> Result<bool, String> {
+    if CURRENT_OWNERSHIP.load(Ordering::SeqCst) {
+        return Ok(false);
+    }
+    let p = path();
+    let Some(snapshot) = load_snapshot(&p)? else {
+        return Ok(false);
+    };
+    restore(&snapshot, true, true)?;
+    fs::remove_file(&p).map_err(|e| format!("remove stale network recovery snapshot: {e}"))?;
+    Ok(true)
+}
+
+/// Idempotent within one Nexus ownership period. If startup recovery has not run
+/// yet, a pre-existing journal is stale and must be restored before capturing a
+/// new baseline. Once ownership is current, later Proxy/DNS writes reuse it.
 pub(crate) fn ensure_snapshot(services: &[String]) -> Result<(), String> {
+    if !CURRENT_OWNERSHIP.load(Ordering::SeqCst) {
+        recover_stale_and_clear()?;
+    }
     let p = path();
     if load_snapshot(&p)?.is_some() {
+        CURRENT_OWNERSHIP.store(true, Ordering::SeqCst);
         return Ok(());
     }
     let mut states = Vec::with_capacity(services.len());
@@ -264,7 +290,9 @@ pub(crate) fn ensure_snapshot(services: &[String]) -> Result<(), String> {
             version: SNAPSHOT_VERSION,
             services: states,
         },
-    )
+    )?;
+    CURRENT_OWNERSHIP.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 pub(crate) fn restore_proxy_only() -> Result<bool, String> {
@@ -286,10 +314,12 @@ pub(crate) fn restore_dns_only() -> Result<bool, String> {
 pub(crate) fn restore_all_and_clear() -> Result<bool, String> {
     let p = path();
     let Some(snapshot) = load_snapshot(&p)? else {
+        CURRENT_OWNERSHIP.store(false, Ordering::SeqCst);
         return Ok(false);
     };
     restore(&snapshot, true, true)?;
     fs::remove_file(&p).map_err(|e| format!("remove network recovery snapshot: {e}"))?;
+    CURRENT_OWNERSHIP.store(false, Ordering::SeqCst);
     Ok(true)
 }
 
